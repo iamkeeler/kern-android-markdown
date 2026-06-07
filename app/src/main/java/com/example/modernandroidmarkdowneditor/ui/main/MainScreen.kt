@@ -250,7 +250,6 @@ private fun ProjectSectionHeader(
     project: ProjectEntity,
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme
 ) {
-    val icon = if (project.isExternal) "📂" else "🗂"
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -258,9 +257,11 @@ private fun ProjectSectionHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(icon, fontSize = 11.sp)
         Text(
-            text = project.name.uppercase(),
+            text = buildString {
+                append(project.name.uppercase())
+                if (project.isExternal) append("  ☁️")
+            },
             color = theme.textMuted,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
@@ -417,9 +418,9 @@ fun CreateProjectDialog(
                         colors = CheckboxDefaults.colors(checkedColor = theme.accent))
                     Spacer(Modifier.width(8.dp))
                     Column {
-                        Text("External Scoped Storage (SAF)", color = theme.textPrimary,
+                        Text("Cloud project ☁️", color = theme.textPrimary,
                             fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text("Simulated SD Card workspace. Disables Cloud Sync.",
+                        Text("Files stored in external / scoped storage.",
                             color = theme.textMuted, fontSize = 10.sp)
                     }
                 }

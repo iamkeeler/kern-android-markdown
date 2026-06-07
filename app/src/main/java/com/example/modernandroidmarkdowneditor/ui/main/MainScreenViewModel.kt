@@ -76,12 +76,12 @@ class MainScreenViewModel(
         if (db.projectDao().getSelectedProject() != null) return@withContext
 
         val sandboxId = db.projectDao().insertProject(
-            ProjectEntity(name = "Personal Notes", path = "personal_notes", isExternal = false, isSelected = true)
+            ProjectEntity(name = "Notes", path = "notes", isExternal = false, isSelected = true)
         )
         val sandboxProj = db.projectDao().getSelectedProject()!!
 
         db.projectDao().insertProject(
-            ProjectEntity(name = "External Documents", path = "external_docs", isExternal = true, isSelected = false)
+            ProjectEntity(name = "Documents", path = "documents", isExternal = true, isSelected = false)
         )
 
         storageManager.writeFile(sandboxProj, "Welcome.md", """
