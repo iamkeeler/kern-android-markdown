@@ -1,6 +1,7 @@
 package com.example.modernandroidmarkdowneditor.analysis
 
 import java.util.regex.Pattern
+import com.example.modernandroidmarkdowneditor.utils.TextAnalysisUtils.countWords
 
 enum class HighlightType {
     ADVERB,
@@ -54,21 +55,6 @@ object HemingwayAnalyzer {
     }
 
     private val sentencePattern = Pattern.compile("([^.!?]+[.!?]*)")
-
-    private fun countWords(s: CharSequence): Int {
-        var count = 0
-        var inWord = false
-        for (i in 0 until s.length) {
-            val c = s[i]
-            if (c.isWhitespace()) {
-                inWord = false
-            } else if (!inWord) {
-                inWord = true
-                count++
-            }
-        }
-        return count
-    }
 
     fun analyze(text: String): HemingwayMetrics {
         if (text.isBlank()) {
