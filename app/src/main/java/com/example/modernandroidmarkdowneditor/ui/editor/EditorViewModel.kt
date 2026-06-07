@@ -3,6 +3,7 @@ package com.example.modernandroidmarkdowneditor.ui.editor
 import android.content.Context
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
+import com.example.modernandroidmarkdowneditor.utils.TextAnalysisUtils.countWords
 import androidx.lifecycle.viewModelScope
 import com.example.modernandroidmarkdowneditor.analysis.HemingwayAnalyzer
 import com.example.modernandroidmarkdowneditor.analysis.HemingwayMetrics
@@ -451,20 +452,7 @@ class EditorViewModel(
         syncEngine.triggerSync(project)
     }
 
-    private fun countWords(s: CharSequence): Int {
-        var count = 0
-        var inWord = false
-        for (i in 0 until s.length) {
-            val c = s[i]
-            if (c.isWhitespace()) {
-                inWord = false
-            } else if (!inWord) {
-                inWord = true
-                count++
-            }
-        }
-        return count
-    }
+
 
     private fun countSentences(s: CharSequence): Int {
         var count = 0
