@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -52,7 +53,8 @@ fun MainScreen(
         modifier = modifier
             .fillMaxSize()
             .background(theme.background)
-            .padding(24.dp)
+            .safeDrawingPadding()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         // Book Index Style Title
         Text(

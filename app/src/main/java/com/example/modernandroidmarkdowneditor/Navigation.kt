@@ -1,12 +1,13 @@
 package com.example.modernandroidmarkdowneditor
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -34,7 +35,7 @@ fun MainNavigation(
                     onItemClick = { navKey -> backStack.add(navKey) },
                     db = db,
                     storageManager = storageManager,
-                    modifier = Modifier.safeDrawingPadding()
+                    modifier = Modifier.fillMaxSize()
                 )
             }
             entry<EditorKey> { key ->
@@ -49,7 +50,9 @@ fun MainNavigation(
                         editorViewModel.closeFile()
                         backStack.removeLastOrNull()
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.statusBars)
                 )
             }
         },
