@@ -83,7 +83,6 @@ fun EditorScreen(
             ) {
                 // Header (Breadcrumbs)
                 EditorHeader(
-                    projectRoot = uiState.activeProject?.name ?: "",
                     filePath = filePath,
                     theme = uiState.activeTheme,
                     onBackClick = onBackClick,
@@ -167,7 +166,6 @@ fun EditorScreen(
 
 @Composable
 fun EditorHeader(
-    projectRoot: String,
     filePath: String,
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     onBackClick: () -> Unit,
@@ -196,36 +194,21 @@ fun EditorHeader(
                     .clickable { onBackClick() }
                     .padding(horizontal = 6.dp, vertical = 8.dp)
             )
-            
-            Text(
-                text = "/",
-                color = theme.textMuted,
-                fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = "${projectRoot}/",
-                color = theme.textMuted,
-                fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium
-            )
-            
+
             val segments = filePath.split('/')
             val folders = if (segments.size > 1) segments.dropLast(1).joinToString("/") + "/" else ""
             val fileName = segments.last()
-            
+
             if (folders.isNotEmpty()) {
                 Text(
-                    text = folders,
+                    text = "/$folders",
                     color = theme.textMuted,
                     fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium
                 )
             }
-            
+
             Text(
                 text = fileName,
                 color = theme.textPrimary,
