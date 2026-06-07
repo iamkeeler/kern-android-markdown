@@ -12,17 +12,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Flat list item for the unified single-scroll file index. */
+sealed class FileListItem {
+    data class ProjectHeader(val project: ProjectEntity) : FileListItem()
+    data class FileRow(val node: VfsNode, val project: ProjectEntity) : FileListItem()
+}
+
 data class ProjectExplorerUiState(
     val projects: List<ProjectEntity> = emptyList(),
-    val selectedProject: ProjectEntity? = null,
+    /** null = root combined view; non-null = drilled into a project subfolder */
+    val activeProject: ProjectEntity? = null,
     val currentPath: String = "",
-    val files: List<VfsNode> = emptyList(),
+    val drillFiles: List<VfsNode> = emptyList(),
+    val allItems: List<FileListItem> = emptyList(),
     val isCreateProjectDialogOpen: Boolean = false
 )
 
@@ -31,231 +38,175 @@ class MainScreenViewModel(
     private val storageManager: StorageManager
 ) : ViewModel() {
 
-    private val _currentPath = MutableStateFlow("")
-    val currentPath: StateFlow<String> = _currentPath.asStateFlow()
-
+    private val _activeProject = MutableStateFlow<ProjectEntity?>(null)
+    private val _currentPath   = MutableStateFlow("")
+    private val _drillFiles    = MutableStateFlow<List<VfsNode>>(emptyList())
+    private val _allItems      = MutableStateFlow<List<FileListItem>>(emptyList())
     private val _isCreateDialogOpen = MutableStateFlow(false)
-    val isCreateDialogOpen: StateFlow<Boolean> = _isCreateDialogOpen.asStateFlow()
-
-    private val _vfsFiles = MutableStateFlow<List<VfsNode>>(emptyList())
-    val vfsFiles: StateFlow<List<VfsNode>> = _vfsFiles.asStateFlow()
 
     val uiState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
-        db.projectDao().getSelectedProjectFlow(),
+        _activeProject,
         _currentPath,
-        _vfsFiles,
+        _drillFiles,
+        _allItems,
         _isCreateDialogOpen
-    ) { projects, selectedProject, currentPath, files, isCreateOpen ->
+    ) { args ->
+        @Suppress("UNCHECKED_CAST")
         ProjectExplorerUiState(
-            projects = projects,
-            selectedProject = selectedProject,
-            currentPath = currentPath,
-            files = files,
-            isCreateProjectDialogOpen = isCreateOpen
+            projects        = args[0] as List<ProjectEntity>,
+            activeProject   = args[1] as ProjectEntity?,
+            currentPath     = args[2] as String,
+            drillFiles      = args[3] as List<VfsNode>,
+            allItems        = args[4] as List<FileListItem>,
+            isCreateProjectDialogOpen = args[5] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState())
 
     init {
         viewModelScope.launch {
             seedInitialData()
-            refreshFileList()
+            refreshAllFiles()
         }
     }
+
+    // ── Seeding ────────────────────────────────────────────────────────────────
 
     private suspend fun seedInitialData() = withContext(Dispatchers.IO) {
-        val projects = db.projectDao().getSelectedProject()
-        if (projects == null) {
-            // Seed Sandbox Project
-            val sandboxId = db.projectDao().insertProject(
-                ProjectEntity(name = "Personal Notes (Sandbox)", path = "personal_notes", isExternal = false, isSelected = true)
-            )
-            val sandboxProj = db.projectDao().getSelectedProject()!!
+        if (db.projectDao().getSelectedProject() != null) return@withContext
 
-            // Seed SAF Project
-            db.projectDao().insertProject(
-                ProjectEntity(name = "External Documents (SAF)", path = "external_docs", isExternal = true, isSelected = false)
-            )
+        val sandboxId = db.projectDao().insertProject(
+            ProjectEntity(name = "Personal Notes", path = "personal_notes", isExternal = false, isSelected = true)
+        )
+        val sandboxProj = db.projectDao().getSelectedProject()!!
 
-            // Seed welcome files
-            val welcomeContent = """
-                # Welcome to Kern!
-                
-                This is a typography-first Markdown editor designed for mobile and foldables.
-                
-                ## Key Features
-                
-                1. **Inline-Reveal WYSIWYG**: Tap on this text block to edit. Unfocused blocks render fully!
-                2. **Multi-Field Performance**: Instant recomposition and differential updates.
-                3. **Cloud Sync**: Select Google Drive or Dropbox in the info drawer to sync sandbox files.
-                4. **Hemingway Analyzer**: Check the Metrics panel for Hemingway grade recommendations.
-                
-                ```kotlin
-                fun main() {
-                    println("Typing with zero latency!")
-                }
-                ```
-                
-                Enjoy writing!
-            """.trimIndent()
+        db.projectDao().insertProject(
+            ProjectEntity(name = "External Documents", path = "external_docs", isExternal = true, isSelected = false)
+        )
 
-            storageManager.writeFile(sandboxProj, "Welcome.md", welcomeContent)
-            db.fileDao().insertFile(
-                FileEntity(
-                    projectId = sandboxId,
-                    name = "Welcome.md",
-                    relativePath = "Welcome.md",
-                    isDirectory = false,
-                    lastModified = System.currentTimeMillis(),
-                    syncState = "PENDING"
-                )
-            )
+        storageManager.writeFile(sandboxProj, "Welcome.md", """
+            # Welcome to Kern!
+            A typography-first Markdown editor for mobile and foldables.
+            ## Features
+            1. **Inline-Reveal WYSIWYG**: Tap to edit.
+            2. **Cloud Sync**: Set a provider in the info drawer.
+            3. **Hemingway Analyzer**: Check Metrics for readability.
+        """.trimIndent())
+        db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
+            relativePath = "Welcome.md", isDirectory = false,
+            lastModified = System.currentTimeMillis(), syncState = "PENDING"))
 
-            storageManager.createDirectory(sandboxProj, "Work")
-            db.fileDao().insertFile(
-                FileEntity(
-                    projectId = sandboxId,
-                    name = "Work",
-                    relativePath = "Work",
-                    isDirectory = true,
-                    lastModified = System.currentTimeMillis(),
-                    syncState = "SYNCED"
-                )
-            )
+        storageManager.createDirectory(sandboxProj, "Work")
+        db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Work",
+            relativePath = "Work", isDirectory = true,
+            lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
 
-            storageManager.writeFile(sandboxProj, "Work/Notes.md", "## Meeting Notes\n\n- Discuss project explorer architecture\n- Enforce decoupled module boundaries")
-            db.fileDao().insertFile(
-                FileEntity(
-                    projectId = sandboxId,
-                    name = "Notes.md",
-                    relativePath = "Work/Notes.md",
-                    isDirectory = false,
-                    lastModified = System.currentTimeMillis(),
-                    syncState = "PENDING"
-                )
-            )
-        }
+        storageManager.writeFile(sandboxProj, "Work/Notes.md", "## Meeting Notes\n\n- Project explorer architecture")
+        db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes.md",
+            relativePath = "Work/Notes.md", isDirectory = false,
+            lastModified = System.currentTimeMillis(), syncState = "PENDING"))
     }
 
-    fun selectProject(project: ProjectEntity) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                db.projectDao().deselectAllProjects()
-                db.projectDao().updateProject(project.copy(isSelected = true))
+    // ── Combined root list ─────────────────────────────────────────────────────
+
+    suspend fun refreshAllFiles() {
+        val projectList = withContext(Dispatchers.IO) { db.projectDao().getAllProjects() }
+        val items = mutableListOf<FileListItem>()
+        for (proj in projectList) {
+            val diskFiles = storageManager.listDirectory(proj, "")
+            val enriched = withContext(Dispatchers.IO) {
+                VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(proj.id))
             }
-            _currentPath.value = ""
-            refreshFileList()
+            items += FileListItem.ProjectHeader(proj)
+            enriched.forEach { items += FileListItem.FileRow(it, proj) }
         }
+        _allItems.value = items
     }
 
-    fun navigateToFolder(path: String) {
-        _currentPath.value = path
-        viewModelScope.launch {
-            refreshFileList()
-        }
+    // ── Folder drill-down ──────────────────────────────────────────────────────
+
+    fun navigateToFolder(node: VfsNode, project: ProjectEntity) {
+        _activeProject.value = project
+        _currentPath.value   = node.relativePath
+        viewModelScope.launch { loadDrillFiles(project, node.relativePath) }
     }
 
     fun navigateUp() {
         val current = _currentPath.value
-        if (current.isNotEmpty()) {
+        if (current.isEmpty()) {
+            // Already at root of a project → back to combined view
+            _activeProject.value = null
+            viewModelScope.launch { refreshAllFiles() }
+        } else {
             val parent = current.substringBeforeLast('/', "")
             _currentPath.value = parent
-            viewModelScope.launch {
-                refreshFileList()
-            }
+            val proj = _activeProject.value ?: return
+            viewModelScope.launch { loadDrillFiles(proj, parent) }
         }
     }
 
-    fun setCreateDialogOpen(open: Boolean) {
-        _isCreateDialogOpen.value = open
+    private suspend fun loadDrillFiles(project: ProjectEntity, path: String) {
+        val diskFiles = storageManager.listDirectory(project, path)
+        _drillFiles.value = withContext(Dispatchers.IO) {
+            VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(project.id))
+        }
     }
+
+    // ── Dialog / create ────────────────────────────────────────────────────────
+
+    fun setCreateDialogOpen(open: Boolean) { _isCreateDialogOpen.value = open }
 
     fun createProject(name: String, isExternal: Boolean) {
         viewModelScope.launch {
-            val path = name.lowercase().replace(" ", "_")
-            val project = ProjectEntity(
-                name = name,
-                path = path,
-                isExternal = isExternal,
-                isSelected = false
-            )
             withContext(Dispatchers.IO) {
-                db.projectDao().insertProject(project)
+                db.projectDao().insertProject(
+                    ProjectEntity(name = name,
+                        path = name.lowercase().replace(" ", "_"),
+                        isExternal = isExternal,
+                        isSelected = false)
+                )
             }
+            refreshAllFiles()
         }
     }
 
     fun createFile(name: String) {
-        val selected = uiState.value.selectedProject ?: return
-        val ext = if (name.endsWith(".md")) "" else ".md"
-        val fileName = "$name$ext"
+        val proj = _activeProject.value ?: return
+        val fileName = if (name.endsWith(".md")) name else "$name.md"
         val relativePath = if (_currentPath.value.isEmpty()) fileName else "${_currentPath.value}/$fileName"
-
         viewModelScope.launch {
-            storageManager.createFile(selected, relativePath)
+            storageManager.createFile(proj, relativePath)
             withContext(Dispatchers.IO) {
-                db.fileDao().insertFile(
-                    FileEntity(
-                        projectId = selected.id,
-                        name = fileName,
-                        relativePath = relativePath,
-                        isDirectory = false,
-                        lastModified = System.currentTimeMillis(),
-                        syncState = if (selected.isExternal) "SYNCED" else "PENDING"
-                    )
-                )
+                db.fileDao().insertFile(FileEntity(projectId = proj.id, name = fileName,
+                    relativePath = relativePath, isDirectory = false,
+                    lastModified = System.currentTimeMillis(),
+                    syncState = if (proj.isExternal) "SYNCED" else "PENDING"))
             }
-            refreshFileList()
+            loadDrillFiles(proj, _currentPath.value)
         }
     }
 
     fun createFolder(name: String) {
-        val selected = uiState.value.selectedProject ?: return
+        val proj = _activeProject.value ?: return
         val relativePath = if (_currentPath.value.isEmpty()) name else "${_currentPath.value}/$name"
-
         viewModelScope.launch {
-            storageManager.createDirectory(selected, relativePath)
+            storageManager.createDirectory(proj, relativePath)
             withContext(Dispatchers.IO) {
-                db.fileDao().insertFile(
-                    FileEntity(
-                        projectId = selected.id,
-                        name = name,
-                        relativePath = relativePath,
-                        isDirectory = true,
-                        lastModified = System.currentTimeMillis(),
-                        syncState = "SYNCED"
-                    )
-                )
+                db.fileDao().insertFile(FileEntity(projectId = proj.id, name = name,
+                    relativePath = relativePath, isDirectory = true,
+                    lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
             }
-            refreshFileList()
+            loadDrillFiles(proj, _currentPath.value)
         }
     }
 
-    fun deleteNode(node: VfsNode) {
-        val selected = uiState.value.selectedProject ?: return
+    fun deleteNode(node: VfsNode, project: ProjectEntity) {
         viewModelScope.launch {
-            storageManager.deleteFile(selected, node.relativePath)
-            withContext(Dispatchers.IO) {
-                db.fileDao().deleteFile(selected.id, node.relativePath)
-            }
-            refreshFileList()
-        }
-    }
-
-    suspend fun refreshFileList() {
-        val selected = withContext(Dispatchers.IO) {
-            db.projectDao().getSelectedProject()
-        }
-        if (selected != null) {
-            val files = storageManager.listDirectory(selected, _currentPath.value)
-            val enrichedFiles = withContext(Dispatchers.IO) {
-                val dbFiles = db.fileDao().getFilesForProject(selected.id)
-                VfsNodeMapper.enrichFiles(files, dbFiles)
-            }
-            _vfsFiles.value = enrichedFiles
-        } else {
-            _vfsFiles.value = emptyList()
+            storageManager.deleteFile(project, node.relativePath)
+            withContext(Dispatchers.IO) { db.fileDao().deleteFile(project.id, node.relativePath) }
+            val active = _activeProject.value
+            if (active != null) loadDrillFiles(active, _currentPath.value)
+            else refreshAllFiles()
         }
     }
 }
-

@@ -52,6 +52,9 @@ interface ProjectDao {
     @Query("SELECT * FROM projects")
     fun getAllProjectsFlow(): Flow<List<ProjectEntity>>
 
+    @Query("SELECT * FROM projects")
+    fun getAllProjects(): List<ProjectEntity>
+
     @Query("SELECT * FROM projects WHERE isSelected = 1 LIMIT 1")
     fun getSelectedProject(): ProjectEntity?
 
