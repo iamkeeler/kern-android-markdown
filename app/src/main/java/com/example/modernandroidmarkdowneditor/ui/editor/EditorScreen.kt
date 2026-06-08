@@ -44,8 +44,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.modernandroidmarkdowneditor.data.local.ProjectEntity
-import com.example.modernandroidmarkdowneditor.data.local.ThemeEntity
 import com.example.modernandroidmarkdowneditor.data.sync.SyncProvider
 import com.example.modernandroidmarkdowneditor.data.sync.SyncState
 import com.example.modernandroidmarkdowneditor.parser.MarkdownBlockType
