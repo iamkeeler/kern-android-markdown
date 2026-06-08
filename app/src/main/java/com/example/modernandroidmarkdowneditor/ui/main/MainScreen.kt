@@ -34,7 +34,7 @@ fun MainScreen(
     modifier: Modifier = Modifier
 ) {
     val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager) }
-    val state by vm.uiState.collectAsStateWithLifecycle()
+    val state by vm.explorerState.collectAsStateWithLifecycle()
 
     var showCreateFileDialog   by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
