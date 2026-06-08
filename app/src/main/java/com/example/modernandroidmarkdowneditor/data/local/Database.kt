@@ -85,6 +85,9 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE projectId = :projectId")
     fun getFilesForProject(projectId: Long): List<FileEntity>
 
+    @Query("SELECT * FROM files WHERE projectId IN (:projectIds)")
+    fun getFilesForProjects(projectIds: List<Long>): List<FileEntity>
+
     @Query("SELECT * FROM files WHERE projectId = :projectId AND relativePath = :relativePath LIMIT 1")
     fun getFileByPath(projectId: Long, relativePath: String): FileEntity?
 
