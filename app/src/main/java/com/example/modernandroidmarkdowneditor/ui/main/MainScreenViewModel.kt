@@ -111,12 +111,16 @@ class MainScreenViewModel(
 
     suspend fun refreshAllFiles() {
         val projectList = withContext(Dispatchers.IO) { db.projectDao().getAllProjects() }
+
+        val allProjectIds = projectList.map { it.id }
+        val allDbFiles = withContext(Dispatchers.IO) { db.fileDao().getFilesForProjects(allProjectIds) }
+        val dbFilesByProject = allDbFiles.groupBy { it.projectId }
+
         val items = mutableListOf<FileListItem>()
         for (proj in projectList) {
             val diskFiles = storageManager.listDirectory(proj, "")
-            val enriched = withContext(Dispatchers.IO) {
-                VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(proj.id))
-            }
+            val projDbFiles = dbFilesByProject[proj.id] ?: emptyList()
+            val enriched = VfsNodeMapper.enrichFiles(diskFiles, projDbFiles)
             items += FileListItem.ProjectHeader(proj)
             enriched.forEach { items += FileListItem.FileRow(it, proj) }
         }
