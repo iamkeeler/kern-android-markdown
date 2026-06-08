@@ -1,0 +1,2 @@
+from default_api import pre_commit_instructions
+pre_commit_instructions()

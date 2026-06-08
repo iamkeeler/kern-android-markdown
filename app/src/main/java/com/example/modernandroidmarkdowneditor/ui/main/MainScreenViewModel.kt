@@ -44,7 +44,7 @@ class MainScreenViewModel(
     private val _allItems      = MutableStateFlow<List<FileListItem>>(emptyList())
     private val _isCreateDialogOpen = MutableStateFlow(false)
 
-    val uiState: StateFlow<ProjectExplorerUiState> = combine(
+    val explorerState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
         _activeProject,
         _currentPath,
