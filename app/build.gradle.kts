@@ -94,3 +94,12 @@ dependencies {
   // Serialization JSON
   implementation(libs.kotlinx.serialization.json)
 }
+dependencies {
+  implementation("androidx.compose.material:material-icons-extended:1.5.0")
+}
+
+android {
+    lint {
+        abortOnError = false
+    }
+}

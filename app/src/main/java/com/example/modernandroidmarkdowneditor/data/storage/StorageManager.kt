@@ -111,4 +111,18 @@ class StorageManager(private val context: Context) {
             false
         }
     }
+
+    /**
+     * Renames a file or directory on Dispatchers.IO.
+     */
+    suspend fun renameFile(project: ProjectEntity, oldPath: String, newPath: String): Boolean = withContext(Dispatchers.IO) {
+        val projectRoot = getProjectRootFile(project)
+        val oldFile = File(projectRoot, oldPath)
+        val newFile = File(projectRoot, newPath)
+        if (oldFile.exists()) {
+            oldFile.renameTo(newFile)
+        } else {
+            false
+        }
+    }
 }

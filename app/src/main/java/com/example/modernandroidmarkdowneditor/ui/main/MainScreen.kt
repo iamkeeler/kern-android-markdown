@@ -7,6 +7,16 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,10 +46,12 @@ fun MainScreen(
     val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager) }
     val state by vm.explorerState.collectAsStateWithLifecycle()
 
-    var showCreateFileDialog   by remember { mutableStateOf(false) }
-    var showCreateFolderDialog by remember { mutableStateOf(false) }
-    var createName             by remember { mutableStateOf("") }
+    var showCreateFileDialog   by remember { mutableStateOf<ProjectEntity?>(null) }
+
+    var showCreateFolderDialog by remember { mutableStateOf<ProjectEntity?>(null) }
     var nodeToDelete           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
+    var nodeToRename           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
+
 
     val theme = ThemeEngine.DefaultLight.toColorTheme()
 
@@ -67,57 +79,22 @@ fun MainScreen(
             modifier = Modifier.padding(bottom = 20.dp)
         )
 
-        // ── Toolbar: back / path / create ──────────────────────────────────────
+        // ── Toolbar: path / create ──────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Back is always shown when drilled into a project
-                if (state.activeProject != null) {
-                    Text(
-                        text = "[back]",
-                        color = theme.accent,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .clickable { vm.navigateUp() }
-                            .padding(vertical = 4.dp, horizontal = 0.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("/", color = theme.textMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    Spacer(Modifier.width(6.dp))
-                }
-                val pathLabel = when {
-                    state.activeProject == null           -> "ALL FILES"
-                    state.currentPath.isEmpty()           -> state.activeProject!!.name.uppercase()
-                    else                                  -> state.currentPath.uppercase()
-                }
-                Text(
-                    text = "INDEX: $pathLabel",
-                    color = theme.textPrimary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.sp
-                )
-            }
+            Text(
+                text = "INDEX: ALL FILES",
+                color = theme.textPrimary,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                // Create actions only available when drilled into a specific project folder
-                if (state.activeProject != null) {
-                    Text(
-                        text = "[+ file]",
-                        color = theme.accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.clickable { showCreateFileDialog = true }.padding(vertical = 4.dp)
-                    )
-                    Text(
-                        text = "[+ folder]",
-                        color = theme.accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.clickable { showCreateFolderDialog = true }.padding(vertical = 4.dp)
-                    )
-                }
                 Text(
                     text = "[+ project]",
                     color = theme.accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
@@ -129,59 +106,37 @@ fun MainScreen(
         Spacer(Modifier.height(12.dp))
 
         // ── Single unified list ────────────────────────────────────────────────
-        if (state.activeProject == null) {
-            // Root view: flat list of all projects and their files
-            if (state.allItems.isEmpty()) {
-                EmptyStateHint(
-                    title = "No files yet",
-                    body = "Tap [+ project] above to create your first workspace.",
-                    theme = theme
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    items(state.allItems) { item ->
-                        when (item) {
-                            is FileListItem.ProjectHeader -> ProjectSectionHeader(item.project, theme)
-                            is FileListItem.FileRow       -> VfsNodeRow(
-                                node            = item.node,
-                                theme           = theme,
-                                isExternalProject = item.project.isExternal,
-                                onNodeClick     = { node ->
-                                    if (node.isDirectory) vm.navigateToFolder(node, item.project)
-                                    else onItemClick(EditorKey(item.project.id, node.relativePath))
-                                },
-                                onDeleteClick   = { node -> nodeToDelete = Pair(node, item.project) }
-                            )
-                        }
-                    }
-                }
-            }
+        if (state.allItems.isEmpty()) {
+            EmptyStateHint(
+                title = "No files yet",
+                body = "Tap [+ project] above to create your first workspace.",
+                theme = theme
+            )
         } else {
-            // Drill-down view: single project subfolder
-            if (state.drillFiles.isEmpty()) {
-                EmptyStateHint(
-                    title = "Folder is empty",
-                    body = "Tap [+ file] or [+ folder] above to add something.",
-                    theme = theme
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    items(state.drillFiles) { node ->
-                        VfsNodeRow(
-                            node              = node,
-                            theme             = theme,
-                            isExternalProject = state.activeProject!!.isExternal,
-                            onNodeClick       = { clicked ->
-                                if (clicked.isDirectory) vm.navigateToFolder(clicked, state.activeProject!!)
-                                else onItemClick(EditorKey(state.activeProject!!.id, clicked.relativePath))
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.Top
+            ) {
+                items(state.allItems) { item ->
+                    when (item) {
+                        is FileListItem.ProjectHeader -> ProjectSectionHeader(
+                            project = item.project,
+                            theme = theme,
+                            onCreateFile = { showCreateFileDialog = item.project },
+                            onCreateFolder = { showCreateFolderDialog = item.project }
+                        )
+                        is FileListItem.FileRow       -> VfsNodeRow(
+                            node            = item.node,
+                            theme           = theme,
+                            isExternalProject = item.project.isExternal,
+                            depth           = item.depth,
+                            isExpanded      = item.isExpanded,
+                            onNodeClick     = { node ->
+                                if (node.isDirectory) vm.toggleFolder(node, item.project)
+                                else onItemClick(EditorKey(item.project.id, node.relativePath))
                             },
-                            onDeleteClick     = { node -> nodeToDelete = Pair(node, state.activeProject!!) }
+                            onDeleteClick   = { node -> nodeToDelete = Pair(node, item.project) },
+                            onRenameClick   = { node -> nodeToRename = Pair(node, item.project) }
                         )
                     }
                 }
@@ -201,25 +156,47 @@ fun MainScreen(
         )
     }
 
-    if (showCreateFileDialog) {
+    showCreateFileDialog?.let { project ->
         InputDialog(
             title       = "New Markdown File",
             label       = "Filename",
             confirmText = "Create",
             theme       = theme,
-            onDismiss   = { showCreateFileDialog = false; createName = "" },
-            onConfirm   = { vm.createFile(it); showCreateFileDialog = false; createName = "" }
+            onDismiss   = { showCreateFileDialog = null },
+            onConfirm   = { name ->
+                vm.createFile(project, "", name)
+                showCreateFileDialog = null
+            }
         )
     }
 
-    if (showCreateFolderDialog) {
+    showCreateFolderDialog?.let { project ->
         InputDialog(
             title       = "New Folder",
             label       = "Folder name",
             confirmText = "Create",
             theme       = theme,
-            onDismiss   = { showCreateFolderDialog = false; createName = "" },
-            onConfirm   = { vm.createFolder(it); showCreateFolderDialog = false; createName = "" }
+            onDismiss   = { showCreateFolderDialog = null },
+            onConfirm   = { name ->
+                vm.createFolder(project, "", name)
+                showCreateFolderDialog = null
+            }
+        )
+    }
+
+
+    nodeToRename?.let { (node, project) ->
+        InputDialog(
+            title       = "Rename",
+            label       = "New name",
+            confirmText = "Rename",
+            theme       = theme,
+            initialValue = node.name,
+            onDismiss   = { nodeToRename = null },
+            onConfirm   = { name ->
+                vm.performRenameWithStorageManager(node, project, name)
+                nodeToRename = null
+            }
         )
     }
 
@@ -248,26 +225,42 @@ fun MainScreen(
 @Composable
 private fun ProjectSectionHeader(
     project: ProjectEntity,
-    theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme
+    theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
+    onCreateFile: () -> Unit,
+    onCreateFolder: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 16.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = buildString {
-                append(project.name.uppercase())
-                if (project.isExternal) append("  ☁️")
-            },
-            color = theme.textMuted,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.5.sp
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = buildString {
+                    append(project.name.uppercase())
+                    if (project.isExternal) append("  ☁️")
+                },
+                color = theme.textMuted,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "[+ file]",
+                color = theme.accent, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier.clickable { onCreateFile() }
+            )
+            Text(
+                text = "[+ folder]",
+                color = theme.accent, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier.clickable { onCreateFolder() }
+            )
+        }
     }
 }
 
@@ -288,70 +281,117 @@ private fun EmptyStateHint(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VfsNodeRow(
     node: VfsNode,
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     isExternalProject: Boolean,
+    depth: Int,
+    isExpanded: Boolean,
     onNodeClick: (VfsNode) -> Unit,
-    onDeleteClick: (VfsNode) -> Unit
+    onDeleteClick: (VfsNode) -> Unit,
+    onRenameClick: (VfsNode) -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onNodeClick(node) }
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-            val icon = if (node.isDirectory) "📁" else "📄"
-            Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text       = node.name,
-                color      = theme.textPrimary,
-                fontSize   = 14.sp,
-                fontFamily = FontFamily.Serif,
-                fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
-                maxLines   = 1,
-                overflow   = TextOverflow.Ellipsis,
-                modifier   = Modifier.alignByBaseline()
-            )
-            val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
-            if (isSynced) {
-                Spacer(Modifier.width(4.dp))
-                Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { dismissValue ->
+            when (dismissValue) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onRenameClick(node)
+                    false // Don't actually dismiss
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onDeleteClick(node)
+                    false // Don't actually dismiss
+                }
+                else -> false
             }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text     = " . ".repeat(50),
-                color    = theme.textMuted.copy(alpha = 0.4f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-                modifier = Modifier.weight(1f).alignByBaseline()
-            )
         }
-        Spacer(Modifier.width(8.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            val details = if (node.isDirectory) "DIR"
-            else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-            Text(details, color = theme.textMuted, fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
-            Spacer(Modifier.width(16.dp))
-            Text(
-                text     = "[delete]",
-                color    = theme.textMuted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            if (direction == SwipeToDismissBoxValue.StartToEnd) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(theme.accent.copy(alpha = 0.2f))
+                        .padding(start = 24.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = theme.accent)
+                }
+            } else if (direction == SwipeToDismissBoxValue.EndToStart) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(theme.accent.copy(alpha = 0.2f))
+                        .padding(end = 24.dp),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = theme.accent)
+                }
+            }
+        },
+        content = {
+            Row(
                 modifier = Modifier
-                    .clickable { onDeleteClick(node) }
-                    .padding(horizontal = 4.dp)
-                    .alignByBaseline()
-            )
+                    .fillMaxWidth()
+                    .background(theme.background)
+                    .clickable { onNodeClick(node) }
+                    .padding(vertical = 8.dp)
+                    .padding(start = (depth * 16).dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                    val icon = if (node.isDirectory) {
+                        if (isExpanded) "v" else ">" // Twirl down indicator
+                    } else {
+                        "📄"
+                    }
+                    Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp).width(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text       = node.name,
+                        color      = theme.textPrimary,
+                        fontSize   = 14.sp,
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
+                        maxLines   = 1,
+                        overflow   = TextOverflow.Ellipsis,
+                        modifier   = Modifier.alignByBaseline()
+                    )
+                    val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
+                    if (isSynced) {
+                        Spacer(Modifier.width(4.dp))
+                        Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text     = " . ".repeat(50),
+                        color    = theme.textMuted.copy(alpha = 0.4f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+                        modifier = Modifier.weight(1f).alignByBaseline()
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    val details = if (node.isDirectory) "DIR"
+                    else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
+                    Text(details, color = theme.textMuted, fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
+                    Spacer(Modifier.width(16.dp))
+                }
+            }
         }
-    }
+    )
 }
 
 @Composable
@@ -360,10 +400,11 @@ fun InputDialog(
     label: String,
     confirmText: String,
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
+    initialValue: String = "",
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
-    var value by remember { mutableStateOf("") }
+    var value by remember { mutableStateOf(initialValue) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title, color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },

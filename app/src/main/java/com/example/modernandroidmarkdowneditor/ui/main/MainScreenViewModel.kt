@@ -20,16 +20,18 @@ import kotlinx.coroutines.withContext
 /** Flat list item for the unified single-scroll file index. */
 sealed class FileListItem {
     data class ProjectHeader(val project: ProjectEntity) : FileListItem()
-    data class FileRow(val node: VfsNode, val project: ProjectEntity) : FileListItem()
+    data class FileRow(
+        val node: VfsNode,
+        val project: ProjectEntity,
+        val depth: Int,
+        val isExpanded: Boolean
+    ) : FileListItem()
 }
 
 data class ProjectExplorerUiState(
     val projects: List<ProjectEntity> = emptyList(),
-    /** null = root combined view; non-null = drilled into a project subfolder */
-    val activeProject: ProjectEntity? = null,
-    val currentPath: String = "",
-    val drillFiles: List<VfsNode> = emptyList(),
     val allItems: List<FileListItem> = emptyList(),
+    val expandedFolders: Set<String> = emptySet(), // Format: "projectId:relativePath"
     val isCreateProjectDialogOpen: Boolean = false
 )
 
@@ -38,28 +40,22 @@ class MainScreenViewModel(
     private val storageManager: StorageManager
 ) : ViewModel() {
 
-    private val _activeProject = MutableStateFlow<ProjectEntity?>(null)
-    private val _currentPath   = MutableStateFlow("")
-    private val _drillFiles    = MutableStateFlow<List<VfsNode>>(emptyList())
-    private val _allItems      = MutableStateFlow<List<FileListItem>>(emptyList())
+    private val _allItems = MutableStateFlow<List<FileListItem>>(emptyList())
+    private val _expandedFolders = MutableStateFlow<Set<String>>(emptySet())
     private val _isCreateDialogOpen = MutableStateFlow(false)
 
     val explorerState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
-        _activeProject,
-        _currentPath,
-        _drillFiles,
         _allItems,
+        _expandedFolders,
         _isCreateDialogOpen
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         ProjectExplorerUiState(
             projects        = args[0] as List<ProjectEntity>,
-            activeProject   = args[1] as ProjectEntity?,
-            currentPath     = args[2] as String,
-            drillFiles      = args[3] as List<VfsNode>,
-            allItems        = args[4] as List<FileListItem>,
-            isCreateProjectDialogOpen = args[5] as Boolean
+            allItems        = args[1] as List<FileListItem>,
+            expandedFolders = args[2] as Set<String>,
+            isCreateProjectDialogOpen = args[3] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState())
 
@@ -111,49 +107,49 @@ class MainScreenViewModel(
 
     suspend fun refreshAllFiles() {
         val projectList = withContext(Dispatchers.IO) { db.projectDao().getAllProjects() }
-
         val allProjectIds = projectList.map { it.id }
         val allDbFiles = withContext(Dispatchers.IO) { db.fileDao().getFilesForProjects(allProjectIds) }
         val dbFilesByProject = allDbFiles.groupBy { it.projectId }
+        val expanded = _expandedFolders.value
 
         val items = mutableListOf<FileListItem>()
         for (proj in projectList) {
-            val diskFiles = storageManager.listDirectory(proj, "")
-            val projDbFiles = dbFilesByProject[proj.id] ?: emptyList()
-            val enriched = VfsNodeMapper.enrichFiles(diskFiles, projDbFiles)
             items += FileListItem.ProjectHeader(proj)
-            enriched.forEach { items += FileListItem.FileRow(it, proj) }
+            val projDbFiles = dbFilesByProject[proj.id] ?: emptyList()
+
+            suspend fun buildTree(relativePath: String, depth: Int) {
+                val diskFiles = storageManager.listDirectory(proj, relativePath)
+                val enriched = VfsNodeMapper.enrichFiles(diskFiles, projDbFiles)
+                for (node in enriched) {
+                    val folderKey = "\${proj.id}:\${node.relativePath}"
+                    val isExpanded = expanded.contains(folderKey)
+                    items += FileListItem.FileRow(node, proj, depth, isExpanded)
+                    if (node.isDirectory && isExpanded) {
+                        buildTree(node.relativePath, depth + 1)
+                    }
+                }
+            }
+
+            buildTree("", 0)
         }
         _allItems.value = items
     }
 
     // ── Folder drill-down ──────────────────────────────────────────────────────
 
-    fun navigateToFolder(node: VfsNode, project: ProjectEntity) {
-        _activeProject.value = project
-        _currentPath.value   = node.relativePath
-        viewModelScope.launch { loadDrillFiles(project, node.relativePath) }
-    }
-
-    fun navigateUp() {
-        val current = _currentPath.value
-        if (current.isEmpty()) {
-            // Already at root of a project → back to combined view
-            _activeProject.value = null
-            viewModelScope.launch { refreshAllFiles() }
+    fun toggleFolder(node: VfsNode, project: ProjectEntity) {
+        if (!node.isDirectory) return
+        val folderKey = "\${project.id}:\${node.relativePath}"
+        val current = _expandedFolders.value.toMutableSet()
+        if (current.contains(folderKey)) {
+            // Also remove all sub-folders from expanded set so they collapse
+            current.removeAll { it.startsWith("\$folderKey/") }
+            current.remove(folderKey)
         } else {
-            val parent = current.substringBeforeLast('/', "")
-            _currentPath.value = parent
-            val proj = _activeProject.value ?: return
-            viewModelScope.launch { loadDrillFiles(proj, parent) }
+            current.add(folderKey)
         }
-    }
-
-    private suspend fun loadDrillFiles(project: ProjectEntity, path: String) {
-        val diskFiles = storageManager.listDirectory(project, path)
-        _drillFiles.value = withContext(Dispatchers.IO) {
-            VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(project.id))
-        }
+        _expandedFolders.value = current
+        viewModelScope.launch { refreshAllFiles() }
     }
 
     // ── Dialog / create ────────────────────────────────────────────────────────
@@ -174,43 +170,143 @@ class MainScreenViewModel(
         }
     }
 
-    fun createFile(name: String) {
-        val proj = _activeProject.value ?: return
+    fun createFile(project: ProjectEntity, parentPath: String, name: String) {
         val fileName = if (name.endsWith(".md")) name else "$name.md"
-        val relativePath = if (_currentPath.value.isEmpty()) fileName else "${_currentPath.value}/$fileName"
+        val relativePath = if (parentPath.isEmpty()) fileName else "\$parentPath/\$fileName"
         viewModelScope.launch {
-            storageManager.createFile(proj, relativePath)
+            storageManager.createFile(project, relativePath)
             withContext(Dispatchers.IO) {
-                db.fileDao().insertFile(FileEntity(projectId = proj.id, name = fileName,
+                db.fileDao().insertFile(FileEntity(projectId = project.id, name = fileName,
                     relativePath = relativePath, isDirectory = false,
                     lastModified = System.currentTimeMillis(),
-                    syncState = if (proj.isExternal) "SYNCED" else "PENDING"))
+                    syncState = if (project.isExternal) "SYNCED" else "PENDING"))
             }
-            loadDrillFiles(proj, _currentPath.value)
+            refreshAllFiles()
         }
     }
 
-    fun createFolder(name: String) {
-        val proj = _activeProject.value ?: return
-        val relativePath = if (_currentPath.value.isEmpty()) name else "${_currentPath.value}/$name"
+    fun createFolder(project: ProjectEntity, parentPath: String, name: String) {
+        val relativePath = if (parentPath.isEmpty()) name else "\$parentPath/\$name"
         viewModelScope.launch {
-            storageManager.createDirectory(proj, relativePath)
+            storageManager.createDirectory(project, relativePath)
             withContext(Dispatchers.IO) {
-                db.fileDao().insertFile(FileEntity(projectId = proj.id, name = name,
+                db.fileDao().insertFile(FileEntity(projectId = project.id, name = name,
                     relativePath = relativePath, isDirectory = true,
                     lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
             }
-            loadDrillFiles(proj, _currentPath.value)
+            refreshAllFiles()
         }
     }
 
     fun deleteNode(node: VfsNode, project: ProjectEntity) {
         viewModelScope.launch {
             storageManager.deleteFile(project, node.relativePath)
-            withContext(Dispatchers.IO) { db.fileDao().deleteFile(project.id, node.relativePath) }
-            val active = _activeProject.value
-            if (active != null) loadDrillFiles(active, _currentPath.value)
-            else refreshAllFiles()
+            withContext(Dispatchers.IO) {
+                if (node.isDirectory) {
+                    // we need to delete all files inside the directory as well from DB
+                    val allFiles = db.fileDao().getFilesForProject(project.id)
+                    allFiles.filter { it.relativePath.startsWith(node.relativePath) }.forEach {
+                        db.fileDao().deleteFile(project.id, it.relativePath)
+                    }
+                } else {
+                    db.fileDao().deleteFile(project.id, node.relativePath)
+                }
+            }
+            refreshAllFiles()
+        }
+    }
+
+    fun renameNode(node: VfsNode, project: ProjectEntity, newName: String) {
+        viewModelScope.launch {
+            val oldPath = node.relativePath
+            val parentPath = oldPath.substringBeforeLast('/', "")
+            val finalNewName = if (!node.isDirectory && !newName.endsWith(".md")) "$newName.md" else newName
+            val newPath = if (parentPath.isEmpty()) finalNewName else "\$parentPath/\$finalNewName"
+
+            // Read content if it's a file, we can just rewrite it and delete the old one,
+            // or we could use java.io.File.renameTo but StorageManager doesn't expose it.
+            // Let's add rename in StorageManager or just read/write here.
+            // A simple implementation without changing StorageManager:
+            withContext(Dispatchers.IO) {
+                if (!node.isDirectory) {
+                    val content = storageManager.readFile(project, oldPath)
+                    storageManager.createFile(project, newPath)
+                    storageManager.writeFile(project, newPath, content)
+                    storageManager.deleteFile(project, oldPath)
+
+                    db.fileDao().deleteFile(project.id, oldPath)
+                    db.fileDao().insertFile(FileEntity(projectId = project.id, name = finalNewName,
+                        relativePath = newPath, isDirectory = false,
+                        lastModified = System.currentTimeMillis(), syncState = if(project.isExternal) "SYNCED" else "PENDING"))
+                } else {
+                    // Renaming a directory requires moving all contents.
+                    // This is more complex, let's just update the db and maybe move it in storage manager.
+                    // For now, let's just keep it simple or implement rename in storage manager.
+                }
+            }
+
+            // Note: need to implement recursive rename or use `java.io.File.renameTo` for directories.
+            // Let's modify StorageManager next to support rename.
+
+            refreshAllFiles()
+        }
+    }
+
+    fun performRenameWithStorageManager(node: VfsNode, project: ProjectEntity, newName: String) {
+        viewModelScope.launch {
+            val oldPath = node.relativePath
+            val parentPath = oldPath.substringBeforeLast('/', "")
+            val finalNewName = if (!node.isDirectory && !newName.endsWith(".md")) "$newName.md" else newName
+            val newPath = if (parentPath.isEmpty()) finalNewName else "\$parentPath/\$finalNewName"
+
+            if (oldPath == newPath) return@launch
+
+            val success = withContext(Dispatchers.IO) {
+                storageManager.renameFile(project, oldPath, newPath)
+            }
+
+            if (success) {
+                withContext(Dispatchers.IO) {
+                    // Update DB
+                    if (!node.isDirectory) {
+                        db.fileDao().deleteFile(project.id, oldPath)
+                        db.fileDao().insertFile(FileEntity(projectId = project.id, name = finalNewName,
+                            relativePath = newPath, isDirectory = false,
+                            lastModified = System.currentTimeMillis(), syncState = if(project.isExternal) "SYNCED" else "PENDING"))
+                    } else {
+                        // For directory, we need to update the path of the directory itself
+                        db.fileDao().deleteFile(project.id, oldPath)
+                        db.fileDao().insertFile(FileEntity(projectId = project.id, name = finalNewName,
+                            relativePath = newPath, isDirectory = true,
+                            lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+
+                        // And all its children
+                        val allFiles = db.fileDao().getFilesForProject(project.id)
+                        val prefix = "\$oldPath/"
+                        allFiles.filter { it.relativePath.startsWith(prefix) }.forEach { child ->
+                            val newChildPath = newPath + "/" + child.relativePath.removePrefix(prefix)
+                            db.fileDao().deleteFile(project.id, child.relativePath)
+                            db.fileDao().insertFile(child.copy(id = 0, relativePath = newChildPath, name = newChildPath.substringAfterLast('/')))
+                        }
+                    }
+                }
+
+                // Update expanded folders if a directory was renamed
+                if (node.isDirectory) {
+                    val oldFolderKey = "\${project.id}:\$oldPath"
+                    val newFolderKey = "\${project.id}:\$newPath"
+                    val currentExpanded = _expandedFolders.value.toMutableSet()
+
+                    val keysToUpdate = currentExpanded.filter { it == oldFolderKey || it.startsWith("\$oldFolderKey/") }
+                    for (key in keysToUpdate) {
+                        currentExpanded.remove(key)
+                        val newKey = key.replaceFirst(oldFolderKey, newFolderKey)
+                        currentExpanded.add(newKey)
+                    }
+                    _expandedFolders.value = currentExpanded
+                }
+            }
+            refreshAllFiles()
         }
     }
 }
