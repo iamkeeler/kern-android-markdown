@@ -58,19 +58,11 @@ fun MainScreen(
             .safeDrawingPadding()
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        // ── Brand Header Box ──────────────────────────────────────────────────────
+        // ── Brand Header ──────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(
-                    border = BorderStroke(1.dp, theme.accent),
-                    shape = RoundedCornerShape(4.dp)
-                )
-                .background(
-                    color = Color.Black.copy(alpha = 0.05f),
-                    shape = RoundedCornerShape(4.dp)
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(top = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -113,7 +105,12 @@ fun MainScreen(
                 )
             }
         }
-        Spacer(Modifier.height(20.dp))
+        
+        HorizontalDivider(
+            color = theme.textMuted.copy(alpha = 0.15f),
+            thickness = 1.dp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
 
         // ── Toolbar: back / path / create ──────────────────────────────────────
         Row(

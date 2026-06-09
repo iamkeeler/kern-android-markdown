@@ -34,7 +34,7 @@ The custom parser alters text representations on the fly when adding markdown de
 
 ### 4. Interface Density & Aesthetic Constraints
 When writing UI bindings, you must adhere strictly to the parameters defined in `design.md`:
-* **No Cards/Dividers:** Discard standard mobile framing patterns like floating cards and visible divider lines. Structural hierarchy must be driven solely by typographic weight and proportional spatial layout.
+* **No Cards/Dividers:** Discard standard mobile framing patterns like floating cards. Visible divider lines are generally avoided, but structural dividers/lines that resemble formatting elements found in printed books (such as thin bookish separator lines) are permitted.
 * **Layout Margins:** Enforce an 8dp grid spacing system strictly. Line height for the core editing workspace must be locked at exactly 1.6x.
 * **Adaptive Split-States:** Implement the adaptive split-screen layout for width constraints >= 600dp (35% left file tree rail, 65% central document workspace canvas capped at a max text line width of 680dp).
 * **Animations:** For inline-reveal animations, use an instantaneous alpha fade pipeline (0ms to 50ms). Do not use sliding or spatial displacement dampening curves.
