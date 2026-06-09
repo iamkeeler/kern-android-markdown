@@ -131,10 +131,34 @@ interface ThemeDao {
     fun deleteTheme(id: Long)
 }
 
-@Database(entities = [ProjectEntity::class, FileEntity::class, SettingEntity::class, ThemeEntity::class], version = 1, exportSchema = false)
+@Entity(tableName = "quotes")
+data class QuoteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val text: String,
+    val author: String,
+    val year: Int
+)
+
+@Dao
+interface QuoteDao {
+    @Query("SELECT * FROM quotes")
+    fun getAllQuotesFlow(): Flow<List<QuoteEntity>>
+
+    @Query("SELECT * FROM quotes")
+    fun getAllQuotes(): List<QuoteEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertQuotes(quotes: List<QuoteEntity>)
+
+    @Query("SELECT COUNT(*) FROM quotes")
+    fun getCount(): Int
+}
+
+@Database(entities = [ProjectEntity::class, FileEntity::class, SettingEntity::class, ThemeEntity::class, QuoteEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
     abstract fun fileDao(): FileDao
     abstract fun settingDao(): SettingDao
     abstract fun themeDao(): ThemeDao
+    abstract fun quoteDao(): QuoteDao
 }

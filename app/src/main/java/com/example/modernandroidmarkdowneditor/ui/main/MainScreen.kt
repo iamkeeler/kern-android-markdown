@@ -1,15 +1,21 @@
 package com.example.modernandroidmarkdowneditor.ui.main
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -20,6 +26,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.modernandroidmarkdowneditor.EditorKey
+import com.example.modernandroidmarkdowneditor.SettingsKey
+import com.example.modernandroidmarkdowneditor.ui.settings.MinimalOutlinedButton
 import com.example.modernandroidmarkdowneditor.data.local.AppDatabase
 import com.example.modernandroidmarkdowneditor.data.local.ProjectEntity
 import com.example.modernandroidmarkdowneditor.data.storage.StorageManager
@@ -50,22 +58,62 @@ fun MainScreen(
             .safeDrawingPadding()
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        // ── App title ──────────────────────────────────────────────────────────
-        Text(
-            text = "Kern",
-            fontSize = 26.sp,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Light,
-            color = theme.textPrimary,
-            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
-        )
-        Text(
-            text = "A typography-first index of text works",
-            fontSize = 11.sp,
-            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-            color = theme.textMuted,
-            modifier = Modifier.padding(bottom = 20.dp)
-        )
+        // ── Brand Header Box ──────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    border = BorderStroke(1.dp, theme.accent),
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .background(
+                    color = Color.Black.copy(alpha = 0.05f),
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Kern",
+                    fontSize = 28.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Light,
+                    color = theme.textPrimary,
+                    letterSpacing = (-0.5).sp
+                )
+                
+                state.activeQuote?.let { quote ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "“${quote.text}” — ${quote.author}, ${quote.year}",
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Normal,
+                        color = theme.textMuted,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(end = 16.dp)
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clickable { onItemClick(SettingsKey) },
+                contentAlignment = Alignment.TopEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = "Settings",
+                    tint = theme.textMuted,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(20.dp))
 
         // ── Toolbar: back / path / create ──────────────────────────────────────
         Row(
@@ -105,19 +153,6 @@ fun MainScreen(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                // Create actions only available when drilled into a specific project folder
-                if (state.activeProject != null) {
-                    Text(
-                        text = "[+ file]",
-                        color = theme.accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.clickable { showCreateFileDialog = true }.padding(vertical = 4.dp)
-                    )
-                    Text(
-                        text = "[+ folder]",
-                        color = theme.accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.clickable { showCreateFolderDialog = true }.padding(vertical = 4.dp)
-                    )
-                }
                 Text(
                     text = "[+ project]",
                     color = theme.accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
@@ -128,62 +163,86 @@ fun MainScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // ── Single unified list ────────────────────────────────────────────────
-        if (state.activeProject == null) {
-            // Root view: flat list of all projects and their files
-            if (state.allItems.isEmpty()) {
-                EmptyStateHint(
-                    title = "No files yet",
-                    body = "Tap [+ project] above to create your first workspace.",
-                    theme = theme
-                )
+        // ── Single unified list and floating buttons container ─────────────────
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (state.activeProject == null) {
+                // Root view: flat list of all projects and their files
+                if (state.allItems.isEmpty()) {
+                    EmptyStateHint(
+                        title = "No files yet",
+                        body = "Tap [+ project] above to create your first workspace.",
+                        theme = theme
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Top
+                    ) {
+                        items(state.allItems) { item ->
+                            when (item) {
+                                is FileListItem.ProjectHeader -> ProjectSectionHeader(item.project, theme)
+                                is FileListItem.FileRow       -> VfsNodeRow(
+                                    node            = item.node,
+                                    theme           = theme,
+                                    isExternalProject = item.project.isExternal,
+                                    onNodeClick     = { node ->
+                                        if (node.isDirectory) vm.navigateToFolder(node, item.project)
+                                        else onItemClick(EditorKey(item.project.id, node.relativePath))
+                                    },
+                                    onDeleteClick   = { node -> nodeToDelete = Pair(node, item.project) }
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    items(state.allItems) { item ->
-                        when (item) {
-                            is FileListItem.ProjectHeader -> ProjectSectionHeader(item.project, theme)
-                            is FileListItem.FileRow       -> VfsNodeRow(
-                                node            = item.node,
-                                theme           = theme,
-                                isExternalProject = item.project.isExternal,
-                                onNodeClick     = { node ->
-                                    if (node.isDirectory) vm.navigateToFolder(node, item.project)
-                                    else onItemClick(EditorKey(item.project.id, node.relativePath))
+                // Drill-down view: single project subfolder
+                if (state.drillFiles.isEmpty()) {
+                    EmptyStateHint(
+                        title = "Folder is empty",
+                        body = "Tap [+ file] or [+ folder] above to add something.",
+                        theme = theme
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Top
+                    ) {
+                        items(state.drillFiles) { node ->
+                            VfsNodeRow(
+                                node              = node,
+                                theme             = theme,
+                                isExternalProject = state.activeProject!!.isExternal,
+                                onNodeClick       = { clicked ->
+                                    if (clicked.isDirectory) vm.navigateToFolder(clicked, state.activeProject!!)
+                                    else onItemClick(EditorKey(state.activeProject!!.id, clicked.relativePath))
                                 },
-                                onDeleteClick   = { node -> nodeToDelete = Pair(node, item.project) }
+                                onDeleteClick     = { node -> nodeToDelete = Pair(node, state.activeProject!!) }
                             )
                         }
                     }
                 }
             }
-        } else {
-            // Drill-down view: single project subfolder
-            if (state.drillFiles.isEmpty()) {
-                EmptyStateHint(
-                    title = "Folder is empty",
-                    body = "Tap [+ file] or [+ folder] above to add something.",
-                    theme = theme
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Top
+
+            // Floating minimalist Outlined Buttons (FAB) at bottom-right
+            if (state.activeProject != null) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 16.dp, end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.End
                 ) {
-                    items(state.drillFiles) { node ->
-                        VfsNodeRow(
-                            node              = node,
-                            theme             = theme,
-                            isExternalProject = state.activeProject!!.isExternal,
-                            onNodeClick       = { clicked ->
-                                if (clicked.isDirectory) vm.navigateToFolder(clicked, state.activeProject!!)
-                                else onItemClick(EditorKey(state.activeProject!!.id, clicked.relativePath))
-                            },
-                            onDeleteClick     = { node -> nodeToDelete = Pair(node, state.activeProject!!) }
-                        )
-                    }
+                    MinimalOutlinedButton(
+                        text = "+ Folder",
+                        onClick = { showCreateFolderDialog = true },
+                        theme = theme
+                    )
+                    MinimalOutlinedButton(
+                        text = "+ File",
+                        onClick = { showCreateFileDialog = true },
+                        theme = theme
+                    )
                 }
             }
         }
