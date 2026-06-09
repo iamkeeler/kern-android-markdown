@@ -119,7 +119,7 @@ class MarkdownVisualTransformation(
         paragraph: com.example.modernandroidmarkdowneditor.parser.ParagraphBlock
     ): Pair<String, IndexTransformationMatrix> {
         val raw = paragraph.rawText
-        val tokensToStrip = paragraph.elements.filter {
+        val tokensToProcess = paragraph.elements.filter {
             when (it.type) {
                 MarkdownElementType.TOKEN_HEADER,
                 MarkdownElementType.TOKEN_BOLD,
@@ -137,10 +137,21 @@ class MarkdownVisualTransformation(
         val strippedRanges = mutableListOf<IndexRange>()
         val sb = StringBuilder()
         var lastIdx = 0
-        for (token in tokensToStrip) {
+        for (token in tokensToProcess) {
             if (token.start >= lastIdx) {
                 sb.append(raw.substring(lastIdx, token.start))
-                strippedRanges.add(IndexRange(token.start, token.end))
+                if (token.type == MarkdownElementType.TOKEN_LIST_BULLET) {
+                    if (paragraph.blockType == MarkdownBlockType.UNORDERED_LIST) {
+                        val originalMarker = raw.substring(token.start, token.end)
+                        val bulletChar = "•"
+                        val replaced = if (originalMarker.endsWith(" ")) "$bulletChar " else bulletChar
+                        sb.append(replaced)
+                    } else {
+                        sb.append(raw.substring(token.start, token.end))
+                    }
+                } else {
+                    strippedRanges.add(IndexRange(token.start, token.end))
+                }
                 lastIdx = token.end
             }
         }
@@ -199,6 +210,13 @@ class MarkdownVisualTransformation(
                     val tEnd = matrix.originalToTransformed(end)
                     if (tStart < tEnd) {
                         builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = tokenColor), tStart, tEnd)
+                    }
+                }
+                MarkdownElementType.TOKEN_LIST_BULLET -> {
+                    val tStart = matrix.originalToTransformed(start)
+                    val tEnd = matrix.originalToTransformed(end)
+                    if (tStart < tEnd) {
+                        builder.addStyle(SpanStyle(color = tokenColor, fontWeight = FontWeight.Bold), tStart, tEnd)
                     }
                 }
                 else -> {}

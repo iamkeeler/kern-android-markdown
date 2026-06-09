@@ -17,6 +17,7 @@ import com.example.modernandroidmarkdowneditor.data.storage.StorageManager
 import com.example.modernandroidmarkdowneditor.ui.editor.EditorScreen
 import com.example.modernandroidmarkdowneditor.ui.editor.EditorViewModel
 import com.example.modernandroidmarkdowneditor.ui.main.MainScreen
+import com.example.modernandroidmarkdowneditor.ui.settings.SettingsScreen
 
 @Composable
 fun MainNavigation(
@@ -50,9 +51,14 @@ fun MainNavigation(
                         editorViewModel.closeFile()
                         backStack.removeLastOrNull()
                     },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.statusBars)
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            entry<SettingsKey> {
+                SettingsScreen(
+                    db = db,
+                    onBackClick = { backStack.removeLastOrNull() },
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         },

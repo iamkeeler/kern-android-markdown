@@ -5,6 +5,7 @@ import com.example.modernandroidmarkdowneditor.parser.IndexTransformationMatrix
 import com.example.modernandroidmarkdowneditor.parser.MarkdownBlockType
 import com.example.modernandroidmarkdowneditor.parser.MarkdownElementType
 import com.example.modernandroidmarkdowneditor.parser.MarkdownParser
+import com.example.modernandroidmarkdowneditor.parser.MarkdownEditorEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -132,4 +133,280 @@ class MarkdownParserTest {
         val complexHighlights = metrics.highlights.filter { it.type == com.example.modernandroidmarkdowneditor.analysis.HighlightType.COMPLEX_WORD }
         assertEquals(2, complexHighlights.size)
     }
+
+    @Test
+    fun testListParsingAndSplitting() {
+        // Test isListLine directly
+        assertTrue(MarkdownParser.isListLine("- Item"))
+        assertTrue(MarkdownParser.isListLine("* Item"))
+        assertTrue(MarkdownParser.isListLine("+ Item"))
+        assertTrue(MarkdownParser.isListLine("  - Item"))
+        assertTrue(MarkdownParser.isListLine("1. Item"))
+        assertTrue(MarkdownParser.isListLine("12. Item"))
+        assertTrue(MarkdownParser.isListLine("  12. Item"))
+        assertTrue(!MarkdownParser.isListLine("-Item"))
+        assertTrue(!MarkdownParser.isListLine("1.Item"))
+
+        // Test splitDocument with consecutive lists and plain paragraphs
+        val doc = """
+            First block.
+            Still first block.
+            
+            - List item 1
+            - List item 2
+            
+            Plain block after list.
+        """.trimIndent()
+
+        val blocks = MarkdownParser.splitDocument(doc)
+        assertEquals(4, blocks.size)
+        assertEquals("First block.\nStill first block.", blocks[0])
+        assertEquals("- List item 1", blocks[1])
+        assertEquals("- List item 2", blocks[2])
+        assertEquals("Plain block after list.", blocks[3])
+
+        // Test joinDocument with consecutive list items
+        val joined = MarkdownParser.joinDocument(blocks)
+        val expectedJoined = """
+            First block.
+            Still first block.
+            
+            - List item 1
+            - List item 2
+            
+            Plain block after list.
+        """.trimIndent()
+        assertEquals(expectedJoined, joined)
+
+        // Test parseParagraph for indented lists
+        val indentedItem = MarkdownParser.parseParagraph("  - Nest")
+        assertEquals(MarkdownBlockType.UNORDERED_LIST, indentedItem.blockType)
+        assertEquals(1, indentedItem.elements.size)
+        assertEquals(MarkdownElementType.TOKEN_LIST_BULLET, indentedItem.elements[0].type)
+        assertEquals(2, indentedItem.elements[0].start)
+        assertEquals(4, indentedItem.elements[0].end)
+
+        // Test parseParagraph for ordered lists
+        val orderedItem = MarkdownParser.parseParagraph("  99. Item")
+        assertEquals(MarkdownBlockType.ORDERED_LIST, orderedItem.blockType)
+        assertEquals(1, orderedItem.elements.size)
+        assertEquals(MarkdownElementType.TOKEN_LIST_BULLET, orderedItem.elements[0].type)
+        assertEquals(2, orderedItem.elements[0].start)
+        assertEquals(6, orderedItem.elements[0].end)
+    }
+
+    @Test
+    fun testEditorEngineListContinuation() {
+        // Test Checklist Continuation
+        val checklistRes1 = MarkdownEditorEngine.checkContinuation("  - [x] Task")
+        assertTrue(checklistRes1.isContinuation)
+        assertEquals("  - [ ] ", checklistRes1.nextLinePrefix)
+        assertTrue(!checklistRes1.isExit)
+
+        val checklistResEmpty = MarkdownEditorEngine.checkContinuation("  - [ ] ")
+        assertTrue(checklistResEmpty.isContinuation)
+        assertEquals("", checklistResEmpty.nextLinePrefix)
+        assertTrue(checklistResEmpty.isExit)
+
+        // Test Ordered List Continuation
+        val orderedRes1 = MarkdownEditorEngine.checkContinuation("1. Apple")
+        assertTrue(orderedRes1.isContinuation)
+        assertEquals("2. ", orderedRes1.nextLinePrefix)
+        assertTrue(!orderedRes1.isExit)
+
+        val orderedResEmpty = MarkdownEditorEngine.checkContinuation("9. ")
+        assertTrue(orderedResEmpty.isContinuation)
+        assertEquals("", orderedResEmpty.nextLinePrefix)
+        assertTrue(orderedResEmpty.isExit)
+
+        // Test Bullet List Continuation
+        val bulletRes1 = MarkdownEditorEngine.checkContinuation("  * Item")
+        assertTrue(bulletRes1.isContinuation)
+        assertEquals("  * ", bulletRes1.nextLinePrefix)
+        assertTrue(!bulletRes1.isExit)
+
+        val bulletResEmpty = MarkdownEditorEngine.checkContinuation("  * ")
+        assertTrue(bulletResEmpty.isContinuation)
+        assertEquals("", bulletResEmpty.nextLinePrefix)
+        assertTrue(bulletResEmpty.isExit)
+
+        // Test Blockquote Continuation
+        val quoteRes1 = MarkdownEditorEngine.checkContinuation("> Quote")
+        assertTrue(quoteRes1.isContinuation)
+        assertEquals("> ", quoteRes1.nextLinePrefix)
+        assertTrue(!quoteRes1.isExit)
+
+        val quoteResEmpty = MarkdownEditorEngine.checkContinuation("> ")
+        assertTrue(quoteResEmpty.isContinuation)
+        assertEquals("", quoteResEmpty.nextLinePrefix)
+        assertTrue(quoteResEmpty.isExit)
+    }
+
+    @Test
+    fun testEditorEngineTextFormatting() {
+        // Selection wrapping
+        val wrapResult = MarkdownEditorEngine.handleTextChange(
+            oldText = "hello", oldSelStart = 0, oldSelEnd = 5,
+            newText = "*", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true
+        )
+        assertEquals("*hello*", wrapResult.text)
+        assertEquals(1, wrapResult.selectionStart)
+        assertEquals(6, wrapResult.selectionEnd)
+
+        // Auto-pairing: opening brackets
+        val pairBracket = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "(", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true
+        )
+        assertEquals("()", pairBracket.text)
+        assertEquals(1, pairBracket.selectionStart)
+
+        // Overtype skipping: closing brackets
+        val skipBracket = MarkdownEditorEngine.handleTextChange(
+            oldText = "()", oldSelStart = 1, oldSelEnd = 1,
+            newText = "())", newSelStart = 2, newSelEnd = 2,
+            autoHeaderSpacing = true
+        )
+        assertEquals("()", skipBracket.text)
+        assertEquals(2, skipBracket.selectionStart)
+
+        // Smart Typography: dashes
+        val enDash = MarkdownEditorEngine.handleTextChange(
+            oldText = "-", oldSelStart = 1, oldSelEnd = 1,
+            newText = "--", newSelStart = 2, newSelEnd = 2,
+            autoHeaderSpacing = true
+        )
+        assertEquals("–", enDash.text)
+        assertEquals(1, enDash.selectionStart)
+
+        val emDash = MarkdownEditorEngine.handleTextChange(
+            oldText = "–", oldSelStart = 1, oldSelEnd = 1,
+            newText = "–-", newSelStart = 2, newSelEnd = 2,
+            autoHeaderSpacing = true
+        )
+        assertEquals("—", emDash.text)
+        assertEquals(1, emDash.selectionStart)
+
+        // Smart Typography: ellipsis
+        val ellipsis = MarkdownEditorEngine.handleTextChange(
+            oldText = "..", oldSelStart = 2, oldSelEnd = 2,
+            newText = "...", newSelStart = 3, newSelEnd = 3,
+            autoHeaderSpacing = true
+        )
+        assertEquals("…", ellipsis.text)
+        assertEquals(1, ellipsis.selectionStart)
+
+        // Smart Typography: quotes
+        val openQuote = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "\"", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true
+        )
+        // Quote is converted to smart opening quote “ and paired with closing ”
+        assertEquals("“”", openQuote.text)
+        assertEquals(1, openQuote.selectionStart)
+
+        val closeQuote = MarkdownEditorEngine.handleTextChange(
+            oldText = "“hello", oldSelStart = 6, oldSelEnd = 6,
+            newText = "“hello\"", newSelStart = 7, newSelEnd = 7,
+            autoHeaderSpacing = true
+        )
+        assertEquals("“hello”", closeQuote.text)
+        assertEquals(7, closeQuote.selectionStart)
+
+        // Auto Header Spacing
+        val headerSpace = MarkdownEditorEngine.handleTextChange(
+            oldText = "##", oldSelStart = 2, oldSelEnd = 2,
+            newText = "##T", newSelStart = 3, newSelEnd = 3,
+            autoHeaderSpacing = true
+        )
+        assertEquals("## T", headerSpace.text)
+        assertEquals(4, headerSpace.selectionStart)
+
+        // Auto Header Spacing Disabled
+        val headerSpaceDisabled = MarkdownEditorEngine.handleTextChange(
+            oldText = "##", oldSelStart = 2, oldSelEnd = 2,
+            newText = "##T", newSelStart = 3, newSelEnd = 3,
+            autoHeaderSpacing = false
+        )
+        assertEquals("##T", headerSpaceDisabled.text)
+        assertEquals(3, headerSpaceDisabled.selectionStart)
+
+        // Curly Braces Auto-complete Enabled
+        val pairBraces = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "{", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true, autoCompleteEnabled = true, autoCompleteBraces = true
+        )
+        assertEquals("{}", pairBraces.text)
+        assertEquals(1, pairBraces.selectionStart)
+
+        // Curly Braces Overtype Skipping
+        val skipBraces = MarkdownEditorEngine.handleTextChange(
+            oldText = "{}", oldSelStart = 1, oldSelEnd = 1,
+            newText = "{}}", newSelStart = 2, newSelEnd = 2,
+            autoHeaderSpacing = true, autoCompleteEnabled = true, autoCompleteBraces = true
+        )
+        assertEquals("{}", skipBraces.text)
+        assertEquals(2, skipBraces.selectionStart)
+
+        // Curly Braces Disabled
+        val disabledBraces = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "{", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true, autoCompleteEnabled = true, autoCompleteBraces = false
+        )
+        assertEquals("{", disabledBraces.text)
+        assertEquals(1, disabledBraces.selectionStart)
+
+        // Master Auto-complete Disabled
+        val disabledMaster = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "{", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true, autoCompleteEnabled = false, autoCompleteBraces = true
+        )
+        assertEquals("{", disabledMaster.text)
+        assertEquals(1, disabledMaster.selectionStart)
+
+        // Quote Auto-complete Disabled
+        val disabledQuotes = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "\"", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true, autoCompleteEnabled = true, autoCompleteQuotes = false
+        )
+        // Since quote pairing is disabled, the straight quote gets converted to curly opening quote by smart typography,
+        // but it does NOT append the closing curly quote.
+        assertEquals("“", disabledQuotes.text)
+        assertEquals(1, disabledQuotes.selectionStart)
+
+        // Single Quote Auto-complete Enabled
+        val pairSingleQuotes = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "'", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true, autoCompleteEnabled = true, autoCompleteSingleQuotes = true
+        )
+        assertEquals("‘’", pairSingleQuotes.text)
+        assertEquals(1, pairSingleQuotes.selectionStart)
+
+        // Single Quote Overtype Skipping
+        val skipSingleQuotes = MarkdownEditorEngine.handleTextChange(
+            oldText = "‘’", oldSelStart = 1, oldSelEnd = 1,
+            newText = "‘’'", newSelStart = 2, newSelEnd = 2,
+            autoHeaderSpacing = true, autoCompleteEnabled = true, autoCompleteSingleQuotes = true
+        )
+        assertEquals("‘’", skipSingleQuotes.text)
+        assertEquals(2, skipSingleQuotes.selectionStart)
+
+        // Single Quote Auto-complete Disabled
+        val disabledSingleQuotes = MarkdownEditorEngine.handleTextChange(
+            oldText = "", oldSelStart = 0, oldSelEnd = 0,
+            newText = "'", newSelStart = 1, newSelEnd = 1,
+            autoHeaderSpacing = true, autoCompleteEnabled = true, autoCompleteSingleQuotes = false
+        )
+        assertEquals("‘", disabledSingleQuotes.text)
+        assertEquals(1, disabledSingleQuotes.selectionStart)
+    }
 }
+

@@ -98,6 +98,16 @@ class EditorViewModel(
         }
         // Reactively observe setting changes to keep ViewModel in sync
         viewModelScope.launch(Dispatchers.IO) {
+            db.settingDao().getSettingFlow("selected_theme_id").collect { _ ->
+                loadSelectedTheme()
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            db.settingDao().getSettingFlow("editor_font_family").collect { _ ->
+                loadSelectedTheme()
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
             db.settingDao().getSettingFlow("auto_header_spacing").collect { setting ->
                 val autoHeader = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {

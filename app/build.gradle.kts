@@ -62,6 +62,7 @@ dependencies {
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.material3)
+  implementation("androidx.compose.material:material-icons-core")
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests
@@ -93,4 +94,14 @@ dependencies {
 
   // Serialization JSON
   implementation(libs.kotlinx.serialization.json)
+  implementation(libs.androidx.documentfile)
+}
+dependencies {
+  implementation("androidx.compose.material:material-icons-extended:1.5.0")
+}
+
+android {
+    lint {
+        abortOnError = false
+    }
 }

@@ -482,6 +482,12 @@ fun SidebarPane(
     modifier: Modifier = Modifier
 ) {
     val theme = state.activeTheme
+    val editorFont = when (theme.editorFontFamily.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "sans-serif", "sansserif" -> FontFamily.SansSerif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.Default
+    }
     val title = when (state.sidebarMode) {
         SidebarMode.METRICS -> "Readability"
         SidebarMode.SETTINGS -> "Settings"
@@ -494,7 +500,7 @@ fun SidebarPane(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, color = theme.textPrimary, fontSize = 18.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Light)
+            Text(title, color = theme.textPrimary, fontSize = 18.sp, fontFamily = editorFont, fontWeight = FontWeight.Light)
             IconButton(
                 onClick = onCloseClick,
                 modifier = Modifier.semantics { contentDescription = "Close sidebar" }
