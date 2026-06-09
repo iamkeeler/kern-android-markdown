@@ -157,6 +157,24 @@ class MainScreenViewModel(
         }
     }
 
+    fun navigateUpToRoot() {
+        _activeProject.value = null
+        _currentPath.value = ""
+        viewModelScope.launch { refreshAllFiles() }
+    }
+
+    fun navigateToFolderRoot(project: ProjectEntity) {
+        _activeProject.value = project
+        _currentPath.value = ""
+        viewModelScope.launch { loadDrillFiles(project, "") }
+    }
+
+    fun navigateToSegment(project: ProjectEntity, path: String) {
+        _activeProject.value = project
+        _currentPath.value = path
+        viewModelScope.launch { loadDrillFiles(project, path) }
+    }
+
     fun selectProject(project: ProjectEntity) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -239,6 +257,15 @@ class MainScreenViewModel(
             val active = _activeProject.value
             if (active != null) loadDrillFiles(active, _currentPath.value)
             else refreshAllFiles()
+        }
+    }
+
+    fun deleteProject(project: ProjectEntity) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                db.projectDao().deleteProjectById(project.id)
+            }
+            refreshAllFiles()
         }
     }
 

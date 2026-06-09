@@ -33,6 +33,12 @@ import com.example.modernandroidmarkdowneditor.data.local.ProjectEntity
 import com.example.modernandroidmarkdowneditor.data.storage.StorageManager
 import com.example.modernandroidmarkdowneditor.data.storage.VfsNode
 import com.example.modernandroidmarkdowneditor.ui.theme.ThemeEngine
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.text.TextStyle
 
 @Composable
 fun MainScreen(
@@ -47,6 +53,11 @@ fun MainScreen(
     var createFileDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var createFolderDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var nodeToDelete           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
+    var projectToDelete        by remember { mutableStateOf<ProjectEntity?>(null) }
+
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
+    var isSortAscending by remember { mutableStateOf(true) }
 
     val theme = ThemeEngine.DefaultLight.toColorTheme()
 
@@ -57,51 +68,83 @@ fun MainScreen(
             .safeDrawingPadding()
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        // ── Brand Header ──────────────────────────────────────────────────────────
+        // ── Brand Header & Search ──────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = "Kern",
-                    fontSize = 28.sp,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Light,
-                    color = theme.textPrimary,
-                    letterSpacing = (-0.5).sp
+            if (isSearchActive) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search files...", color = theme.textMuted, fontSize = 13.sp) },
+                    textStyle = TextStyle(fontSize = 13.sp, color = theme.textPrimary),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .padding(end = 8.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = theme.textPrimary,
+                        unfocusedTextColor = theme.textPrimary,
+                        focusedBorderColor = theme.accent,
+                        unfocusedBorderColor = theme.textMuted.copy(alpha = 0.3f),
+                        cursorColor = theme.accent
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { searchQuery = ""; isSearchActive = false }) {
+                            Text("✕", color = theme.textMuted, fontSize = 14.sp)
+                        }
+                    }
                 )
-                
-                state.activeQuote?.let { quote ->
-                    Spacer(Modifier.height(4.dp))
+            } else {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
-                        text = "“${quote.text}” — ${quote.author}, ${quote.year}",
-                        fontSize = 12.sp,
+                        text = "Kern",
+                        fontSize = 28.sp,
                         fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Normal,
-                        color = theme.textMuted,
-                        lineHeight = 16.sp,
-                        modifier = Modifier.padding(end = 16.dp)
+                        fontWeight = FontWeight.Light,
+                        color = theme.textPrimary,
+                        letterSpacing = (-0.5).sp
                     )
+                    
+                    state.activeQuote?.let { quote ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "“${quote.text}” — ${quote.author}, ${quote.year}",
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Normal,
+                            color = theme.textMuted,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(end = 16.dp)
+                        )
+                    }
                 }
             }
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clickable { onItemClick(SettingsKey) },
-                contentAlignment = Alignment.TopEnd
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    tint = theme.textMuted,
-                    modifier = Modifier.size(24.dp)
-                )
+                if (!isSearchActive) {
+                    IconButton(onClick = { isSearchActive = true }) {
+                        Text("🔍", fontSize = 18.sp)
+                    }
+                }
+                IconButton(onClick = { onItemClick(SettingsKey) }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Settings",
+                        tint = theme.textMuted,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
         
@@ -111,120 +154,262 @@ fun MainScreen(
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
 
-        // ── Toolbar: back / path / create ──────────────────────────────────────
+        // ── Breadcrumbs Path Bar & Sorting ─────────────────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Back is always shown when drilled into a project
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Clear back button
                 if (state.activeProject != null) {
                     Text(
-                        text = "[back]",
+                        text = "←",
+                        color = theme.accent,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { vm.navigateUp() }
+                            .padding(end = 8.dp)
+                    )
+                }
+                
+                // files / notes / work
+                Text(
+                    text = "files",
+                    color = if (state.activeProject == null) theme.textPrimary else theme.accent,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.clickable {
+                        if (state.activeProject != null) {
+                            vm.navigateUpToRoot()
+                        }
+                    }
+                )
+                
+                state.activeProject?.let { proj ->
+                    Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    
+                    val isProjRoot = state.currentPath.isEmpty()
+                    Text(
+                        text = proj.name.lowercase(),
+                        color = if (isProjRoot) theme.textPrimary else theme.accent,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable {
+                            if (!isProjRoot) {
+                                vm.navigateToFolderRoot(proj)
+                            }
+                        }
+                    )
+                    
+                    if (state.currentPath.isNotEmpty()) {
+                        val segments = state.currentPath.split('/')
+                        segments.forEachIndexed { index, segment ->
+                            Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                            val isLast = index == segments.lastIndex
+                            val segmentPath = segments.take(index + 1).joinToString("/")
+                            Text(
+                                text = segment,
+                                color = if (isLast) theme.textPrimary else theme.accent,
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.clickable {
+                                    if (!isLast) {
+                                        vm.navigateToSegment(proj, segmentPath)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (state.activeProject == null && !isSearchActive) {
+                    Text(
+                        text = "[+ workspace]",
                         color = theme.accent,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .clickable { vm.navigateUp() }
-                            .padding(vertical = 4.dp, horizontal = 0.dp)
+                        modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text("/", color = theme.textMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    Spacer(Modifier.width(6.dp))
                 }
-                val pathLabel = when {
-                    state.activeProject == null           -> "ALL FILES"
-                    state.currentPath.isEmpty()           -> state.activeProject!!.name.uppercase()
-                    else                                  -> state.currentPath.uppercase()
-                }
+                
                 Text(
-                    text = "INDEX: $pathLabel",
-                    color = theme.textPrimary,
+                    text = if (isSortAscending) "[A-Z]" else "[Z-A]",
+                    color = theme.accent,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.sp
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "[+ project]",
-                    color = theme.accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }.padding(vertical = 4.dp)
+                    modifier = Modifier
+                        .clickable { isSortAscending = !isSortAscending }
+                        .padding(vertical = 4.dp, horizontal = 8.dp)
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
         // ── Single unified list and floating buttons container ─────────────────
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (state.activeProject == null) {
-                // Root view: flat list of all projects and their files
-                if (state.allItems.isEmpty()) {
-                    EmptyStateHint(
-                        title = "No files yet",
-                        body = "Tap [+ project] above to create your first workspace.",
-                        theme = theme
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Top
-                    ) {
-                        items(state.allItems) { item ->
-                            when (item) {
-                                is FileListItem.ProjectHeader -> {
-                                    val isSel = item.project.isSelected
-                                    ProjectSectionHeader(
-                                        project = item.project,
-                                        theme = theme,
-                                        isSelected = isSel,
-                                        onHeaderClick = { vm.selectProject(item.project) },
-                                        onCreateFileClick = { createFileDialogTargetProject = item.project },
-                                        onCreateFolderClick = { createFolderDialogTargetProject = item.project }
-                                    )
-                                }
-                                is FileListItem.FileRow       -> VfsNodeRow(
-                                    node            = item.node,
-                                    theme           = theme,
-                                    isExternalProject = item.project.isExternal,
-                                    onNodeClick     = { node ->
-                                        if (node.isDirectory) vm.navigateToFolder(node, item.project)
-                                        else onItemClick(EditorKey(item.project.id, node.relativePath))
+            AnimatedContent(
+                targetState = Triple(state.activeProject, state.currentPath, isSearchActive && searchQuery.isNotEmpty()),
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(50)) togetherWith fadeOut(animationSpec = tween(50))
+                },
+                label = "FileExplorerTransition"
+            ) { (activeProj, currentPath, isSearchingLocal) ->
+                if (isSearchingLocal) {
+                    // Global search results view (intermingled files & folders)
+                    val filteredItems = remember(state.allItems, searchQuery, isSortAscending) {
+                        state.allItems.filterIsInstance<FileListItem.FileRow>().filter {
+                            it.node.name.contains(searchQuery, ignoreCase = true)
+                        }.let { list ->
+                            if (isSortAscending) list.sortedBy { it.node.name.lowercase() }
+                            else list.sortedByDescending { it.node.name.lowercase() }
+                        }
+                    }
+
+                    if (filteredItems.isEmpty()) {
+                        EmptyStateHint(
+                            title = "No matches found",
+                            body = "Try searching for another filename.",
+                            theme = theme
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            items(filteredItems) { item ->
+                                SearchVfsNodeRow(
+                                    node = item.node,
+                                    project = item.project,
+                                    theme = theme,
+                                    onNodeClick = { clicked ->
+                                        if (clicked.isDirectory) {
+                                            vm.navigateToFolder(clicked, item.project)
+                                            isSearchActive = false
+                                            searchQuery = ""
+                                        } else {
+                                            onItemClick(EditorKey(item.project.id, clicked.relativePath))
+                                        }
                                     },
-                                    onDeleteClick   = { node -> nodeToDelete = Pair(node, item.project) }
+                                    onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
                                 )
                             }
                         }
                     }
-                }
-            } else {
-                // Drill-down view: single project subfolder
-                if (state.drillFiles.isEmpty()) {
-                    EmptyStateHint(
-                        title = "Folder is empty",
-                        body = "Tap [+ file] or [+ folder] to add something.",
-                        theme = theme
-                    )
+                } else if (activeProj == null) {
+                    // Root view: flat list of watched project folders
+                    val sortedProjects = remember(state.projects, isSortAscending) {
+                        if (isSortAscending) state.projects.sortedBy { it.name.lowercase() }
+                        else state.projects.sortedByDescending { it.name.lowercase() }
+                    }
+
+                    if (sortedProjects.isEmpty()) {
+                        EmptyStateHint(
+                            title = "No workspaces",
+                            body = "Tap [+ workspace] above to add a local or cloud folder.",
+                            theme = theme
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            items(sortedProjects) { proj ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { vm.navigateToFolderRoot(proj) }
+                                        .padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                                        Text("📁", fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = proj.name,
+                                            color = theme.textPrimary,
+                                            fontSize = 14.sp,
+                                            fontFamily = FontFamily.Serif,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.alignByBaseline()
+                                        )
+                                        if (proj.isExternal) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                                        }
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = " . ".repeat(50),
+                                            color = theme.textMuted.copy(alpha = 0.4f),
+                                            fontSize = 14.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Clip,
+                                            modifier = Modifier.weight(1f).alignByBaseline()
+                                        )
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Row(verticalAlignment = Alignment.Bottom) {
+                                        Text("DIR", color = theme.textMuted, fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
+                                        Spacer(Modifier.width(16.dp))
+                                        Text(
+                                            text = "[delete]",
+                                            color = theme.textMuted,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier
+                                                .clickable { projectToDelete = proj }
+                                                .padding(horizontal = 4.dp)
+                                                .alignByBaseline()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Top
-                    ) {
-                        items(state.drillFiles) { node ->
-                            VfsNodeRow(
-                                node              = node,
-                                theme             = theme,
-                                isExternalProject = state.activeProject!!.isExternal,
-                                onNodeClick       = { clicked ->
-                                    if (clicked.isDirectory) vm.navigateToFolder(clicked, state.activeProject!!)
-                                    else onItemClick(EditorKey(state.activeProject!!.id, clicked.relativePath))
-                                },
-                                onDeleteClick     = { node -> nodeToDelete = Pair(node, state.activeProject!!) }
-                            )
+                    // Drill-down view: list subfolders and files inside active project directory
+                    val sortedFiles = remember(state.drillFiles, isSortAscending) {
+                        if (isSortAscending) state.drillFiles.sortedBy { it.name.lowercase() }
+                        else state.drillFiles.sortedByDescending { it.name.lowercase() }
+                    }
+
+                    if (sortedFiles.isEmpty()) {
+                        EmptyStateHint(
+                            title = "Folder is empty",
+                            body = "Tap [+ file] or [+ folder] to add content.",
+                            theme = theme
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            items(sortedFiles) { node ->
+                                VfsNodeRow(
+                                    node              = node,
+                                    theme             = theme,
+                                    isExternalProject = activeProj.isExternal,
+                                    onNodeClick       = { clicked ->
+                                        if (clicked.isDirectory) vm.navigateToFolder(clicked, activeProj)
+                                        else onItemClick(EditorKey(activeProj.id, clicked.relativePath))
+                                    },
+                                    onDeleteClick     = { clicked -> nodeToDelete = Pair(clicked, activeProj) }
+                                )
+                            }
                         }
                     }
                 }
@@ -309,6 +494,25 @@ fun MainScreen(
             },
             dismissButton = {
                 TextButton(onClick = { nodeToDelete = null }) { Text("Cancel", color = theme.textMuted) }
+            },
+            containerColor = theme.surface
+        )
+    }
+
+    projectToDelete?.let { proj ->
+        AlertDialog(
+            onDismissRequest = { projectToDelete = null },
+            title = { Text("Delete Workspace?",
+                color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text  = { Text("Are you sure you want to delete '${proj.name}'? This cannot be undone.",
+                color = theme.textPrimary, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteProject(proj); projectToDelete = null }) {
+                    Text("Delete", color = theme.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { projectToDelete = null }) { Text("Cancel", color = theme.textMuted) }
             },
             containerColor = theme.surface
         )
@@ -551,4 +755,72 @@ fun CreateProjectDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = theme.textMuted) } },
         containerColor = theme.surface
     )
+}
+
+@Composable
+fun SearchVfsNodeRow(
+    node: VfsNode,
+    project: ProjectEntity,
+    theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
+    onNodeClick: (VfsNode) -> Unit,
+    onDeleteClick: (VfsNode) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onNodeClick(node) }
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+            val icon = if (node.isDirectory) "📁" else "📄"
+            Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.alignByBaseline()) {
+                Text(
+                    text       = node.name,
+                    color      = theme.textPrimary,
+                    fontSize   = 14.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
+                    maxLines   = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "in ${project.name}/${node.relativePath.substringBeforeLast('/', "")}",
+                    color = theme.textMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text     = " . ".repeat(50),
+                color    = theme.textMuted.copy(alpha = 0.4f),
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier.weight(1f).alignByBaseline()
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            val details = if (node.isDirectory) "DIR"
+            else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
+            Text(details, color = theme.textMuted, fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
+            Spacer(Modifier.width(16.dp))
+            Text(
+                text     = "[delete]",
+                color    = theme.textMuted,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .clickable { onDeleteClick(node) }
+                    .padding(horizontal = 4.dp)
+                    .alignByBaseline()
+            )
+        }
+    }
 }
