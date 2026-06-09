@@ -95,6 +95,11 @@ fun EditorScreen(
                         viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
                     }
                 )
+                
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = uiState.activeTheme.textMuted.copy(alpha = 0.15f)
+                )
 
                 val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                 // Main Editor Area
