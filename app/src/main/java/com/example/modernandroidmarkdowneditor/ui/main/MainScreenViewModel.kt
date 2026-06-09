@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.modernandroidmarkdowneditor.data.local.QuoteEntity
 
 /** Flat list item for the unified single-scroll file index. */
 sealed class FileListItem {
@@ -30,7 +31,8 @@ data class ProjectExplorerUiState(
     val currentPath: String = "",
     val drillFiles: List<VfsNode> = emptyList(),
     val allItems: List<FileListItem> = emptyList(),
-    val isCreateProjectDialogOpen: Boolean = false
+    val isCreateProjectDialogOpen: Boolean = false,
+    val activeQuote: QuoteEntity? = null
 )
 
 class MainScreenViewModel(
@@ -43,6 +45,7 @@ class MainScreenViewModel(
     private val _drillFiles    = MutableStateFlow<List<VfsNode>>(emptyList())
     private val _allItems      = MutableStateFlow<List<FileListItem>>(emptyList())
     private val _isCreateDialogOpen = MutableStateFlow(false)
+    private val _activeQuote   = MutableStateFlow<QuoteEntity?>(null)
 
     val explorerState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
@@ -50,7 +53,8 @@ class MainScreenViewModel(
         _currentPath,
         _drillFiles,
         _allItems,
-        _isCreateDialogOpen
+        _isCreateDialogOpen,
+        _activeQuote
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         ProjectExplorerUiState(
@@ -59,14 +63,17 @@ class MainScreenViewModel(
             currentPath     = args[2] as String,
             drillFiles      = args[3] as List<VfsNode>,
             allItems        = args[4] as List<FileListItem>,
-            isCreateProjectDialogOpen = args[5] as Boolean
+            isCreateProjectDialogOpen = args[5] as Boolean,
+            activeQuote     = args[6] as QuoteEntity?
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState())
 
     init {
         viewModelScope.launch {
             seedInitialData()
+            seedQuotes()
             refreshAllFiles()
+            selectRandomQuote()
         }
     }
 
@@ -211,6 +218,46 @@ class MainScreenViewModel(
             val active = _activeProject.value
             if (active != null) loadDrillFiles(active, _currentPath.value)
             else refreshAllFiles()
+        }
+    }
+
+    private suspend fun seedQuotes() = withContext(Dispatchers.IO) {
+        if (db.quoteDao().getCount() == 0) {
+            val quotes = listOf(
+                QuoteEntity(text = "There is nothing to writing. All you do is sit down at a typewriter and bleed.", author = "Ernest Hemingway", year = 1949),
+                QuoteEntity(text = "The first draft of anything is shit.", author = "Ernest Hemingway", year = 1926),
+                QuoteEntity(text = "Substitute 'damn' every time you're inclined to write 'very'; your editor will delete it and the writing will be just as it should be.", author = "Mark Twain", year = 1880),
+                QuoteEntity(text = "Writing is a prescription for those who have trouble reading the world.", author = "Mary Oliver", year = 1992),
+                QuoteEntity(text = "If a writer knows enough about what he is writing about he may omit things that he knows and the reader... will feel those things as strongly as though the writer had stated them.", author = "Ernest Hemingway", year = 1932),
+                QuoteEntity(text = "We are all apprentices in a craft where no one ever becomes a master.", author = "Ernest Hemingway", year = 1934),
+                QuoteEntity(text = "The road to hell is paved with adverbs.", author = "Stephen King", year = 2000),
+                QuoteEntity(text = "If you don't have time to read, you don't have the time (or the tools) to write.", author = "Stephen King", year = 2000),
+                QuoteEntity(text = "Write with the door closed, rewrite with the door open.", author = "Stephen King", year = 2000),
+                QuoteEntity(text = "A professional writer is an amateur who didn't quit.", author = "Richard Bach", year = 1979),
+                QuoteEntity(text = "You can fix anything but a blank page.", author = "Nora Roberts", year = 2006),
+                QuoteEntity(text = "You don’t start out writing good stuff. You start out writing crap and thinking it’s good stuff, and then gradually you get better at it.", author = "Octavia E. Butler", year = 1989),
+                QuoteEntity(text = "Easy reading is damn hard writing.", author = "Nathaniel Hawthorne", year = 1851),
+                QuoteEntity(text = "We write to taste life twice, in the moment and in retrospect.", author = "Anaïs Nin", year = 1974),
+                QuoteEntity(text = "Every secret of a writer’s soul, every experience of his life, every quality of his mind, is written large in his works.", author = "Virginia Woolf", year = 1940),
+                QuoteEntity(text = "A word after a word after a word is power.", author = "Margaret Atwood", year = 1981),
+                QuoteEntity(text = "Writing, to me, is simply thinking through my fingers.", author = "Isaac Asimov", year = 1980),
+                QuoteEntity(text = "Don't tell me the moon is shining; show me the glint of light on broken glass.", author = "Anton Chekhov", year = 1886),
+                QuoteEntity(text = "I love deadlines. I love the whooshing noise they make as they go by.", author = "Douglas Adams", year = 1985),
+                QuoteEntity(text = "The business of burning books is less dangerous than the business of writing them.", author = "Walter Benjamin", year = 1928),
+                QuoteEntity(text = "Fill your paper with the breathings of your heart.", author = "William Wordsworth", year = 1798),
+                QuoteEntity(text = "There is no greater agony than bearing an untold story inside you.", author = "Maya Angelou", year = 1969),
+                QuoteEntity(text = "You can always edit a bad page. You can't edit a blank page.", author = "Jodi Picoult", year = 2011),
+                QuoteEntity(text = "The first draft is just you telling yourself the story.", author = "Terry Pratchett", year = 1999),
+                QuoteEntity(text = "If there's a book that you want to read, but it hasn't been written yet, then you must write it.", author = "Toni Morrison", year = 1970)
+            )
+            db.quoteDao().insertQuotes(quotes)
+        }
+    }
+
+    private suspend fun selectRandomQuote() {
+        val quotes = withContext(Dispatchers.IO) { db.quoteDao().getAllQuotes() }
+        if (quotes.isNotEmpty()) {
+            _activeQuote.value = quotes.random()
         }
     }
 }
