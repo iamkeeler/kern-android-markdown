@@ -84,7 +84,14 @@ fun EditorScreen(
                     filePath = filePath,
                     theme = uiState.activeTheme,
                     onBackClick = onBackClick,
-                    onSidebarToggle = { viewModel.toggleSidebar(!uiState.isSidebarOpen) }
+                    onMetricsToggle = {
+                        val currentMode = uiState.sidebarMode
+                        viewModel.toggleSidebar(if (currentMode == SidebarMode.METRICS) SidebarMode.CLOSED else SidebarMode.METRICS)
+                    },
+                    onSettingsToggle = {
+                        val currentMode = uiState.sidebarMode
+                        viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
+                    }
                 )
 
                 val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -167,7 +174,8 @@ fun EditorHeader(
     filePath: String,
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     onBackClick: () -> Unit,
-    onSidebarToggle: () -> Unit
+    onMetricsToggle: () -> Unit,
+    onSettingsToggle: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -216,11 +224,22 @@ fun EditorHeader(
             )
         }
 
-        IconButton(
-            onClick = onSidebarToggle,
-            modifier = Modifier.semantics { contentDescription = "Toggle info and settings sidebar" }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text("⚙", color = theme.textMuted, fontSize = 20.sp)
+            IconButton(
+                onClick = onMetricsToggle,
+                modifier = Modifier.semantics { contentDescription = "Toggle readability metrics sidebar" }
+            ) {
+                Text("📖", color = theme.textMuted, fontSize = 20.sp)
+            }
+            IconButton(
+                onClick = onSettingsToggle,
+                modifier = Modifier.semantics { contentDescription = "Toggle consolidated settings sidebar" }
+            ) {
+                Text("⚙", color = theme.textMuted, fontSize = 20.sp)
+            }
         }
     }
 }
