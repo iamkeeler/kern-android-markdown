@@ -33,6 +33,7 @@ data class HemingwayMetrics(
 object HemingwayAnalyzer {
 
     private val adverbPattern = Pattern.compile("\\b(\\w+ly)\\b", Pattern.CASE_INSENSITIVE)
+    private val excludedAdverbs = setOf("only", "family", "early", "holy", "reply")
     
     // Simple helper regex for passive voice: helper verbs + verb ending in ed, or common irregular past participles
     private val passiveVoicePattern = Pattern.compile(
@@ -50,9 +51,10 @@ object HemingwayAnalyzer {
         "implement" to "build"
     )
 
-    private val complexWordPatterns = complexWords.map { (complex, _) ->
-        complex to Pattern.compile("\\b$complex\\b", Pattern.CASE_INSENSITIVE)
-    }
+    private val complexWordsPattern = Pattern.compile(
+        "\\b(${complexWords.keys.joinToString("|")})\\b",
+        Pattern.CASE_INSENSITIVE
+    )
 
     private val sentencePattern = Pattern.compile("([^.!?]+[.!?]*)")
 
@@ -75,8 +77,8 @@ object HemingwayAnalyzer {
         
         // 1. Basic counts
         val wordCount = countWords(text)
-        // Character count excluding whitespaces for ARI calculation
-        val charCount = text.filter { !it.isWhitespace() }.length
+        // Character count excluding whitespaces for ARI calculation without allocations
+        val charCount = text.count { !it.isWhitespace() }
 
         // 2. Sentence Splitting & Sentence metrics
         // We'll split the text into sentences while tracking their original indices.
@@ -103,7 +105,7 @@ object HemingwayAnalyzer {
         while (adverbMatcher.find()) {
             val adverb = adverbMatcher.group(1)
             val lower = adverb?.lowercase() ?: ""
-            if (lower.isNotEmpty() && lower != "only" && lower != "family" && lower != "early" && lower != "holy" && lower != "reply") {
+            if (lower.isNotEmpty() && !excludedAdverbs.contains(lower)) {
                 adverbCount++
                 highlights.add(HemingwayHighlight(adverbMatcher.start(), adverbMatcher.end(), HighlightType.ADVERB, "Use a stronger verb instead of an adverb."))
             }
@@ -117,13 +119,12 @@ object HemingwayAnalyzer {
             highlights.add(HemingwayHighlight(passiveMatcher.start(), passiveMatcher.end(), HighlightType.PASSIVE_VOICE, "Rewrite in active voice if possible."))
         }
 
-        // 5. Complex words
-        for ((complex, pattern) in complexWordPatterns) {
-            val simple = complexWords[complex]
-            val matcher = pattern.matcher(text)
-            while (matcher.find()) {
-                highlights.add(HemingwayHighlight(matcher.start(), matcher.end(), HighlightType.COMPLEX_WORD, "Simplify to: '$simple'"))
-            }
+        // 5. Complex words using single-pass regex matcher
+        val complexMatcher = complexWordsPattern.matcher(text)
+        while (complexMatcher.find()) {
+            val matchedWord = complexMatcher.group(1)?.lowercase() ?: ""
+            val simple = complexWords[matchedWord]
+            highlights.add(HemingwayHighlight(complexMatcher.start(), complexMatcher.end(), HighlightType.COMPLEX_WORD, "Simplify to: '$simple'"))
         }
 
         // 6. Readability Grade Level (ARI)
@@ -163,7 +164,7 @@ object HemingwayAnalyzer {
             val sentenceText = matcher.group()
             val start = matcher.start()
             val end = matcher.end()
-            if (sentenceText.trim().isNotEmpty()) {
+            if (sentenceText.isNotBlank()) {
                 spans.add(SentenceSpan(sentenceText, start, end))
             }
         }

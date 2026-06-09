@@ -72,6 +72,13 @@ fun SettingsTabsContent(
     val currentAutoCompleteParens  = autoCompleteParensSetting?.value?.toBoolean() ?: true
     val currentAutoCompleteBrackets = autoCompleteBracketsSetting?.value?.toBoolean() ?: true
 
+    val appFont = when (theme.editorFontFamily.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "sans-serif", "sansserif" -> FontFamily.SansSerif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.Default
+    }
+
     var activeTab by remember { mutableIntStateOf(0) }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -91,7 +98,7 @@ fun SettingsTabsContent(
                     text = tabName,
                     color = if (selected) theme.accent else theme.textMuted,
                     fontSize = 13.sp,
-                    fontFamily = FontFamily.Serif,
+                    fontFamily = appFont,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier
                         .clickable { activeTab = idx }
@@ -115,7 +122,7 @@ fun SettingsTabsContent(
         ) {
             when (activeTab) {
                 0 -> { // Styles tab
-                    Text("View Mode", color = theme.textPrimary, fontSize = 14.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+                    Text("View Mode", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
                     val modes = listOf(
                         "RENDERED"           to "Live Preview",
@@ -135,7 +142,7 @@ fun SettingsTabsContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = FontFamily.Serif)
+                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
                             RadioButton(
                                 selected = currentViewMode == mode,
                                 onClick = {
@@ -152,7 +159,7 @@ fun SettingsTabsContent(
                     HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
                     Spacer(Modifier.height(16.dp))
 
-                    Text("Editor Font", color = theme.textPrimary, fontSize = 14.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+                    Text("Editor Font", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
                     val fonts = listOf(
                         "serif"      to "Serif (Book)",
@@ -172,7 +179,7 @@ fun SettingsTabsContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = FontFamily.Serif)
+                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
                             RadioButton(
                                 selected = currentFontFamily == font,
                                 onClick = {
@@ -203,7 +210,7 @@ fun SettingsTabsContent(
                                   text = "Sticky Selection",
                                   color = theme.textPrimary,
                                   fontSize = 13.sp,
-                                  fontFamily = FontFamily.Serif,
+                                  fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
@@ -244,11 +251,11 @@ fun SettingsTabsContent(
                           horizontalArrangement = Arrangement.SpaceBetween
                       ) {
                           Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                              Text(
+                               Text(
                                   text = "Auto Header Spacing",
                                   color = theme.textPrimary,
                                   fontSize = 13.sp,
-                                  fontFamily = FontFamily.Serif,
+                                  fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
@@ -284,11 +291,11 @@ fun SettingsTabsContent(
                           horizontalArrangement = Arrangement.SpaceBetween
                       ) {
                           Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                              Text(
+                               Text(
                                   text = "Auto Complete",
                                   color = theme.textPrimary,
                                   fontSize = 13.sp,
-                                  fontFamily = FontFamily.Serif,
+                                  fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
@@ -367,7 +374,7 @@ fun SettingsTabsContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(name, color = theme.textPrimary, fontSize = 13.sp, fontFamily = FontFamily.Serif)
+                             Text(name, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
                             val isCurrent = theme.name == presetJson.name
                             if (isCurrent) {
                                 Text("Active", color = theme.accent, fontSize = 11.sp,
@@ -453,28 +460,28 @@ fun SettingsTabsContent(
                     )
                 }
                 3 -> { // Sync tab
-                    Text("Cloud Sync Provider", color = theme.textPrimary, fontSize = 14.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    val providers = listOf(
-                        "NONE"         to "Local-Only (None)",
-                        "GOOGLE_DRIVE" to "Google Drive",
-                        "DROPBOX"      to "Dropbox",
-                        "ONEDRIVE"     to "Microsoft OneDrive"
-                    )
-                    providers.forEach { (provider, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("sync_provider", provider))
-                                    }
-                                }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = FontFamily.Serif)
+                     Text("Cloud Sync Provider", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                     Spacer(Modifier.height(8.dp))
+                     val providers = listOf(
+                         "NONE"         to "Local-Only (None)",
+                         "GOOGLE_DRIVE" to "Google Drive",
+                         "DROPBOX"      to "Dropbox",
+                         "ONEDRIVE"     to "Microsoft OneDrive"
+                     )
+                     providers.forEach { (provider, label) ->
+                         Row(
+                             modifier = Modifier
+                                 .fillMaxWidth()
+                                 .clickable {
+                                     coroutineScope.launch(Dispatchers.IO) {
+                                         db.settingDao().insertSetting(SettingEntity("sync_provider", provider))
+                                     }
+                                 }
+                                 .padding(vertical = 8.dp),
+                             verticalAlignment = Alignment.CenterVertically,
+                             horizontalArrangement = Arrangement.SpaceBetween
+                         ) {
+                             Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
                             RadioButton(
                                 selected = currentSync == provider,
                                 onClick = {
@@ -495,25 +502,25 @@ fun SettingsTabsContent(
                     }
                 }
                 4 -> { // About tab
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Kern", color = theme.textPrimary, fontSize = 14.sp,
-                            fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium)
-                        Text("Version 1.0", color = theme.textMuted, fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace)
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Design & Development", color = theme.textMuted, fontSize = 12.sp)
-                        Text("Attach.design", color = theme.textPrimary, fontSize = 13.sp,
-                            fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium)
-                    }
+                     Row(
+                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         Text("Kern", color = theme.textPrimary, fontSize = 14.sp,
+                             fontFamily = appFont, fontWeight = FontWeight.Medium)
+                         Text("Version 1.0", color = theme.textMuted, fontSize = 11.sp,
+                             fontFamily = FontFamily.Monospace)
+                     }
+                     Row(
+                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         Text("Design & Development", color = theme.textMuted, fontSize = 12.sp)
+                         Text("Attach.design", color = theme.textPrimary, fontSize = 13.sp,
+                             fontFamily = appFont, fontWeight = FontWeight.Medium)
+                     }
 
                     Spacer(Modifier.height(16.dp))
                     HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
@@ -539,13 +546,13 @@ fun SettingsTabsContent(
                         "Kotlin"                         to "Apache 2.0 · JetBrains"
                     )
                     libraries.forEach { (lib, license) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(lib, color = theme.textPrimary, fontSize = 13.sp,
-                                fontFamily = FontFamily.Serif, modifier = Modifier.weight(1f))
+                         Row(
+                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                             horizontalArrangement = Arrangement.SpaceBetween,
+                             verticalAlignment = Alignment.CenterVertically
+                         ) {
+                             Text(lib, color = theme.textPrimary, fontSize = 13.sp,
+                                 fontFamily = appFont, modifier = Modifier.weight(1f))
                             Text(license, color = theme.textMuted, fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace)
                         }
@@ -565,11 +572,13 @@ fun SettingsScreen(
 ) {
     // Observe global settings reactively (only theme is needed for status bar and background)
     val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsState(initial = null)
+    val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
     var theme by remember { mutableStateOf(ThemeEngine.DefaultLight.toColorTheme()) }
 
-    LaunchedEffect(selectedThemeIdSetting) {
+    LaunchedEffect(selectedThemeIdSetting, editorFontSetting) {
         withContext(Dispatchers.IO) {
             val themeId = selectedThemeIdSetting?.value?.toLongOrNull()
+            val savedFont = editorFontSetting?.value ?: "serif"
             var activeTheme = ThemeEngine.DefaultLight.toColorTheme()
             if (themeId != null) {
                 val dbTheme = db.themeDao().getThemeById(themeId)
@@ -580,6 +589,7 @@ fun SettingsScreen(
                     }
                 }
             }
+            activeTheme = activeTheme.copy(editorFontFamily = savedFont)
             withContext(Dispatchers.Main) {
                 theme = activeTheme
             }
@@ -597,29 +607,36 @@ fun SettingsScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(theme.background)
-            .safeDrawingPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
-    ) {
-        // ── Page title row ────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Settings",
-                fontSize = 28.sp,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Light,
-                color = theme.textPrimary,
-                letterSpacing = (-0.5).sp
-            )
+     val appFont = when (theme.editorFontFamily.lowercase()) {
+         "serif" -> FontFamily.Serif
+         "sans-serif", "sansserif" -> FontFamily.SansSerif
+         "monospace" -> FontFamily.Monospace
+         else -> FontFamily.Default
+     }
+
+     Column(
+         modifier = modifier
+             .fillMaxSize()
+             .background(theme.background)
+             .safeDrawingPadding()
+             .padding(horizontal = 24.dp, vertical = 16.dp)
+     ) {
+         // ── Page title row ────────────────────────────────────────────────────
+         Row(
+             modifier = Modifier
+                 .fillMaxWidth()
+                 .padding(top = 8.dp, bottom = 8.dp),
+             verticalAlignment = Alignment.CenterVertically,
+             horizontalArrangement = Arrangement.SpaceBetween
+         ) {
+             Text(
+                 text = "Settings",
+                 fontSize = 28.sp,
+                 fontFamily = appFont,
+                 fontWeight = FontWeight.Light,
+                 color = theme.textPrimary,
+                 letterSpacing = (-0.5).sp
+             )
             MinimalOutlinedButton(
                 text = "Back",
                 onClick = onBackClick,
@@ -647,6 +664,12 @@ fun MinimalOutlinedButton(
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     modifier: Modifier = Modifier
 ) {
+     val appFont = when (theme.editorFontFamily.lowercase()) {
+         "serif" -> FontFamily.Serif
+         "sans-serif", "sansserif" -> FontFamily.SansSerif
+         "monospace" -> FontFamily.Monospace
+         else -> FontFamily.Default
+     }
     Box(
         modifier = modifier
             .border(border = BorderStroke(1.dp, theme.textMuted.copy(alpha = 0.3f)), shape = RoundedCornerShape(4.dp))
@@ -658,7 +681,7 @@ fun MinimalOutlinedButton(
             text = text,
             color = theme.textPrimary,
             fontSize = 14.sp,
-            fontFamily = FontFamily.Serif,
+            fontFamily = appFont,
             fontWeight = FontWeight.Normal
         )
     }

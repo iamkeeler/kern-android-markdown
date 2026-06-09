@@ -7,3 +7,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable data class EditorKey(val projectId: Long, val filePath: String) : NavKey
 
+@Serializable data object SettingsKey : NavKey
+
+

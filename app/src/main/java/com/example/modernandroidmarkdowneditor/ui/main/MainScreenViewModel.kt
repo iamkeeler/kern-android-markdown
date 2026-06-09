@@ -269,6 +269,39 @@ class MainScreenViewModel(
         }
     }
 
+    fun renameNode(node: VfsNode, newName: String, project: ProjectEntity) {
+        viewModelScope.launch {
+            val dir = node.relativePath.substringBeforeLast('/', "")
+            val newRelativePath = if (dir.isEmpty()) newName else "$dir/$newName"
+            storageManager.renameFile(project, node.relativePath, newRelativePath)
+            withContext(Dispatchers.IO) {
+                db.fileDao().deleteFile(project.id, node.relativePath)
+                db.fileDao().insertFile(
+                    com.example.modernandroidmarkdowneditor.data.local.FileEntity(
+                        projectId = project.id,
+                        name = newName,
+                        relativePath = newRelativePath,
+                        isDirectory = node.isDirectory,
+                        lastModified = System.currentTimeMillis(),
+                        syncState = "PENDING"
+                    )
+                )
+            }
+            val active = _activeProject.value
+            if (active != null) loadDrillFiles(active, _currentPath.value)
+            else refreshAllFiles()
+        }
+    }
+
+    fun renameProject(project: ProjectEntity, newName: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                db.projectDao().updateProject(project.copy(name = newName))
+            }
+            refreshAllFiles()
+        }
+    }
+
     private suspend fun seedQuotes() = withContext(Dispatchers.IO) {
         if (db.quoteDao().getCount() == 0) {
             val quotes = listOf(

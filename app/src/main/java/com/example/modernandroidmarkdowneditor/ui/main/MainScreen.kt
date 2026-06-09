@@ -4,18 +4,24 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -34,11 +40,60 @@ import com.example.modernandroidmarkdowneditor.data.storage.StorageManager
 import com.example.modernandroidmarkdowneditor.data.storage.VfsNode
 import com.example.modernandroidmarkdowneditor.ui.theme.ThemeEngine
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+
+@Composable
+fun SwipeableFileRow(
+    text: String,
+    theme: ThemeEngine.ColorTheme,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
+    onShare: () -> Unit,
+    onClick: () -> Unit
+) {
+    val density = LocalDensity.current
+    val offsetX = remember { Animatable(0f) }
+    val threshold = with(density) { 60.dp.toPx() }
+
+    Box(modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).background(theme.surface)) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onShare) { Icon(Icons.Outlined.Share, null, tint = theme.textMuted) }
+            IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, null, tint = theme.accent) }
+            IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, null, tint = Color.Red) }
+        }
+        Surface(
+            modifier = Modifier
+                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val target = if (offsetX.value < -threshold) -180f else 0f
+                            kotlinx.coroutines.launch { offsetX.animateTo(target, spring()) }
+                        }
+                    ) { change, dragAmount ->
+                        change.consume()
+                        val next = (offsetX.value + dragAmount).coerceIn(-180f, 0f)
+                        kotlinx.coroutines.launch { offsetX.snapTo(next) }
+                    }
+                }
+                .fillMaxSize()
+                .clickable { onClick() },
+            color = theme.background,
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.padding(16.dp)) {
+                Text(text, color = theme.textPrimary, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
 
 @Composable
 fun MainScreen(
@@ -54,12 +109,44 @@ fun MainScreen(
     var createFolderDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var nodeToDelete           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
     var projectToDelete        by remember { mutableStateOf<ProjectEntity?>(null) }
+    var nodeToRename           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
+    var projectToRename        by remember { mutableStateOf<ProjectEntity?>(null) }
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var isSortAscending by remember { mutableStateOf(true) }
 
-    val theme = ThemeEngine.DefaultLight.toColorTheme()
+    val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsState(initial = null)
+    val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
+    var theme by remember { mutableStateOf(ThemeEngine.DefaultLight.toColorTheme()) }
+
+    LaunchedEffect(selectedThemeIdSetting, editorFontSetting) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val themeId = selectedThemeIdSetting?.value?.toLongOrNull()
+            val savedFont = editorFontSetting?.value ?: "serif"
+            var activeTheme = ThemeEngine.DefaultLight.toColorTheme()
+            if (themeId != null) {
+                val dbTheme = db.themeDao().getThemeById(themeId)
+                if (dbTheme != null) {
+                    val themeJson = ThemeEngine.deserialize(dbTheme.jsonString)
+                    if (themeJson != null) {
+                        activeTheme = themeJson.toColorTheme()
+                    }
+                }
+            }
+            activeTheme = activeTheme.copy(editorFontFamily = savedFont)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                theme = activeTheme
+            }
+        }
+    }
+
+    val appFont = when (theme.editorFontFamily.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "sans-serif", "sansserif" -> FontFamily.SansSerif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.Default
+    }
 
     Column(
         modifier = modifier
@@ -68,84 +155,80 @@ fun MainScreen(
             .safeDrawingPadding()
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        // ── Brand Header & Search ──────────────────────────────────────────────────
+        // ── Brand Header (always visible) ──────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            if (isSearchActive) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search files...", color = theme.textMuted, fontSize = 13.sp) },
-                    textStyle = TextStyle(fontSize = 13.sp, color = theme.textPrimary),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .padding(end = 8.dp),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = theme.textPrimary,
-                        unfocusedTextColor = theme.textPrimary,
-                        focusedBorderColor = theme.accent,
-                        unfocusedBorderColor = theme.textMuted.copy(alpha = 0.3f),
-                        cursorColor = theme.accent
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = { searchQuery = ""; isSearchActive = false }) {
-                            Text("✕", color = theme.textMuted, fontSize = 14.sp)
-                        }
-                    }
+            // Kern title + quote — always shown
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Kern",
+                    fontSize = 28.sp,
+                    fontFamily = appFont,
+                    fontWeight = FontWeight.Light,
+                    color = theme.textPrimary,
+                    letterSpacing = (-0.5).sp
                 )
-            } else {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
+                state.activeQuote?.let { quote ->
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Kern",
-                        fontSize = 28.sp,
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Light,
-                        color = theme.textPrimary,
-                        letterSpacing = (-0.5).sp
+                        text = "“${quote.text}” — ${quote.author}, ${quote.year}",
+                        fontSize = 12.sp,
+                        fontFamily = appFont,
+                        fontWeight = FontWeight.Normal,
+                        color = theme.textMuted,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(end = 16.dp)
                     )
-                    
-                    state.activeQuote?.let { quote ->
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "“${quote.text}” — ${quote.author}, ${quote.year}",
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Normal,
-                            color = theme.textMuted,
-                            lineHeight = 16.sp,
-                            modifier = Modifier.padding(end = 16.dp)
-                        )
-                    }
                 }
             }
 
+            // Icon row: search toggle + settings
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                if (!isSearchActive) {
-                    IconButton(onClick = { isSearchActive = true }) {
-                        Text("🔍", fontSize = 18.sp)
-                    }
+                IconButton(onClick = {
+                    isSearchActive = !isSearchActive
+                    if (!isSearchActive) searchQuery = ""
+                }) {
+                    Text(if (isSearchActive) "✕" else "🔍", fontSize = 18.sp)
                 }
                 IconButton(onClick = { onItemClick(SettingsKey) }) {
                     Icon(
                         imageVector = Icons.Outlined.Settings,
                         contentDescription = "Settings",
                         tint = theme.textMuted,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
+        }
+
+        // ── Inline search bar (slides in below the Kern title) ─────────────────
+        if (isSearchActive) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search files...", color = theme.textMuted, fontSize = 13.sp) },
+                textStyle = TextStyle(fontSize = 13.sp, color = theme.textPrimary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = theme.textPrimary,
+                    unfocusedTextColor = theme.textPrimary,
+                    focusedBorderColor = theme.accent,
+                    unfocusedBorderColor = theme.textMuted.copy(alpha = 0.3f),
+                    cursorColor = theme.accent
+                )
+            )
         }
         
         HorizontalDivider(
@@ -324,59 +407,16 @@ fun MainScreen(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Top
                         ) {
-                            items(sortedProjects) { proj ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { vm.navigateToFolderRoot(proj) }
-                                        .padding(vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom
-                                ) {
-                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                                        Text("📁", fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            text = proj.name,
-                                            color = theme.textPrimary,
-                                            fontSize = 14.sp,
-                                            fontFamily = FontFamily.Serif,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.alignByBaseline()
-                                        )
-                                        if (proj.isExternal) {
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
-                                        }
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = " . ".repeat(50),
-                                            color = theme.textMuted.copy(alpha = 0.4f),
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Clip,
-                                            modifier = Modifier.weight(1f).alignByBaseline()
-                                        )
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Row(verticalAlignment = Alignment.Bottom) {
-                                        Text("DIR", color = theme.textMuted, fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
-                                        Spacer(Modifier.width(16.dp))
-                                        Text(
-                                            text = "[delete]",
-                                            color = theme.textMuted,
-                                            fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            modifier = Modifier
-                                                .clickable { projectToDelete = proj }
-                                                .padding(horizontal = 4.dp)
-                                                .alignByBaseline()
-                                        )
-                                    }
-                                }
+                            items(sortedProjects, key = { it.id }) { proj ->
+                                SwipeableProjectRow(
+                                    project = proj,
+                                    theme = theme,
+                                    appFont = appFont,
+                                    onClick = { vm.navigateToFolderRoot(proj) },
+                                    onShare = { /* TODO: zip & share */ },
+                                    onEdit = { projectToRename = proj },
+                                    onDelete = { projectToDelete = proj }
+                                )
                             }
                         }
                     }
@@ -398,16 +438,19 @@ fun MainScreen(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Top
                         ) {
-                            items(sortedFiles) { node ->
-                                VfsNodeRow(
-                                    node              = node,
-                                    theme             = theme,
+                            items(sortedFiles, key = { it.relativePath }) { node ->
+                                SwipeableFileRow(
+                                    node = node,
+                                    theme = theme,
+                                    appFont = appFont,
                                     isExternalProject = activeProj.isExternal,
-                                    onNodeClick       = { clicked ->
-                                        if (clicked.isDirectory) vm.navigateToFolder(clicked, activeProj)
-                                        else onItemClick(EditorKey(activeProj.id, clicked.relativePath))
+                                    onClick = {
+                                        if (node.isDirectory) vm.navigateToFolder(node, activeProj)
+                                        else onItemClick(EditorKey(activeProj.id, node.relativePath))
                                     },
-                                    onDeleteClick     = { clicked -> nodeToDelete = Pair(clicked, activeProj) }
+                                    onShare = { /* TODO: share */ },
+                                    onEdit = { nodeToRename = Pair(node, activeProj) },
+                                    onDelete = { nodeToDelete = Pair(node, activeProj) }
                                 )
                             }
                         }
@@ -496,6 +539,34 @@ fun MainScreen(
                 TextButton(onClick = { nodeToDelete = null }) { Text("Cancel", color = theme.textMuted) }
             },
             containerColor = theme.surface
+        )
+    }
+
+    nodeToRename?.let { (node, project) ->
+        InputDialog(
+            title       = "Rename ${if (node.isDirectory) "Folder" else "File"}",
+            label       = "New name",
+            confirmText = "Rename",
+            theme       = theme,
+            onDismiss   = { nodeToRename = null },
+            onConfirm   = { newName ->
+                vm.renameNode(node, newName, project)
+                nodeToRename = null
+            }
+        )
+    }
+
+    projectToRename?.let { proj ->
+        InputDialog(
+            title       = "Rename Workspace",
+            label       = "New name",
+            confirmText = "Rename",
+            theme       = theme,
+            onDismiss   = { projectToRename = null },
+            onConfirm   = { newName ->
+                vm.renameProject(proj, newName)
+                projectToRename = null
+            }
         )
     }
 
@@ -598,17 +669,276 @@ private fun EmptyStateHint(
     body: String,
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme
 ) {
+    val appFont = when (theme.editorFontFamily.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "sans-serif", "sansserif" -> FontFamily.SansSerif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.Default
+    }
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(title, color = theme.textPrimary, fontFamily = FontFamily.Serif,
+        Text(title, color = theme.textPrimary, fontFamily = appFont,
             fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text(body, color = theme.textMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
     }
 }
 
+// ── Swipe-to-reveal helpers ───────────────────────────────────────────────────
+
+private val SWIPE_REVEAL_WIDTH = 216.dp // 3 × 72dp action buttons
+
+@Composable
+fun SwipeableFileRow(
+    node: VfsNode,
+    theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
+    appFont: FontFamily,
+    isExternalProject: Boolean,
+    onClick: () -> Unit,
+    onShare: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { SWIPE_REVEAL_WIDTH.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (offsetX.value < -revealWidthPx / 2) {
+                                offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
+                            } else {
+                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    },
+                    onHorizontalDrag = { _, delta ->
+                        scope.launch {
+                            val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
+                            offsetX.snapTo(target)
+                        }
+                    }
+                )
+            }
+    ) {
+        // ── Action strip (behind) ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(SWIPE_REVEAL_WIDTH)
+                .fillMaxHeight(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), onClick = onShare)
+            SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), onClick = onEdit)
+            SwipeAction(label = "Delete",color = Color(0xFFCC3333), onClick = onDelete)
+        }
+
+        // ── Content row (on top, slides left) ─────────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                .background(theme.background)
+                .clickable {
+                    if (offsetX.value != 0f) {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    } else {
+                        onClick()
+                    }
+                }
+                .padding(vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                    val icon = if (node.isDirectory) "📁" else "📄"
+                    Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text       = node.name,
+                        color      = theme.textPrimary,
+                        fontSize   = 14.sp,
+                        fontFamily = appFont,
+                        fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
+                        maxLines   = 1,
+                        overflow   = TextOverflow.Ellipsis,
+                        modifier   = Modifier.alignByBaseline()
+                    )
+                    val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
+                    if (isSynced) {
+                        Spacer(Modifier.width(4.dp))
+                        Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text     = " . ".repeat(50),
+                        color    = theme.textMuted.copy(alpha = 0.4f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.weight(1f).alignByBaseline()
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                val details = if (node.isDirectory) "DIR"
+                else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
+                Text(details, color = theme.textMuted, fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
+            }
+        }
+    }
+}
+
+@Composable
+fun SwipeableProjectRow(
+    project: ProjectEntity,
+    theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
+    appFont: FontFamily,
+    onClick: () -> Unit,
+    onShare: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { SWIPE_REVEAL_WIDTH.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (offsetX.value < -revealWidthPx / 2) {
+                                offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
+                            } else {
+                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    },
+                    onHorizontalDrag = { _, delta ->
+                        scope.launch {
+                            val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
+                            offsetX.snapTo(target)
+                        }
+                    }
+                )
+            }
+    ) {
+        // ── Action strip (behind) ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(SWIPE_REVEAL_WIDTH)
+                .fillMaxHeight(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = onShare)
+            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = onEdit)
+            SwipeAction(label = "Delete", color = Color(0xFFCC3333), onClick = onDelete)
+        }
+
+        // ── Content row (on top, slides left) ─────────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                .background(theme.background)
+                .clickable {
+                    if (offsetX.value != 0f) {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    } else {
+                        onClick()
+                    }
+                }
+                .padding(vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                    Text("📁", fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = project.name,
+                        color = theme.textPrimary,
+                        fontSize = 14.sp,
+                        fontFamily = appFont,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.alignByBaseline()
+                    )
+                    if (project.isExternal) {
+                        Spacer(Modifier.width(4.dp))
+                        Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = " . ".repeat(50),
+                        color = theme.textMuted.copy(alpha = 0.4f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.weight(1f).alignByBaseline()
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("DIR", color = theme.textMuted, fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwipeAction(
+    label: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .width(72.dp)
+            .fillMaxHeight()
+            .background(color)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.SansSerif,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// Keep original VfsNodeRow as internal alias so SearchVfsNodeRow still compiles
 @Composable
 fun VfsNodeRow(
     node: VfsNode,
@@ -617,62 +947,21 @@ fun VfsNodeRow(
     onNodeClick: (VfsNode) -> Unit,
     onDeleteClick: (VfsNode) -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onNodeClick(node) }
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-            val icon = if (node.isDirectory) "📁" else "📄"
-            Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text       = node.name,
-                color      = theme.textPrimary,
-                fontSize   = 14.sp,
-                fontFamily = FontFamily.Serif,
-                fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
-                maxLines   = 1,
-                overflow   = TextOverflow.Ellipsis,
-                modifier   = Modifier.alignByBaseline()
-            )
-            val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
-            if (isSynced) {
-                Spacer(Modifier.width(4.dp))
-                Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
-            }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text     = " . ".repeat(50),
-                color    = theme.textMuted.copy(alpha = 0.4f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-                modifier = Modifier.weight(1f).alignByBaseline()
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            val details = if (node.isDirectory) "DIR"
-            else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-            Text(details, color = theme.textMuted, fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
-            Spacer(Modifier.width(16.dp))
-            Text(
-                text     = "[delete]",
-                color    = theme.textMuted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .clickable { onDeleteClick(node) }
-                    .padding(horizontal = 4.dp)
-                    .alignByBaseline()
-            )
-        }
-    }
+    SwipeableFileRow(
+        node = node,
+        theme = theme,
+        appFont = when (theme.editorFontFamily.lowercase()) {
+            "serif" -> FontFamily.Serif
+            "sans-serif", "sansserif" -> FontFamily.SansSerif
+            "monospace" -> FontFamily.Monospace
+            else -> FontFamily.Default
+        },
+        isExternalProject = isExternalProject,
+        onClick = { onNodeClick(node) },
+        onShare = {},
+        onEdit = {},
+        onDelete = { onDeleteClick(node) }
+    )
 }
 
 @Composable
@@ -765,62 +1054,107 @@ fun SearchVfsNodeRow(
     onNodeClick: (VfsNode) -> Unit,
     onDeleteClick: (VfsNode) -> Unit
 ) {
-    Row(
+    val appFont = when (theme.editorFontFamily.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "sans-serif", "sansserif" -> FontFamily.SansSerif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.Default
+    }
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { SWIPE_REVEAL_WIDTH.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onNodeClick(node) }
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-            val icon = if (node.isDirectory) "📁" else "📄"
-            Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
-            Spacer(Modifier.width(8.dp))
-            Column(modifier = Modifier.alignByBaseline()) {
-                Text(
-                    text       = node.name,
-                    color      = theme.textPrimary,
-                    fontSize   = 14.sp,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
-                    maxLines   = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "in ${project.name}/${node.relativePath.substringBeforeLast('/', "")}",
-                    color = theme.textMuted,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (offsetX.value < -revealWidthPx / 2)
+                                offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
+                            else
+                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                        }
+                    },
+                    onDragCancel = { scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) } },
+                    onHorizontalDrag = { _, delta ->
+                        scope.launch {
+                            offsetX.snapTo((offsetX.value + delta).coerceIn(-revealWidthPx, 0f))
+                        }
+                    }
                 )
             }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text     = " . ".repeat(50),
-                color    = theme.textMuted.copy(alpha = 0.4f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier.weight(1f).alignByBaseline()
-            )
+    ) {
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(SWIPE_REVEAL_WIDTH)
+                .fillMaxHeight(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = {})
+            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = {})
+            SwipeAction(label = "Delete", color = Color(0xFFCC3333), onClick = { onDeleteClick(node) })
         }
-        Spacer(Modifier.width(8.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            val details = if (node.isDirectory) "DIR"
-            else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-            Text(details, color = theme.textMuted, fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
-            Spacer(Modifier.width(16.dp))
-            Text(
-                text     = "[delete]",
-                color    = theme.textMuted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .clickable { onDeleteClick(node) }
-                    .padding(horizontal = 4.dp)
-                    .alignByBaseline()
-            )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                .background(theme.background)
+                .clickable {
+                    if (offsetX.value != 0f) {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    } else {
+                        onNodeClick(node)
+                    }
+                }
+                .padding(vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                    val icon = if (node.isDirectory) "📁" else "📄"
+                    Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.alignByBaseline()) {
+                        Text(
+                            text       = node.name,
+                            color      = theme.textPrimary,
+                            fontSize   = 14.sp,
+                            fontFamily = appFont,
+                            fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
+                            maxLines   = 1,
+                            overflow   = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "in ${project.name}/${node.relativePath.substringBeforeLast('/', "")}",
+                            color = theme.textMuted,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text     = " . ".repeat(50),
+                        color    = theme.textMuted.copy(alpha = 0.4f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.weight(1f).alignByBaseline()
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                val details = if (node.isDirectory) "DIR"
+                else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
+                Text(details, color = theme.textMuted, fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
+            }
         }
     }
 }

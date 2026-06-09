@@ -4,7 +4,12 @@ import java.util.UUID
 
 object MarkdownParser {
 
-    private val orderedListRegex = "^\\d+\\.\\s".toRegex()
+    private val unorderedListMarkerRegex = "^(\\s*)[-*+](\\s+|$)".toRegex()
+    private val orderedListMarkerRegex = "^(\\s*)\\d+\\.(\\s+|$)".toRegex()
+
+    fun isListLine(line: String): Boolean {
+        return unorderedListMarkerRegex.containsMatchIn(line) || orderedListMarkerRegex.containsMatchIn(line)
+    }
 
     /**
      * Splits the raw document string into individual paragraph blocks.
@@ -40,10 +45,18 @@ object MarkdownParser {
                 }
             } else {
                 consecutiveEmptyLines = 0
-                if (currentBlock.isNotEmpty()) {
-                    currentBlock.append("\n")
+                if (!inCodeBlock && isListLine(line)) {
+                    if (currentBlock.isNotEmpty()) {
+                        blocks.add(currentBlock.toString())
+                        currentBlock.clear()
+                    }
+                    currentBlock.append(line)
+                } else {
+                    if (currentBlock.isNotEmpty()) {
+                        currentBlock.append("\n")
+                    }
+                    currentBlock.append(line)
                 }
-                currentBlock.append(line)
             }
         }
         
@@ -58,7 +71,20 @@ object MarkdownParser {
      * Merges individual paragraph blocks back into a single document string.
      */
     fun joinDocument(blocks: List<String>): String {
-        return blocks.joinToString("\n\n")
+        if (blocks.isEmpty()) return ""
+        val sb = StringBuilder()
+        sb.append(blocks[0])
+        for (i in 1 until blocks.size) {
+            val prev = blocks[i - 1]
+            val curr = blocks[i]
+            if (isListLine(prev) && isListLine(curr)) {
+                sb.append("\n")
+            } else {
+                sb.append("\n\n")
+            }
+            sb.append(curr)
+        }
+        return sb.toString()
     }
 
     /**
@@ -69,6 +95,9 @@ object MarkdownParser {
         var contentStart = 0
         val elements = mutableListOf<MarkdownElement>()
         val len = rawText.length
+
+        val unorderedMatch = unorderedListMarkerRegex.find(rawText)
+        val orderedMatch = orderedListMarkerRegex.find(rawText)
 
         if (rawText.startsWith("###### ")) {
             blockType = MarkdownBlockType.HEADER_6
@@ -98,10 +127,11 @@ object MarkdownParser {
             blockType = MarkdownBlockType.BLOCKQUOTE
             contentStart = if (rawText.startsWith("> ")) 2 else 1
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, 0, contentStart))
-        } else if (rawText.startsWith("- ") || rawText.startsWith("* ") || rawText.startsWith("+ ")) {
+        } else if (unorderedMatch != null && unorderedMatch.range.start == 0) {
             blockType = MarkdownBlockType.UNORDERED_LIST
-            contentStart = 2
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, 0, 2))
+            contentStart = unorderedMatch.value.length
+            val leadingSpaces = unorderedMatch.value.takeWhile { it.isWhitespace() }.length
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart))
         } else if (rawText.startsWith("```")) {
             blockType = MarkdownBlockType.CODE_BLOCK
             val closeIdx = rawText.indexOf("```", 3)
@@ -113,14 +143,11 @@ object MarkdownParser {
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, 3))
                 elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, 3, len))
             }
-        } else {
-            // Check for ordered list: digit(s) followed by dot and space
-            val matchResult = orderedListRegex.find(rawText)
-            if (matchResult != null) {
-                blockType = MarkdownBlockType.ORDERED_LIST
-                contentStart = matchResult.value.length
-                elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, 0, contentStart))
-            }
+        } else if (orderedMatch != null && orderedMatch.range.start == 0) {
+            blockType = MarkdownBlockType.ORDERED_LIST
+            contentStart = orderedMatch.value.length
+            val leadingSpaces = orderedMatch.value.takeWhile { it.isWhitespace() }.length
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart))
         }
 
         // Inline parser content bounds
