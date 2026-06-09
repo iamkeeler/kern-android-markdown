@@ -44,9 +44,8 @@ fun MainScreen(
     val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager) }
     val state by vm.explorerState.collectAsStateWithLifecycle()
 
-    var showCreateFileDialog   by remember { mutableStateOf(false) }
-    var showCreateFolderDialog by remember { mutableStateOf(false) }
-    var createName             by remember { mutableStateOf("") }
+    var createFileDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
+    var createFolderDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var nodeToDelete           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
 
     val theme = ThemeEngine.DefaultLight.toColorTheme()
@@ -177,7 +176,17 @@ fun MainScreen(
                     ) {
                         items(state.allItems) { item ->
                             when (item) {
-                                is FileListItem.ProjectHeader -> ProjectSectionHeader(item.project, theme)
+                                is FileListItem.ProjectHeader -> {
+                                    val isSel = item.project.isSelected
+                                    ProjectSectionHeader(
+                                        project = item.project,
+                                        theme = theme,
+                                        isSelected = isSel,
+                                        onHeaderClick = { vm.selectProject(item.project) },
+                                        onCreateFileClick = { createFileDialogTargetProject = item.project },
+                                        onCreateFolderClick = { createFolderDialogTargetProject = item.project }
+                                    )
+                                }
                                 is FileListItem.FileRow       -> VfsNodeRow(
                                     node            = item.node,
                                     theme           = theme,
@@ -197,7 +206,7 @@ fun MainScreen(
                 if (state.drillFiles.isEmpty()) {
                     EmptyStateHint(
                         title = "Folder is empty",
-                        body = "Tap [+ file] or [+ folder] above to add something.",
+                        body = "Tap [+ file] or [+ folder] to add something.",
                         theme = theme
                     )
                 } else {
@@ -221,8 +230,9 @@ fun MainScreen(
                 }
             }
 
-            // Floating minimalist Outlined Buttons (FAB) at bottom-right
-            if (state.activeProject != null) {
+            // Floating action buttons: always shown if a project is active or selected
+            val targetProj = state.activeProject ?: state.projects.find { it.isSelected } ?: state.projects.firstOrNull()
+            if (targetProj != null) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -232,12 +242,12 @@ fun MainScreen(
                 ) {
                     MinimalOutlinedButton(
                         text = "+ Folder",
-                        onClick = { showCreateFolderDialog = true },
+                        onClick = { createFolderDialogTargetProject = targetProj },
                         theme = theme
                     )
                     MinimalOutlinedButton(
                         text = "+ File",
-                        onClick = { showCreateFileDialog = true },
+                        onClick = { createFileDialogTargetProject = targetProj },
                         theme = theme
                     )
                 }
@@ -257,25 +267,31 @@ fun MainScreen(
         )
     }
 
-    if (showCreateFileDialog) {
+    createFileDialogTargetProject?.let { targetProj ->
         InputDialog(
-            title       = "New Markdown File",
+            title       = "New File in ${targetProj.name}",
             label       = "Filename",
             confirmText = "Create",
             theme       = theme,
-            onDismiss   = { showCreateFileDialog = false; createName = "" },
-            onConfirm   = { vm.createFile(it); showCreateFileDialog = false; createName = "" }
+            onDismiss   = { createFileDialogTargetProject = null },
+            onConfirm   = { name ->
+                vm.createFile(name, targetProj)
+                createFileDialogTargetProject = null
+            }
         )
     }
 
-    if (showCreateFolderDialog) {
+    createFolderDialogTargetProject?.let { targetProj ->
         InputDialog(
-            title       = "New Folder",
+            title       = "New Folder in ${targetProj.name}",
             label       = "Folder name",
             confirmText = "Create",
             theme       = theme,
-            onDismiss   = { showCreateFolderDialog = false; createName = "" },
-            onConfirm   = { vm.createFolder(it); showCreateFolderDialog = false; createName = "" }
+            onDismiss   = { createFolderDialogTargetProject = null },
+            onConfirm   = { name ->
+                vm.createFolder(name, targetProj)
+                createFolderDialogTargetProject = null
+            }
         )
     }
 
@@ -304,26 +320,71 @@ fun MainScreen(
 @Composable
 private fun ProjectSectionHeader(
     project: ProjectEntity,
-    theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme
+    theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
+    isSelected: Boolean,
+    onHeaderClick: () -> Unit,
+    onCreateFileClick: () -> Unit,
+    onCreateFolderClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 16.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = buildString {
-                append(project.name.uppercase())
-                if (project.isExternal) append("  ☁️")
-            },
-            color = theme.textMuted,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.5.sp
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .clickable { onHeaderClick() }
+                .padding(vertical = 4.dp)
+        ) {
+            Text(
+                text = buildString {
+                    append(project.name.uppercase())
+                    if (project.isExternal) append("  ☁️")
+                },
+                color = if (isSelected) theme.accent else theme.textMuted,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp
+            )
+            if (isSelected) {
+                Text(
+                    text = "• active",
+                    color = theme.accent,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "[+ file]",
+                color = theme.accent,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .clickable { onCreateFileClick() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+            Text(
+                text = "[+ folder]",
+                color = theme.accent,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .clickable { onCreateFolderClick() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
     }
 }
 
