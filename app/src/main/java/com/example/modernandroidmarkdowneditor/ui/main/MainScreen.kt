@@ -1,5 +1,10 @@
 package com.example.modernandroidmarkdowneditor.ui.main
 
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,58 +55,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 
 @Composable
-fun SwipeableFileRow(
-    text: String,
-    theme: ThemeEngine.ColorTheme,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit,
-    onShare: () -> Unit,
-    onClick: () -> Unit
-) {
-    val density = LocalDensity.current
-    val offsetX = remember { Animatable(0f) }
-    val threshold = with(density) { 60.dp.toPx() }
-
-    Box(modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).background(theme.surface)) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onShare) { Icon(Icons.Outlined.Share, null, tint = theme.textMuted) }
-            IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, null, tint = theme.accent) }
-            IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, null, tint = Color.Red) }
-        }
-        Surface(
-            modifier = Modifier
-                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            val target = if (offsetX.value < -threshold) -180f else 0f
-                            kotlinx.coroutines.launch { offsetX.animateTo(target, spring()) }
-                        }
-                    ) { change, dragAmount ->
-                        change.consume()
-                        val next = (offsetX.value + dragAmount).coerceIn(-180f, 0f)
-                        kotlinx.coroutines.launch { offsetX.snapTo(next) }
-                    }
-                }
-                .fillMaxSize()
-                .clickable { onClick() },
-            color = theme.background,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.padding(16.dp)) {
-                Text(text, color = theme.textPrimary, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
-@Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
     db: AppDatabase,
     storageManager: StorageManager,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager) }
     val state by vm.explorerState.collectAsStateWithLifecycle()
 
@@ -209,133 +169,140 @@ fun MainScreen(
             }
         }
 
-        // ── Inline search bar (slides in below the Kern title) ─────────────────
-        if (isSearchActive) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search files...", color = theme.textMuted, fontSize = 13.sp) },
-                textStyle = TextStyle(fontSize = 13.sp, color = theme.textPrimary),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = theme.textPrimary,
-                    unfocusedTextColor = theme.textPrimary,
-                    focusedBorderColor = theme.accent,
-                    unfocusedBorderColor = theme.textMuted.copy(alpha = 0.3f),
-                    cursorColor = theme.accent
-                )
-            )
-        }
-        
+        // ── Action Row (Breadcrumbs or Search) ─────────────────────────────────
         HorizontalDivider(
             color = theme.textMuted.copy(alpha = 0.15f),
             thickness = 1.dp,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
         )
 
-        // ── Breadcrumbs Path Bar & Sorting ─────────────────────────────────────
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .height(48.dp)
+                .padding(bottom = 8.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // Clear back button
-                if (state.activeProject != null) {
-                    Text(
-                        text = "←",
-                        color = theme.accent,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clickable { vm.navigateUp() }
-                            .padding(end = 8.dp)
+            androidx.compose.animation.AnimatedContent(
+                targetState = isSearchActive,
+                label = "SearchBreadcrumbsTransition"
+            ) { searching ->
+                if (searching) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search files...", color = theme.textMuted, fontSize = 13.sp) },
+                        textStyle = TextStyle(fontSize = 13.sp, color = theme.textPrimary),
+                        modifier = Modifier.fillMaxSize(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = theme.textPrimary,
+                            unfocusedTextColor = theme.textPrimary,
+                            focusedBorderColor = theme.accent,
+                            unfocusedBorderColor = theme.textMuted.copy(alpha = 0.3f),
+                            cursorColor = theme.accent
+                        )
                     )
-                }
-                
-                // files / notes / work
-                Text(
-                    text = "files",
-                    color = if (state.activeProject == null) theme.textPrimary else theme.accent,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.clickable {
-                        if (state.activeProject != null) {
-                            vm.navigateUpToRoot()
-                        }
-                    }
-                )
-                
-                state.activeProject?.let { proj ->
-                    Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    
-                    val isProjRoot = state.currentPath.isEmpty()
-                    Text(
-                        text = proj.name.lowercase(),
-                        color = if (isProjRoot) theme.textPrimary else theme.accent,
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.clickable {
-                            if (!isProjRoot) {
-                                vm.navigateToFolderRoot(proj)
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            // Clear back button
+                            if (state.activeProject != null) {
+                                Text(
+                                    text = "←",
+                                    color = theme.accent,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clickable { vm.navigateUp() }
+                                        .padding(end = 8.dp)
+                                )
                             }
-                        }
-                    )
-                    
-                    if (state.currentPath.isNotEmpty()) {
-                        val segments = state.currentPath.split('/')
-                        segments.forEachIndexed { index, segment ->
-                            Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                            val isLast = index == segments.lastIndex
-                            val segmentPath = segments.take(index + 1).joinToString("/")
+
+                            // files / notes / work
                             Text(
-                                text = segment,
-                                color = if (isLast) theme.textPrimary else theme.accent,
+                                text = "files",
+                                color = if (state.activeProject == null) theme.textPrimary else theme.accent,
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
-                                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.clickable {
-                                    if (!isLast) {
-                                        vm.navigateToSegment(proj, segmentPath)
+                                    if (state.activeProject != null) {
+                                        vm.navigateUpToRoot()
                                     }
                                 }
+                            )
+
+                            state.activeProject?.let { proj ->
+                                Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+
+                                val isProjRoot = state.currentPath.isEmpty()
+                                Text(
+                                    text = proj.name.lowercase(),
+                                    color = if (isProjRoot) theme.textPrimary else theme.accent,
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.clickable {
+                                        if (!isProjRoot) {
+                                            vm.navigateToFolderRoot(proj)
+                                        }
+                                    }
+                                )
+
+                                if (state.currentPath.isNotEmpty()) {
+                                    val segments = state.currentPath.split('/')
+                                    segments.forEachIndexed { index, segment ->
+                                        Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                        val isLast = index == segments.lastIndex
+                                        val segmentPath = segments.take(index + 1).joinToString("/")
+                                        Text(
+                                            text = segment,
+                                            color = if (isLast) theme.textPrimary else theme.accent,
+                                            fontSize = 12.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                                            modifier = Modifier.clickable {
+                                                if (!isLast) {
+                                                    vm.navigateToSegment(proj, segmentPath)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (state.activeProject == null) {
+                                Text(
+                                    text = "[+ workspace]",
+                                    color = theme.accent,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
+                                )
+                            }
+
+                            Text(
+                                text = if (isSortAscending) "[A-Z]" else "[Z-A]",
+                                color = theme.accent,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier
+                                    .clickable { isSortAscending = !isSortAscending }
+                                    .padding(vertical = 4.dp, horizontal = 8.dp)
                             )
                         }
                     }
                 }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (state.activeProject == null && !isSearchActive) {
-                    Text(
-                        text = "[+ workspace]",
-                        color = theme.accent,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
-                    )
-                }
-                
-                Text(
-                    text = if (isSortAscending) "[A-Z]" else "[Z-A]",
-                    color = theme.accent,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier
-                        .clickable { isSortAscending = !isSortAscending }
-                        .padding(vertical = 4.dp, horizontal = 8.dp)
-                )
             }
         }
 
@@ -384,6 +351,8 @@ fun MainScreen(
                                             onItemClick(EditorKey(item.project.id, clicked.relativePath))
                                         }
                                     },
+                                    onShareClick = { clicked -> shareNode(context, clicked, item.project, storageManager) },
+                                    onEditClick = { clicked -> nodeToRename = Pair(clicked, item.project) },
                                     onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
                                 )
                             }
@@ -945,6 +914,8 @@ fun VfsNodeRow(
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     isExternalProject: Boolean,
     onNodeClick: (VfsNode) -> Unit,
+    onShareClick: (VfsNode) -> Unit,
+    onEditClick: (VfsNode) -> Unit,
     onDeleteClick: (VfsNode) -> Unit
 ) {
     SwipeableFileRow(
@@ -958,8 +929,8 @@ fun VfsNodeRow(
         },
         isExternalProject = isExternalProject,
         onClick = { onNodeClick(node) },
-        onShare = {},
-        onEdit = {},
+        onShare = { onShareClick(node) },
+        onEdit = { onEditClick(node) },
         onDelete = { onDeleteClick(node) }
     )
 }
@@ -1052,6 +1023,8 @@ fun SearchVfsNodeRow(
     project: ProjectEntity,
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     onNodeClick: (VfsNode) -> Unit,
+    onShareClick: (VfsNode) -> Unit,
+    onEditClick: (VfsNode) -> Unit,
     onDeleteClick: (VfsNode) -> Unit
 ) {
     val appFont = when (theme.editorFontFamily.lowercase()) {
@@ -1094,8 +1067,8 @@ fun SearchVfsNodeRow(
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
-            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = {})
-            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = {})
+            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = { onShareClick(node) })
+            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = { onEditClick(node) })
             SwipeAction(label = "Delete", color = Color(0xFFCC3333), onClick = { onDeleteClick(node) })
         }
 
@@ -1154,6 +1127,79 @@ fun SearchVfsNodeRow(
                 else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
                 Text(details, color = theme.textMuted, fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
+            }
+        }
+    }
+}
+
+
+private fun shareNode(
+    context: android.content.Context,
+    node: VfsNode,
+    project: ProjectEntity,
+    storageManager: StorageManager
+) {
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        val cacheDir = context.cacheDir
+        val shareDir = java.io.File(cacheDir, "share_temp")
+        if (!shareDir.exists()) shareDir.mkdirs()
+
+        val uriToShare: android.net.Uri? = if (node.isDirectory) {
+            // Zip the folder
+            val zipFile = java.io.File(shareDir, "${node.name}.zip")
+            if (zipFile.exists()) zipFile.delete()
+
+            // Simple zip implementation is non-trivial without ZipOutputStream.
+            // Let's use ZipOutputStream
+            try {
+                val zos = java.util.zip.ZipOutputStream(java.io.FileOutputStream(zipFile))
+                suspend fun addDirToZip(dirNode: VfsNode, parentPath: String) {
+                    val children = storageManager.listDirectory(project, dirNode.relativePath)
+                    for (child in children) {
+                        val entryName = if (parentPath.isEmpty()) child.name else "$parentPath/${child.name}"
+                        if (child.isDirectory) {
+                            zos.putNextEntry(java.util.zip.ZipEntry("$entryName/"))
+                            zos.closeEntry()
+                            addDirToZip(child, entryName)
+                        } else {
+                            zos.putNextEntry(java.util.zip.ZipEntry(entryName))
+                            val contentBytes = storageManager.readFile(project, child.relativePath).toByteArray()
+                            zos.write(contentBytes)
+                            zos.closeEntry()
+                        }
+                    }
+                }
+                addDirToZip(node, "")
+                zos.close()
+                androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    zipFile
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        } else {
+            val shareFile = java.io.File(shareDir, node.name)
+            val contentStr = storageManager.readFile(project, node.relativePath)
+            shareFile.writeText(contentStr)
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.provider",
+                shareFile
+            )
+        }
+
+        uriToShare?.let { uri ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                val shareIntent = android.content.Intent().apply {
+                    action = android.content.Intent.ACTION_SEND
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    type = if (node.isDirectory) "application/zip" else "text/markdown"
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share ${node.name}"))
             }
         }
     }
