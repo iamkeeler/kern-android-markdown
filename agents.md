@@ -44,3 +44,11 @@ When writing UI bindings, you must adhere strictly to the parameters defined in 
 ### 5. Runtime Execution Protocol (Self-Review Loop)
 * **Testing Priority:** You must author pure-Kotlin JVM unit tests for the core parser and Index Transformation Matrix before writing any Compose layout components.
 * **Failure Loop Cap:** If a compilation check, verification test, or asset generation routine fails, you have a maximum of 3 automated modification attempts. On the 4th failure, you must immediately halt all execution loops, emit the complete diagnostic stack trace, and hand control back to the human operator. Do not hallucinate fixes or repeat failing steps.
+
+---
+
+### 6. Git Hygiene & Version Control Protocol
+* **Commit After Each Turn:** Commit all working modifications to Git at the end of each turn or completion of a logical sub-task. Commits must be atomic and accompanied by concise, descriptive commit messages.
+* **Feature Branching:** Core features must be developed on dedicated feature branches and subsequently merged into the main development branch once verified.
+* **Standard Git Hygiene:** Adhere to basic Git hygiene standards as a standard in Antigravity, ensuring clean staging, logical commit history, and prevention of untracked build artifacts or temporary files in the repository.
+
