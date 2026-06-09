@@ -17,6 +17,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.contentDescription
@@ -225,7 +229,7 @@ fun EditorHeader(
             Text(
                 text = fileName,
                 color = theme.textPrimary,
-                fontSize = 13.sp,
+                fontSize = 24.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -245,7 +249,12 @@ fun EditorHeader(
                 onClick = onSettingsToggle,
                 modifier = Modifier.semantics { contentDescription = "Toggle consolidated settings sidebar" }
             ) {
-                Text("⚙", color = theme.textMuted, fontSize = 20.sp)
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = "Settings",
+                    tint = theme.textMuted,
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }
