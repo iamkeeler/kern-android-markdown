@@ -74,6 +74,7 @@ class EditorViewModel(
     private val storageManager: StorageManager,
     private val context: Context
 ) : ViewModel() {
+    val database: AppDatabase get() = db
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
