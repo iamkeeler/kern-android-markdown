@@ -144,15 +144,26 @@ class MainScreenViewModel(
 
     fun navigateUp() {
         val current = _currentPath.value
-        if (current.isEmpty()) {
-            // Already at root of a project → back to combined view
+        if (current.isEmpty() || !current.contains('/')) {
+            // Already at project root or a root-level folder → back to combined view
             _activeProject.value = null
+            _currentPath.value = ""
             viewModelScope.launch { refreshAllFiles() }
         } else {
             val parent = current.substringBeforeLast('/', "")
             _currentPath.value = parent
             val proj = _activeProject.value ?: return
             viewModelScope.launch { loadDrillFiles(proj, parent) }
+        }
+    }
+
+    fun selectProject(project: ProjectEntity) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                db.projectDao().deselectAllProjects()
+                db.projectDao().updateProject(project.copy(isSelected = true))
+            }
+            refreshAllFiles()
         }
     }
 
@@ -181,11 +192,12 @@ class MainScreenViewModel(
         }
     }
 
-    fun createFile(name: String) {
-        val proj = _activeProject.value ?: return
-        val fileName = if (name.endsWith(".md")) name else "$name.md"
-        val relativePath = if (_currentPath.value.isEmpty()) fileName else "${_currentPath.value}/$fileName"
+    fun createFile(name: String, targetProject: ProjectEntity? = null) {
         viewModelScope.launch {
+            val proj = targetProject ?: _activeProject.value ?: withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() } ?: return@launch
+            val fileName = if (name.endsWith(".md")) name else "$name.md"
+            val isRootCreation = targetProject != null || _activeProject.value == null
+            val relativePath = if (isRootCreation || _currentPath.value.isEmpty()) fileName else "${_currentPath.value}/$fileName"
             storageManager.createFile(proj, relativePath)
             withContext(Dispatchers.IO) {
                 db.fileDao().insertFile(FileEntity(projectId = proj.id, name = fileName,
@@ -193,21 +205,30 @@ class MainScreenViewModel(
                     lastModified = System.currentTimeMillis(),
                     syncState = if (proj.isExternal) "SYNCED" else "PENDING"))
             }
-            loadDrillFiles(proj, _currentPath.value)
+            if (_activeProject.value != null) {
+                loadDrillFiles(proj, _currentPath.value)
+            } else {
+                refreshAllFiles()
+            }
         }
     }
 
-    fun createFolder(name: String) {
-        val proj = _activeProject.value ?: return
-        val relativePath = if (_currentPath.value.isEmpty()) name else "${_currentPath.value}/$name"
+    fun createFolder(name: String, targetProject: ProjectEntity? = null) {
         viewModelScope.launch {
+            val proj = targetProject ?: _activeProject.value ?: withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() } ?: return@launch
+            val isRootCreation = targetProject != null || _activeProject.value == null
+            val relativePath = if (isRootCreation || _currentPath.value.isEmpty()) name else "${_currentPath.value}/$name"
             storageManager.createDirectory(proj, relativePath)
             withContext(Dispatchers.IO) {
                 db.fileDao().insertFile(FileEntity(projectId = proj.id, name = name,
                     relativePath = relativePath, isDirectory = true,
                     lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
             }
-            loadDrillFiles(proj, _currentPath.value)
+            if (_activeProject.value != null) {
+                loadDrillFiles(proj, _currentPath.value)
+            } else {
+                refreshAllFiles()
+            }
         }
     }
 
