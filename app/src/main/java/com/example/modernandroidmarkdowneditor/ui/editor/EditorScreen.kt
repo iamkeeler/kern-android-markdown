@@ -20,6 +20,12 @@ import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.FileCopy
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -186,8 +192,14 @@ fun EditorHeader(
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     onBackClick: () -> Unit,
     onMetricsToggle: () -> Unit,
-    onSettingsToggle: () -> Unit
+    onSettingsToggle: () -> Unit,
+    onShareClick: () -> Unit = {},
+    onRenameClick: () -> Unit = {},
+    onSyncClick: () -> Unit = {},
+    onDuplicateClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {}
 ) {
+    var isMenuExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -255,6 +267,53 @@ fun EditorHeader(
                     tint = theme.textMuted,
                     modifier = Modifier.size(22.dp)
                 )
+            }
+
+            Box {
+                IconButton(
+                    onClick = { isMenuExpanded = true },
+                    modifier = Modifier.semantics { contentDescription = "More options" }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.MoreVert,
+                        contentDescription = "More",
+                        tint = theme.textMuted,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = isMenuExpanded,
+                    onDismissRequest = { isMenuExpanded = false },
+                    modifier = Modifier.background(theme.surface).border(1.dp, theme.textMuted.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Share", color = theme.textPrimary, fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null, tint = theme.textMuted, modifier = Modifier.size(20.dp)) },
+                        onClick = { isMenuExpanded = false; onShareClick() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Rename", color = theme.textPrimary, fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, tint = theme.textMuted, modifier = Modifier.size(20.dp)) },
+                        onClick = { isMenuExpanded = false; onRenameClick() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Cloud Sync", color = theme.textPrimary, fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.CloudSync, contentDescription = null, tint = theme.textMuted, modifier = Modifier.size(20.dp)) },
+                        onClick = { isMenuExpanded = false; onSyncClick() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Duplicate", color = theme.textPrimary, fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.FileCopy, contentDescription = null, tint = theme.textMuted, modifier = Modifier.size(20.dp)) },
+                        onClick = { isMenuExpanded = false; onDuplicateClick() }
+                    )
+                    HorizontalDivider(color = theme.textMuted.copy(alpha = 0.15f))
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = Color(0xFFFF4D4D), fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF4D4D), modifier = Modifier.size(20.dp)) },
+                        onClick = { isMenuExpanded = false; onDeleteClick() }
+                    )
+                }
             }
         }
     }

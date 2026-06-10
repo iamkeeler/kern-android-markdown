@@ -59,6 +59,7 @@ data class EditorUiState(
     val autoCompleteParens: Boolean = true,
     val autoCompleteBrackets: Boolean = true,
     val hemingwayMetrics: HemingwayMetrics? = null,
+    val isReadabilityPopupOpen: Boolean = false,
     val sidebarMode: SidebarMode = SidebarMode.CLOSED,
     val activeTheme: AppColorTheme = ThemeEngine.DefaultLight.toColorTheme(),
     val syncProvider: SyncProvider = SyncProvider.NONE,
@@ -367,6 +368,7 @@ class EditorViewModel(
 
         // 1. Check if it's a newline split
         if (newValue.text.contains('\n')) {
+            _uiState.value = _uiState.value.copy(isReadabilityPopupOpen = false)
             val splitIndex = newValue.text.indexOf('\n')
             val firstPart = newValue.text.substring(0, splitIndex)
             val secondPart = newValue.text.substring(splitIndex + 1)
@@ -421,6 +423,7 @@ class EditorViewModel(
         }
 
         // 2. Perform inline typing adjustments (overtype skipping, selection wrapping, smart typography, auto header spacing)
+        _uiState.value = _uiState.value.copy(isReadabilityPopupOpen = false)
         val transformResult = MarkdownEditorEngine.handleTextChange(
             oldText = oldValue.text,
             oldSelStart = oldValue.selection.start,
@@ -622,6 +625,17 @@ class EditorViewModel(
         // If Hemingway analyzer is active, recalculate on save
         if (state.sidebarMode == SidebarMode.METRICS) {
             runHemingwayAnalysis(documentContent)
+        }
+    }
+
+    fun toggleReadabilityPopup(isOpen: Boolean) {
+        _uiState.value = _uiState.value.copy(isReadabilityPopupOpen = isOpen)
+        if (isOpen) {
+            viewModelScope.launch(Dispatchers.Default) {
+                val rawBlocks = _uiState.value.paragraphs.items.map { it.block.rawText }
+                val documentContent = com.example.modernandroidmarkdowneditor.parser.MarkdownParser.joinDocument(rawBlocks)
+                runHemingwayAnalysis(documentContent)
+            }
         }
     }
 
