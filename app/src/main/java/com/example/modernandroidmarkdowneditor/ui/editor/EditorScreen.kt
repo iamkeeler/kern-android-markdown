@@ -17,6 +17,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.contentDescription
@@ -123,39 +127,66 @@ fun EditorScreen(
                         viewModel = viewModel
                     )
 
-                    // Floating Formatting Toolbar (appears on text selection)
+                                        // Floating Formatting Toolbar
+                    var isToolbarMinimized by remember { mutableStateOf(false) }
                     val activeIndex = uiState.focusedParagraphIndex
                     val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
-                    val hasSelection = activeValue != null && !activeValue.selection.collapsed
 
-                    if (hasSelection) {
-                        FloatingFormattingToolbar(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 24.dp),
-                            theme = uiState.activeTheme,
-                            onHeaderClick = { viewModel.cycleHeaderLevel(activeIndex) },
-                            onFormat = { p, s ->
-                                val delimiterStart = p
-                                val delimiterEnd = s
-                                val value = textFieldValues[activeIndex] ?: return@FloatingFormattingToolbar
-                                val selStart = value.selection.start
-                                val selEnd = value.selection.end
-                                val text = value.text
-
-                                val selectedText = text.substring(selStart, selEnd)
-                                val formatted = delimiterStart + selectedText + delimiterEnd
-                                val newText = text.substring(0, selStart) + formatted + text.substring(selEnd)
-
-                                val newSelection = if (uiState.stickySelection) {
-                                    androidx.compose.ui.text.TextRange(selStart + delimiterStart.length, selStart + delimiterStart.length + selectedText.length)
-                                } else {
-                                    androidx.compose.ui.text.TextRange(selStart + formatted.length)
-                                }
-
-                                viewModel.updateParagraph(activeIndex, TextFieldValue(newText, newSelection))
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = true,
+                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom),
+                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp)
+                    ) {
+                        if (isToolbarMinimized) {
+                            Box(
+                                modifier = Modifier
+                                    .shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(uiState.activeTheme.surface)
+                                    .clickable { isToolbarMinimized = false }
+                                    .padding(12.dp)
+                            ) {
+                                Text("T", color = uiState.activeTheme.accent, fontWeight = FontWeight.Bold)
                             }
-                        )
+                        } else {
+                            FloatingFormattingToolbar(
+                                modifier = Modifier.shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false),
+                                theme = uiState.activeTheme,
+                                onHeaderClick = { if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex) },
+                                onMinimizeClick = { isToolbarMinimized = true },
+                                onFormat = { p, s ->
+                                    if (activeIndex == -1) return@FloatingFormattingToolbar
+                                    val delimiterStart = p
+                                    val delimiterEnd = s
+                                    val value = textFieldValues[activeIndex] ?: return@FloatingFormattingToolbar
+                                    val selStart = value.selection.start
+                                    val selEnd = value.selection.end
+                                    val text = value.text
+
+                                    val selectedText = text.substring(selStart, selEnd)
+
+                                    if (selStart == selEnd && text.substring(selStart).startsWith(delimiterEnd)) {
+                                        // The user is at the end of the formatting, tapping the format button again should just jump the cursor past the closing delimiter
+                                        viewModel.updateParagraph(activeIndex, TextFieldValue(text, androidx.compose.ui.text.TextRange(selStart + delimiterEnd.length)))
+                                        return@FloatingFormattingToolbar
+                                    }
+
+                                    val formatted = delimiterStart + selectedText + delimiterEnd
+                                    val newText = text.substring(0, selStart) + formatted + text.substring(selEnd)
+
+                                    val newSelection = if (uiState.stickySelection && selStart != selEnd) {
+                                        androidx.compose.ui.text.TextRange(selStart + delimiterStart.length, selStart + delimiterStart.length + selectedText.length)
+                                    } else if (selStart == selEnd) {
+                                        androidx.compose.ui.text.TextRange(selStart + delimiterStart.length)
+                                    } else {
+                                        androidx.compose.ui.text.TextRange(selStart + formatted.length)
+                                    }
+
+                                    viewModel.updateParagraph(activeIndex, TextFieldValue(newText, newSelection))
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -225,7 +256,7 @@ fun EditorHeader(
             Text(
                 text = fileName,
                 color = theme.textPrimary,
-                fontSize = 13.sp,
+                fontSize = 24.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -245,7 +276,12 @@ fun EditorHeader(
                 onClick = onSettingsToggle,
                 modifier = Modifier.semantics { contentDescription = "Toggle consolidated settings sidebar" }
             ) {
-                Text("⚙", color = theme.textMuted, fontSize = 20.sp)
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = "Settings",
+                    tint = theme.textMuted,
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }
@@ -424,11 +460,12 @@ fun FloatingFormattingToolbar(
     theme: com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme,
     onHeaderClick: () -> Unit,
     onFormat: (prefix: String, suffix: String) -> Unit,
+    onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
-            .shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp))
+            .shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false)
             .clip(RoundedCornerShape(12.dp))
             .background(theme.surface)
             .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -470,6 +507,15 @@ fun FloatingFormattingToolbar(
             modifier = Modifier.semantics { contentDescription = "Format selection as link" }
         ) {
             Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = 16.sp)
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        IconButton(
+            onClick = onMinimizeClick,
+            modifier = Modifier.semantics { contentDescription = "Minimize toolbar" }
+        ) {
+            Text("✕", fontWeight = FontWeight.Normal, color = theme.textMuted, fontSize = 14.sp)
         }
     }
 }
