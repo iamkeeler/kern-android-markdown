@@ -20,6 +20,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
@@ -39,9 +41,11 @@ import com.example.modernandroidmarkdowneditor.data.local.ProjectEntity
 import com.example.modernandroidmarkdowneditor.data.storage.StorageManager
 import com.example.modernandroidmarkdowneditor.data.storage.VfsNode
 import com.example.modernandroidmarkdowneditor.ui.theme.ThemeEngine
+import com.example.modernandroidmarkdowneditor.ui.theme.AppColorTheme
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -52,7 +56,7 @@ import androidx.compose.ui.text.TextStyle
 @Composable
 fun SwipeableFileRow(
     text: String,
-    theme: ThemeEngine.ColorTheme,
+    theme: AppColorTheme,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
     onShare: () -> Unit,
@@ -75,12 +79,12 @@ fun SwipeableFileRow(
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             val target = if (offsetX.value < -threshold) -180f else 0f
-                            kotlinx.coroutines.launch { offsetX.animateTo(target, spring()) }
+                            kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(target, spring()) }
                         }
                     ) { change, dragAmount ->
                         change.consume()
                         val next = (offsetX.value + dragAmount).coerceIn(-180f, 0f)
-                        kotlinx.coroutines.launch { offsetX.snapTo(next) }
+                        kotlinx.coroutines.GlobalScope.launch { offsetX.snapTo(next) }
                     }
                 }
                 .fillMaxSize()
@@ -712,7 +716,7 @@ fun SwipeableFileRow(
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        scope.launch {
+                        kotlinx.coroutines.GlobalScope.launch {
                             if (offsetX.value < -revealWidthPx / 2) {
                                 offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
                             } else {
@@ -721,10 +725,10 @@ fun SwipeableFileRow(
                         }
                     },
                     onDragCancel = {
-                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                     },
                     onHorizontalDrag = { _, delta ->
-                        scope.launch {
+                        kotlinx.coroutines.GlobalScope.launch {
                             val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
                             offsetX.snapTo(target)
                         }
@@ -753,7 +757,7 @@ fun SwipeableFileRow(
                 .background(theme.background)
                 .clickable {
                     if (offsetX.value != 0f) {
-                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                     } else {
                         onClick()
                     }
@@ -825,7 +829,7 @@ fun SwipeableProjectRow(
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        scope.launch {
+                        kotlinx.coroutines.GlobalScope.launch {
                             if (offsetX.value < -revealWidthPx / 2) {
                                 offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
                             } else {
@@ -834,10 +838,10 @@ fun SwipeableProjectRow(
                         }
                     },
                     onDragCancel = {
-                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                     },
                     onHorizontalDrag = { _, delta ->
-                        scope.launch {
+                        kotlinx.coroutines.GlobalScope.launch {
                             val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
                             offsetX.snapTo(target)
                         }
@@ -866,7 +870,7 @@ fun SwipeableProjectRow(
                 .background(theme.background)
                 .clickable {
                     if (offsetX.value != 0f) {
-                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                     } else {
                         onClick()
                     }
@@ -1071,16 +1075,16 @@ fun SearchVfsNodeRow(
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        scope.launch {
+                        kotlinx.coroutines.GlobalScope.launch {
                             if (offsetX.value < -revealWidthPx / 2)
                                 offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
                             else
                                 offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
                         }
                     },
-                    onDragCancel = { scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) } },
+                    onDragCancel = { kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) } },
                     onHorizontalDrag = { _, delta ->
-                        scope.launch {
+                        kotlinx.coroutines.GlobalScope.launch {
                             offsetX.snapTo((offsetX.value + delta).coerceIn(-revealWidthPx, 0f))
                         }
                     }
@@ -1106,7 +1110,7 @@ fun SearchVfsNodeRow(
                 .background(theme.background)
                 .clickable {
                     if (offsetX.value != 0f) {
-                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                     } else {
                         onNodeClick(node)
                     }
