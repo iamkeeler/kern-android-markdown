@@ -36,7 +36,7 @@ jobs:
       # Upload the generated APK to Firebase App Distribution
       # This step will automatically email the testers in the specified group.
       - name: Upload to Firebase App Distribution
-        uses: wzieba/Firebase-Distribution-Github-Activity@v1
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
