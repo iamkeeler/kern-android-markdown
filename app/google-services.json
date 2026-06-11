@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "198746606666",
+    "project_id": "androidmd-app",
+    "storage_bucket": "androidmd-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:198746606666:android:0652e7d164ccb0fab66ab3",
+        "android_client_info": {
+          "package_name": "com.attachdesign.kern"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDgZL5TVa2Z4rh8vS4Oy-jKp0KJjteTCnI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
