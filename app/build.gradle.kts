@@ -6,10 +6,10 @@ plugins {
 }
 
 android {
-    namespace = "com.example.modernandroidmarkdowneditor"
+    namespace = "com.attachdesign.kern"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.modernandroidmarkdowneditor"
+        applicationId = "com.attachdesign.kern"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
