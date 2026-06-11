@@ -4,7 +4,7 @@
     <option name="TESTING_TYPE" value="2" />
     <option name="INSTRUMENTATION_RUNNER_CLASS" value="" />
     <option name="METHOD_NAME" value="" />
-    <option name="CLASS_NAME" value="com.example.modernandroidmarkdowneditor.ui.main.MainScreenTest" />
+    <option name="CLASS_NAME" value="com.attachdesign.kern.ui.main.MainScreenTest" />
     <option name="PACKAGE_NAME" value="" />
     <option name="TARGET_SELECTION_MODE" value="DEVICE_AND_SNAPSHOT_COMBO_BOX" />
     <option name="SELECTED_CLOUD_MATRIX_PROJECT_ID" value="" />
