@@ -367,7 +367,7 @@ fun MainScreen(
                     if (sortedProjects.isEmpty()) {
                         EmptyStateHint(
                             title = "No workspaces",
-                            body = "Tap [+ workspace] above to add a local or cloud folder.",
+                            body = "Tap [+ workspace] above to add a local folder.",
                             theme = theme
                         )
                     } else {
@@ -998,7 +998,7 @@ fun CreateProjectDialog(
                         colors = CheckboxDefaults.colors(checkedColor = theme.accent))
                     Spacer(Modifier.width(8.dp))
                     Column {
-                        Text("Cloud project ☁️", color = theme.textPrimary,
+                        Text("External project ☁️", color = theme.textPrimary,
                             fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         Text("Files stored in external / scoped storage.",
                             color = theme.textMuted, fontSize = 10.sp)
