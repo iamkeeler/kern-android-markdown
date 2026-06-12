@@ -41,7 +41,7 @@ fun SettingsTabsContent(
     db: AppDatabase,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     modifier: Modifier = Modifier,
-    syncControllerContent: @Composable (() -> Unit)? = null
+
 ) {
     val coroutineScope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
@@ -51,7 +51,7 @@ fun SettingsTabsContent(
     val viewModeSetting     by db.settingDao().getSettingFlow("view_mode").collectAsState(initial = null)
     val editorFontSetting   by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
     val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsState(initial = null)
-    val syncProviderSetting by db.settingDao().getSettingFlow("sync_provider").collectAsState(initial = null)
+
     val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
     val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsState(initial = null)
     val autoCompleteQuotesSetting       by db.settingDao().getSettingFlow("auto_complete_quotes").collectAsState(initial = null)
@@ -63,7 +63,7 @@ fun SettingsTabsContent(
     val currentViewMode            = viewModeSetting?.value ?: "RENDERED"
     val currentFontFamily          = editorFontSetting?.value ?: "serif"
     val currentSticky              = stickySetting?.value?.toBoolean() ?: true
-    val currentSync                = syncProviderSetting?.value ?: "NONE"
+
     val currentAutoHeader          = autoHeaderSetting?.value?.toBoolean() ?: true
     val currentAutoComplete        = autoCompleteSetting?.value?.toBoolean() ?: true
     val currentAutoCompleteQuotes  = autoCompleteQuotesSetting?.value?.toBoolean() ?: true
@@ -460,46 +460,16 @@ fun SettingsTabsContent(
                     )
                 }
                 3 -> { // Sync tab
-                     Text("Cloud Sync Provider", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                     Text("Cloud Sync", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
                      Spacer(Modifier.height(8.dp))
-                     val providers = listOf(
-                         "NONE"         to "Local-Only (None)",
-                         "GOOGLE_DRIVE" to "Google Drive",
-                         "DROPBOX"      to "Dropbox",
-                         "ONEDRIVE"     to "Microsoft OneDrive"
+                     Text(
+                         "We are actively working on adding cloud synchronization features so you can access your documents anywhere. Stay tuned for updates!",
+                         color = theme.textMuted,
+                         fontSize = 13.sp,
+                         fontFamily = appFont,
+                         lineHeight = 18.sp
                      )
-                     providers.forEach { (provider, label) ->
-                         Row(
-                             modifier = Modifier
-                                 .fillMaxWidth()
-                                 .clickable {
-                                     coroutineScope.launch(Dispatchers.IO) {
-                                         db.settingDao().insertSetting(SettingEntity("sync_provider", provider))
-                                     }
-                                 }
-                                 .padding(vertical = 8.dp),
-                             verticalAlignment = Alignment.CenterVertically,
-                             horizontalArrangement = Arrangement.SpaceBetween
-                         ) {
-                             Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
-                            RadioButton(
-                                selected = currentSync == provider,
-                                onClick = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("sync_provider", provider))
-                                    }
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
-                            )
-                        }
-                    }
-
-                    if (syncControllerContent != null) {
-                        Spacer(Modifier.height(16.dp))
-                        HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                        Spacer(Modifier.height(16.dp))
-                        syncControllerContent()
-                    }
+                     Spacer(Modifier.height(16.dp))
                 }
                 4 -> { // About tab
                      Row(

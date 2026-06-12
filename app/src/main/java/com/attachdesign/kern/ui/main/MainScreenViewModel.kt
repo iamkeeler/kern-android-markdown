@@ -96,7 +96,7 @@ class MainScreenViewModel(
             A typography-first Markdown editor for mobile and foldables.
             ## Features
             1. **Inline-Reveal WYSIWYG**: Tap to edit.
-            2. **Cloud Sync**: Set a provider in the info drawer.
+            2. **Cloud Sync**: Cloud sync features are coming soon!
             3. **Hemingway Analyzer**: Check Metrics for readability.
         """.trimIndent())
         db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
