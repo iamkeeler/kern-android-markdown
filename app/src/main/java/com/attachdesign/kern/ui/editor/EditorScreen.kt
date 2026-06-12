@@ -572,11 +572,7 @@ fun SidebarPane(
                         db = viewModel.database,
                         theme = theme,
                         modifier = Modifier.fillMaxSize(),
-                        syncControllerContent = {
-                            if (state.syncProvider != SyncProvider.NONE) {
-                                SyncControllerContent(state = state, viewModel = viewModel)
-                            }
-                        }
+
                     )
                 }
                 else -> {}
@@ -694,87 +690,4 @@ fun HemingwayStatRow(label: String, count: Int, color: Color, theme: com.attachd
         )
     }
 }
-
-@Composable
-fun SyncControllerContent(
-    state: EditorUiState,
-    viewModel: EditorViewModel
-) {
-    val theme = state.activeTheme
-    val syncStatus by viewModel.syncEngine.syncStatus.collectAsState()
-    val syncLogs by viewModel.syncEngine.syncLogs.collectAsState()
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        ) {
-            Text("Sync Controller", color = theme.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(syncStatus.message, color = theme.textMuted, fontSize = 11.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            val isSyncing = syncStatus.state == SyncState.SYNCING
-            Button(
-                onClick = { viewModel.triggerCloudSyncSweep() },
-                colors = ButtonDefaults.buttonColors(containerColor = theme.accent),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(4.dp),
-                enabled = !isSyncing
-            ) {
-                if (isSyncing) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            color = theme.background,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text("Syncing...", color = theme.background, fontSize = 12.sp)
-                    }
-                } else {
-                    Text("Trigger Upload Sweep", color = theme.background, fontSize = 12.sp)
-                }
-            }
-        }
-
-        HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        ) {
-            Text("Sync Logs Console", color = theme.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .background(theme.background)
-                    .border(1.dp, theme.textMuted.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                    .padding(8.dp)
-            ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(syncLogs.size) { idx ->
-                        Text(
-                            text = syncLogs[idx],
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 9.sp,
-                            color = theme.textPrimary
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 
