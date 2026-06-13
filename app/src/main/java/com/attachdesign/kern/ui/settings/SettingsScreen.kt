@@ -632,7 +632,8 @@ fun MinimalOutlinedButton(
     text: String,
     onClick: () -> Unit,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPrimary: Boolean = false
 ) {
      val appFont = when (theme.editorFontFamily.lowercase()) {
          "serif" -> FontFamily.Serif
@@ -640,19 +641,24 @@ fun MinimalOutlinedButton(
          "monospace" -> FontFamily.Monospace
          else -> FontFamily.Default
      }
+    val bgColor = if (isPrimary) theme.accent else Color.Transparent
+    val textColor = if (isPrimary) theme.background else theme.textPrimary
+    val borderColor = if (isPrimary) theme.accent else theme.textMuted.copy(alpha = 0.3f)
+
     Box(
         modifier = modifier
-            .border(border = BorderStroke(1.dp, theme.textMuted.copy(alpha = 0.3f)), shape = RoundedCornerShape(4.dp))
+            .border(border = BorderStroke(1.dp, borderColor), shape = RoundedCornerShape(4.dp))
+            .background(bgColor, RoundedCornerShape(4.dp))
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = theme.textPrimary,
+            color = textColor,
             fontSize = 14.sp,
             fontFamily = appFont,
-            fontWeight = FontWeight.Normal
+            fontWeight = if (isPrimary) FontWeight.Medium else FontWeight.Normal
         )
     }
 }

@@ -444,7 +444,8 @@ fun MainScreen(
                     MinimalOutlinedButton(
                         text = "+ File",
                         onClick = { createFileDialogTargetProject = targetProj },
-                        theme = theme
+                        theme = theme,
+                        isPrimary = true
                     )
                 }
             }
