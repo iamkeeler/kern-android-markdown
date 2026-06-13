@@ -481,6 +481,50 @@ class EditorViewModel(
         }
     }
 
+    fun setHeaderLevel(index: Int, level: Int) {
+        val currentState = _uiState.value
+        val items = currentState.paragraphs.items.toMutableList()
+        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
+        val text = originalValue.text
+
+        // Strip existing header prefixes
+        var plainText = text
+        var prefixLengthToRemove = 0
+        if (text.startsWith("###### ")) prefixLengthToRemove = 7
+        else if (text.startsWith("##### ")) prefixLengthToRemove = 6
+        else if (text.startsWith("#### ")) prefixLengthToRemove = 5
+        else if (text.startsWith("### ")) prefixLengthToRemove = 4
+        else if (text.startsWith("## ")) prefixLengthToRemove = 3
+        else if (text.startsWith("# ")) prefixLengthToRemove = 2
+
+        plainText = text.substring(prefixLengthToRemove)
+
+        val newText = if (level in 1..6) {
+            "#".repeat(level) + " " + plainText
+        } else {
+            plainText
+        }
+
+        val newSelectionOffset = newText.length - text.length
+
+        val newSelection = androidx.compose.ui.text.TextRange(
+            (originalValue.selection.start + newSelectionOffset).coerceIn(0, newText.length),
+            (originalValue.selection.end + newSelectionOffset).coerceIn(0, newText.length)
+        )
+
+        val updatedBlock = MarkdownParser.parseParagraph(newText, items[index].block.id)
+        items[index] = ImmutableParagraphBlock(updatedBlock)
+
+        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
+            put(index, TextFieldValue(newText, newSelection))
+        }
+
+        _uiState.value = currentState.copy(
+            paragraphs = ImmutableParagraphList(items.toImmutableList())
+        )
+        saveActiveFileAsync()
+    }
+
     fun cycleHeaderLevel(index: Int) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
@@ -488,7 +532,10 @@ class EditorViewModel(
         val text = originalValue.text
 
         val (newText, newSelectionOffset) = when {
-            text.startsWith("### ") -> Pair(text.substring(4), -4)
+            text.startsWith("###### ") -> Pair(text.substring(7), -7)
+            text.startsWith("##### ") -> Pair("###### " + text.substring(6), 1)
+            text.startsWith("#### ") -> Pair("##### " + text.substring(5), 1)
+            text.startsWith("### ") -> Pair("#### " + text.substring(4), 1)
             text.startsWith("## ") -> Pair("### " + text.substring(3), 1)
             text.startsWith("# ") -> Pair("## " + text.substring(2), 1)
             else -> Pair("# $text", 2)
