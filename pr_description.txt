@@ -1,0 +1,13 @@
+🔍 Lens: Apply Primary CTA hierarchy for core tasks
+
+**The Problem:**
+Multiple stacked floating action buttons of the same size and styling (e.g., '+ Folder' and '+ File') dilute the primary CTA. If the user's core task is to write a document, creating a file must hold the highest visual weight. The eye shouldn't have to read labels to know what to do next.
+
+**The Visual Logic:**
+By giving the primary CTA a solid accent background, it immediately draws the eye, establishing a clear visual hierarchy. Secondary actions remain as low-emphasis ghost buttons.
+
+**The Surgery:**
+Extended the existing `MinimalOutlinedButton` component with an `isPrimary` boolean prop. This conditionally applies the `theme.accent` color as a solid background while retaining the original outlined styling when `isPrimary` is false. This avoids creating a duplicate component. Applied `isPrimary=true` to the `+ File` action in the `MainScreen`.
+
+**A11y/IA Impact:**
+Clarifies the mental model by making the core task visually distinct, reducing cognitive load and reliance on reading text labels to distinguish between actions.
