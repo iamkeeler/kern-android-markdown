@@ -20,11 +20,15 @@ import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.zIndex
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,24 +90,55 @@ fun EditorScreen(
                     .fillMaxHeight()
             ) {
                 // Header (Breadcrumbs)
-                EditorHeader(
-                    filePath = filePath,
-                    theme = uiState.activeTheme,
-                    onBackClick = onBackClick,
-                    onMetricsToggle = {
-                        val currentMode = uiState.sidebarMode
-                        viewModel.toggleSidebar(if (currentMode == SidebarMode.METRICS) SidebarMode.CLOSED else SidebarMode.METRICS)
-                    },
-                    onSettingsToggle = {
-                        val currentMode = uiState.sidebarMode
-                        viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
+                Box {
+                    Column {
+                        EditorHeader(
+                            filePath = filePath,
+                            theme = uiState.activeTheme,
+                            onBackClick = onBackClick,
+                            onMetricsToggle = {
+                                viewModel.toggleReadabilityPopup()
+                            },
+                            onSettingsToggle = {
+                                val currentMode = uiState.sidebarMode
+                                viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
+                            },
+                            onMoreOptionsAction = { action ->
+                                // Stub hooks for Share, Rename, Cloud Sync, Duplicate, Delete
+                                when(action) {
+                                    "Share" -> { /* TODO */ }
+                                    "Rename" -> { /* TODO */ }
+                                    "Cloud Sync" -> { /* TODO */ }
+                                    "Duplicate" -> { /* TODO */ }
+                                    "Delete" -> { /* TODO */ }
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(
+                            thickness = 1.dp,
+                            color = uiState.activeTheme.textMuted.copy(alpha = 0.15f)
+                        )
                     }
-                )
-                
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = uiState.activeTheme.textMuted.copy(alpha = 0.15f)
-                )
+
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = uiState.isReadabilityPopupOpen,
+                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Top),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 70.dp, end = 16.dp).zIndex(10f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(320.dp)
+                                .heightIn(max = 400.dp)
+                                .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp), clip = false)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(uiState.activeTheme.surface)
+                                .padding(16.dp)
+                        ) {
+                            MetricsTab(uiState)
+                        }
+                    }
+                }
 
                 val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                 // Main Editor Area
@@ -212,7 +247,8 @@ fun EditorHeader(
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     onBackClick: () -> Unit,
     onMetricsToggle: () -> Unit,
-    onSettingsToggle: () -> Unit
+    onSettingsToggle: () -> Unit,
+    onMoreOptionsAction: (String) -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -230,7 +266,7 @@ fun EditorHeader(
             Text(
                 text = "~",
                 color = theme.accent,
-                fontSize = 13.sp,
+                fontSize = 20.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
@@ -246,7 +282,7 @@ fun EditorHeader(
                 Text(
                     text = "/$folders",
                     color = theme.textMuted,
-                    fontSize = 13.sp,
+                    fontSize = 20.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium
                 )
@@ -255,7 +291,7 @@ fun EditorHeader(
             Text(
                 text = fileName,
                 color = theme.textPrimary,
-                fontSize = 24.sp,
+                fontSize = 20.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -267,9 +303,14 @@ fun EditorHeader(
         ) {
             IconButton(
                 onClick = onMetricsToggle,
-                modifier = Modifier.semantics { contentDescription = "Toggle readability metrics sidebar" }
+                modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
             ) {
-                Text("📖", color = theme.textMuted, fontSize = 20.sp)
+                Icon(
+                    imageVector = Icons.Outlined.Analytics,
+                    contentDescription = "Readability metrics",
+                    tint = theme.textMuted,
+                    modifier = Modifier.size(22.dp)
+                )
             }
             IconButton(
                 onClick = onSettingsToggle,
@@ -281,6 +322,24 @@ fun EditorHeader(
                     tint = theme.textMuted,
                     modifier = Modifier.size(22.dp)
                 )
+            }
+
+            var showMenu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.MoreVert,
+                        contentDescription = "More Options",
+                        tint = theme.textMuted
+                    )
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
+                    DropdownMenuItem(text = { Text("Rename") }, onClick = { showMenu = false; onMoreOptionsAction("Rename") })
+                    DropdownMenuItem(text = { Text("Cloud Sync") }, onClick = { showMenu = false; onMoreOptionsAction("Cloud Sync") })
+                    DropdownMenuItem(text = { Text("Duplicate") }, onClick = { showMenu = false; onMoreOptionsAction("Duplicate") })
+                    DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false; onMoreOptionsAction("Delete") })
+                }
             }
         }
     }
@@ -565,9 +624,6 @@ fun SidebarPane(
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (state.sidebarMode) {
-                SidebarMode.METRICS -> {
-                    MetricsTab(state)
-                }
                 SidebarMode.SETTINGS -> {
                     SettingsTabsContent(
                         db = viewModel.database,
