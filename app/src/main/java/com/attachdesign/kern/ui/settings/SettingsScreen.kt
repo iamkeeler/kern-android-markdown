@@ -50,6 +50,7 @@ fun SettingsTabsContent(
     // Observe global settings reactively
     val viewModeSetting     by db.settingDao().getSettingFlow("view_mode").collectAsState(initial = null)
     val editorFontSetting   by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
+    val editorFontSizeScaleSetting by db.settingDao().getSettingFlow("editor_font_size_scale").collectAsState(initial = null)
     val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsState(initial = null)
 
     val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
@@ -62,6 +63,7 @@ fun SettingsTabsContent(
 
     val currentViewMode            = viewModeSetting?.value ?: "RENDERED"
     val currentFontFamily          = editorFontSetting?.value ?: "serif"
+    val currentFontSizeScale = editorFontSizeScaleSetting?.value?.toFloatOrNull() ?: 1.0f
     val currentSticky              = stickySetting?.value?.toBoolean() ?: true
 
     val currentAutoHeader          = autoHeaderSetting?.value?.toBoolean() ?: true
@@ -185,6 +187,44 @@ fun SettingsTabsContent(
                                 onClick = {
                                     coroutineScope.launch(Dispatchers.IO) {
                                         db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
+                                    }
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(16.dp))
+
+                    Text("Editor Font Size", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    val fontSizes = listOf(
+                        0.8f to "Small",
+                        1.0f to "Medium",
+                        1.2f to "Large",
+                        1.4f to "Extra Large"
+                    )
+                    fontSizes.forEach { (scale, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", scale.toString()))
+                                    }
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
+                            RadioButton(
+                                selected = currentFontSizeScale == scale,
+                                onClick = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", scale.toString()))
                                     }
                                 },
                                 colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
