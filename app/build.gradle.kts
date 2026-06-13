@@ -77,6 +77,8 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation("io.mockk:mockk:1.13.10")
+  testImplementation("app.cash.turbine:turbine:1.0.0")
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
