@@ -223,4 +223,24 @@ class MarkdownVisualTransformation(
             }
         }
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is MarkdownVisualTransformation) return false
+
+        if (isFocused != other.isFocused) return false
+        if (viewMode != other.viewMode) return false
+        if (tokenColor != other.tokenColor) return false
+        if (codeBackgroundColor != other.codeBackgroundColor) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = isFocused.hashCode()
+        result = 31 * result + viewMode.hashCode()
+        result = 31 * result + tokenColor.hashCode()
+        result = 31 * result + codeBackgroundColor.hashCode()
+        return result
+    }
 }
