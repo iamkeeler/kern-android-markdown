@@ -47,6 +47,23 @@ class StorageManager(private val context: Context) {
         return doc
     }
 
+
+    /**
+     * Resolves a child file from a parent directory and ensures the resulting path
+     * strictly resides within the parent directory, preventing path traversal vulnerabilities.
+     */
+    private fun getSafeFile(parent: File, childPath: String): File {
+        val resolvedFile = File(parent, childPath)
+        val parentCanonicalPath = parent.canonicalPath
+        val resolvedCanonicalPath = resolvedFile.canonicalPath
+
+        if (!resolvedCanonicalPath.startsWith(parentCanonicalPath + File.separator) &&
+            resolvedCanonicalPath != parentCanonicalPath) {
+            throw SecurityException("Path traversal attempt detected. Path: $childPath")
+        }
+        return resolvedFile
+    }
+
     /**
      * Gets the root java.io.File directory for a project depending on whether it is
      * App-Sandbox (internal) or External Scoped Storage (SAF).
@@ -57,7 +74,7 @@ class StorageManager(private val context: Context) {
         if (!rootDir.exists()) {
             rootDir.mkdirs()
         }
-        val projectDir = File(rootDir, project.path)
+        val projectDir = getSafeFile(rootDir, project.path)
         if (!projectDir.exists()) {
             projectDir.mkdirs()
         }
@@ -83,7 +100,7 @@ class StorageManager(private val context: Context) {
         }
 
         val projectRoot = getProjectRootFile(project)
-        val targetDir = if (relativePath.isEmpty()) projectRoot else File(projectRoot, relativePath)
+        val targetDir = if (relativePath.isEmpty()) projectRoot else getSafeFile(projectRoot, relativePath)
         
         if (!targetDir.exists() || !targetDir.isDirectory) {
             return@withContext emptyList()
@@ -112,7 +129,7 @@ class StorageManager(private val context: Context) {
         }
 
         val projectRoot = getProjectRootFile(project)
-        val file = File(projectRoot, relativePath)
+        val file = getSafeFile(projectRoot, relativePath)
         if (file.exists() && file.isFile) {
             file.readText(Charsets.UTF_8)
         } else {
@@ -133,7 +150,7 @@ class StorageManager(private val context: Context) {
         }
 
         val projectRoot = getProjectRootFile(project)
-        val file = File(projectRoot, relativePath)
+        val file = getSafeFile(projectRoot, relativePath)
         val parent = file.parentFile
         if (parent != null && !parent.exists()) {
             parent.mkdirs()
@@ -151,7 +168,7 @@ class StorageManager(private val context: Context) {
         }
 
         val projectRoot = getProjectRootFile(project)
-        val file = File(projectRoot, relativePath)
+        val file = getSafeFile(projectRoot, relativePath)
         val parent = file.parentFile
         if (parent != null && !parent.exists()) {
             parent.mkdirs()
@@ -173,7 +190,7 @@ class StorageManager(private val context: Context) {
         }
 
         val projectRoot = getProjectRootFile(project)
-        val file = File(projectRoot, relativePath)
+        val file = getSafeFile(projectRoot, relativePath)
         file.mkdirs()
     }
 
@@ -187,7 +204,7 @@ class StorageManager(private val context: Context) {
         }
 
         val projectRoot = getProjectRootFile(project)
-        val file = File(projectRoot, relativePath)
+        val file = getSafeFile(projectRoot, relativePath)
         if (file.exists()) {
             file.deleteRecursively()
         } else {
@@ -200,8 +217,8 @@ class StorageManager(private val context: Context) {
      */
     suspend fun renameFile(project: ProjectEntity, oldPath: String, newPath: String): Boolean = withContext(Dispatchers.IO) {
         val projectRoot = getProjectRootFile(project)
-        val oldFile = File(projectRoot, oldPath)
-        val newFile = File(projectRoot, newPath)
+        val oldFile = getSafeFile(projectRoot, oldPath)
+        val newFile = getSafeFile(projectRoot, newPath)
         if (oldFile.exists()) {
             oldFile.renameTo(newFile)
         } else {
@@ -222,8 +239,8 @@ class StorageManager(private val context: Context) {
 
         val srcRoot = getProjectRootFile(fromProject)
         val destRoot = getProjectRootFile(toProject)
-        val srcFile = File(srcRoot, fromPath)
-        val destFile = File(destRoot, toPath)
+        val srcFile = getSafeFile(srcRoot, fromPath)
+        val destFile = getSafeFile(destRoot, toPath)
         
         if (!srcFile.exists()) return@withContext false
         
@@ -240,7 +257,7 @@ class StorageManager(private val context: Context) {
      * Note: Avoid using this for content:// projects. Use exportToTempFile instead.
      */
     fun getAbsoluteFile(project: ProjectEntity, relativePath: String): File {
-        return File(getProjectRootFile(project), relativePath)
+        return getSafeFile(getProjectRootFile(project), relativePath)
     }
 
     /**
