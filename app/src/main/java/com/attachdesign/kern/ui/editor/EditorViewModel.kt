@@ -63,7 +63,8 @@ data class EditorUiState(
     val activeTheme: AppColorTheme = ThemeEngine.DefaultLight.toColorTheme(),
     val syncProvider: SyncProvider = SyncProvider.NONE,
     val projectFiles: List<VfsNode> = emptyList(),
-    val explorerCurrentPath: String = ""
+    val explorerCurrentPath: String = "",
+    val isReadabilityPopupOpen: Boolean = false
 ) {
     val isSidebarOpen: Boolean get() = sidebarMode != SidebarMode.CLOSED
 }
@@ -360,7 +361,9 @@ class EditorViewModel(
     }
 
     fun updateParagraph(index: Int, newValue: TextFieldValue) {
-        val currentState = _uiState.value
+        val currentState = _uiState.value.let {
+            if (it.isReadabilityPopupOpen) it.copy(isReadabilityPopupOpen = false) else it
+        }
         val items = currentState.paragraphs.items.toMutableList()
         val originalRaw = items[index].block.rawText
         val oldValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(originalRaw)
@@ -629,6 +632,20 @@ class EditorViewModel(
         _uiState.value = _uiState.value.copy(sidebarMode = mode)
         if (mode == SidebarMode.METRICS) {
             // Readability analysis triggers *only* when sidebar is opened in METRICS mode
+            viewModelScope.launch(Dispatchers.Default) {
+                val rawBlocks = _uiState.value.paragraphs.items.map { it.block.rawText }
+                val documentContent = MarkdownParser.joinDocument(rawBlocks)
+                runHemingwayAnalysis(documentContent)
+            }
+        }
+    }
+
+    fun toggleReadabilityPopup() {
+        val currentState = _uiState.value
+        val willOpen = !currentState.isReadabilityPopupOpen
+        _uiState.value = currentState.copy(isReadabilityPopupOpen = willOpen)
+
+        if (willOpen) {
             viewModelScope.launch(Dispatchers.Default) {
                 val rawBlocks = _uiState.value.paragraphs.items.map { it.block.rawText }
                 val documentContent = MarkdownParser.joinDocument(rawBlocks)
