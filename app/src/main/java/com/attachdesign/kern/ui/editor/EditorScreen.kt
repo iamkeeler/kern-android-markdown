@@ -136,7 +136,7 @@ fun EditorScreen(
                         visible = true,
                         enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom),
                         exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom),
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp)
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp, top = 16.dp, start = 16.dp)
                     ) {
                         if (isToolbarMinimized) {
                             Box(
@@ -151,7 +151,6 @@ fun EditorScreen(
                             }
                         } else {
                             FloatingFormattingToolbar(
-                                modifier = Modifier.shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false),
                                 theme = uiState.activeTheme,
                                 onHeaderClick = { if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex) },
                                 onMinimizeClick = { isToolbarMinimized = true },
@@ -334,6 +333,7 @@ fun EditorCanvas(
                 theme = state.activeTheme,
                 blockType = paragraph.blockType,
                 viewMode = state.viewMode,
+                fontSizeScale = state.editorFontSizeScale,
                 onEnterPressed = { cursor ->
                     val text = value.text
                     val first = text.substring(0, cursor)
@@ -359,6 +359,7 @@ fun ParagraphField(
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     blockType: MarkdownBlockType,
     viewMode: ViewMode,
+    fontSizeScale: Float = 1.0f,
     onEnterPressed: (Int) -> Unit,
     onBackspacePressed: () -> Unit
 ) {
@@ -373,18 +374,18 @@ fun ParagraphField(
     }
 
     val textStyle = if (viewMode == ViewMode.RAW_PLAIN_TEXT) {
-        TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = theme.textPrimary, lineHeight = 20.sp)
+        TextStyle(fontFamily = FontFamily.Monospace, fontSize = (14 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (20 * fontSizeScale).sp)
     } else {
         when (blockType) {
-            MarkdownBlockType.HEADER_1 -> TextStyle(fontFamily = editorFont, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = 30.sp)
-            MarkdownBlockType.HEADER_2 -> TextStyle(fontFamily = editorFont, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = 26.sp)
-            MarkdownBlockType.HEADER_3 -> TextStyle(fontFamily = editorFont, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = 22.sp)
-            MarkdownBlockType.HEADER_4 -> TextStyle(fontFamily = editorFont, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = 20.sp)
-            MarkdownBlockType.HEADER_5 -> TextStyle(fontFamily = editorFont, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = 18.sp)
-            MarkdownBlockType.HEADER_6 -> TextStyle(fontFamily = editorFont, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = 17.sp)
-            MarkdownBlockType.CODE_BLOCK -> TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = theme.textPrimary, lineHeight = 19.sp)
-            MarkdownBlockType.BLOCKQUOTE -> TextStyle(fontFamily = editorFont, fontSize = 15.sp, fontStyle = FontStyle.Italic, color = theme.textMuted, lineHeight = 24.sp)
-            else -> TextStyle(fontFamily = editorFont, fontSize = 15.sp, color = theme.textPrimary, lineHeight = 24.sp) // 1.6x Line height (15sp body)
+            MarkdownBlockType.HEADER_1 -> TextStyle(fontFamily = editorFont, fontSize = (22 * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = (30 * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_2 -> TextStyle(fontFamily = editorFont, fontSize = (18 * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = (26 * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_3 -> TextStyle(fontFamily = editorFont, fontSize = (15 * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (22 * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_4 -> TextStyle(fontFamily = editorFont, fontSize = (14 * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (20 * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_5 -> TextStyle(fontFamily = editorFont, fontSize = (13 * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (18 * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_6 -> TextStyle(fontFamily = editorFont, fontSize = (12 * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (17 * fontSizeScale).sp)
+            MarkdownBlockType.CODE_BLOCK -> TextStyle(fontFamily = FontFamily.Monospace, fontSize = (13 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (19 * fontSizeScale).sp)
+            MarkdownBlockType.BLOCKQUOTE -> TextStyle(fontFamily = editorFont, fontSize = (15 * fontSizeScale).sp, fontStyle = FontStyle.Italic, color = theme.textMuted, lineHeight = (24 * fontSizeScale).sp)
+            else -> TextStyle(fontFamily = editorFont, fontSize = (15 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (24 * fontSizeScale).sp) // 1.6x Line height (15sp body)
         }
     }
 
