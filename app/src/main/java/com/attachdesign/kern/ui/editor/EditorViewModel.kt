@@ -58,6 +58,7 @@ data class EditorUiState(
     val autoCompleteBraces: Boolean = true,
     val autoCompleteParens: Boolean = true,
     val autoCompleteBrackets: Boolean = true,
+    val editorFontSizeScale: Float = 1.0f,
     val hemingwayMetrics: HemingwayMetrics? = null,
     val sidebarMode: SidebarMode = SidebarMode.CLOSED,
     val activeTheme: AppColorTheme = ThemeEngine.DefaultLight.toColorTheme(),
@@ -97,6 +98,14 @@ class EditorViewModel(
             loadSelectedTheme()
         }
         // Reactively observe setting changes to keep ViewModel in sync
+        viewModelScope.launch(Dispatchers.IO) {
+            db.settingDao().getSettingFlow("editor_font_size_scale").collect { setting ->
+                val scale = setting?.value?.toFloatOrNull() ?: 1.0f
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(editorFontSizeScale = scale)
+                }
+            }
+        }
         viewModelScope.launch(Dispatchers.IO) {
             db.settingDao().getSettingFlow("selected_theme_id").collect { _ ->
                 loadSelectedTheme()
@@ -200,6 +209,7 @@ class EditorViewModel(
         val autoCompleteBracesSetting = db.settingDao().getSetting("auto_complete_braces")?.value ?: "true"
         val autoCompleteParensSetting = db.settingDao().getSetting("auto_complete_parens")?.value ?: "true"
         val autoCompleteBracketsSetting = db.settingDao().getSetting("auto_complete_brackets")?.value ?: "true"
+        val editorFontSizeScaleSetting = db.settingDao().getSetting("editor_font_size_scale")?.value ?: "1.0"
 
         withContext(Dispatchers.Main) {
             _uiState.value = _uiState.value.copy(
@@ -212,6 +222,7 @@ class EditorViewModel(
                 autoCompleteBraces = autoCompleteBracesSetting.toBoolean(),
                 autoCompleteParens = autoCompleteParensSetting.toBoolean(),
                 autoCompleteBrackets = autoCompleteBracketsSetting.toBoolean(),
+                editorFontSizeScale = editorFontSizeScaleSetting.toFloatOrNull() ?: 1.0f,
                 syncProvider = SyncProvider.valueOf(syncProviderSetting)
             )
             syncEngine.setProvider(SyncProvider.valueOf(syncProviderSetting))
