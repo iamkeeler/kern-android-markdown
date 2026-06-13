@@ -48,6 +48,12 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.window.PopupProperties
+
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -182,12 +188,13 @@ fun EditorScreen(
                                     .clickable { isToolbarMinimized = false }
                                     .padding(12.dp)
                             ) {
-                                Text("T", color = uiState.activeTheme.accent, fontWeight = FontWeight.Bold)
+                                Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar", tint = uiState.activeTheme.accent)
                             }
                         } else {
                             FloatingFormattingToolbar(
                                 theme = uiState.activeTheme,
                                 onHeaderClick = { if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex) },
+                                onHeaderSet = { level -> if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level) },
                                 onMinimizeClick = { isToolbarMinimized = true },
                                 onFormat = { p, s ->
                                     if (activeIndex == -1) return@FloatingFormattingToolbar
@@ -515,10 +522,12 @@ fun ParagraphField(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FloatingFormattingToolbar(
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     onHeaderClick: () -> Unit,
+    onHeaderSet: (Int) -> Unit = {},
     onFormat: (prefix: String, suffix: String) -> Unit,
     onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -532,11 +541,36 @@ fun FloatingFormattingToolbar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        IconButton(
-            onClick = onHeaderClick,
-            modifier = Modifier.semantics { contentDescription = "Toggle header level" }
-        ) {
-            Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = 16.sp)
+        var isHeaderMenuExpanded by remember { mutableStateOf(false) }
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp) // standard IconButton size approx
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .combinedClickable(
+                        onClick = onHeaderClick,
+                        onLongClick = { isHeaderMenuExpanded = true }
+                    )
+                    .semantics { contentDescription = "Toggle header level" },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = 16.sp)
+            }
+
+            DropdownMenu(
+                expanded = isHeaderMenuExpanded,
+                onDismissRequest = { isHeaderMenuExpanded = false }
+            ) {
+                (1..6).forEach { level ->
+                    DropdownMenuItem(
+                        text = { Text("Header $level", color = theme.textPrimary) },
+                        onClick = {
+                            isHeaderMenuExpanded = false
+                            onHeaderSet(level)
+                        }
+                    )
+                }
+            }
         }
         IconButton(
             onClick = { onFormat("**", "**") },
@@ -575,7 +609,7 @@ fun FloatingFormattingToolbar(
             onClick = onMinimizeClick,
             modifier = Modifier.semantics { contentDescription = "Minimize toolbar" }
         ) {
-            Text("✕", fontWeight = FontWeight.Normal, color = theme.textMuted, fontSize = 14.sp)
+            Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Minimize formatting toolbar", tint = theme.textMuted)
         }
     }
 }
