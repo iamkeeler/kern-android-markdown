@@ -288,7 +288,7 @@ class EditorViewModel(
                 activeFilePath = filePath,
                 fileName = filePath.substringAfterLast('/'),
                 paragraphs = ImmutableParagraphList(parsedBlocks),
-                focusedParagraphIndex = -1,
+                focusedParagraphIndex = if (content.isEmpty()) 0 else -1,
                 hemingwayMetrics = null, // Clear metrics until requested
                 explorerCurrentPath = parentPath,
                 projectFiles = enriched
