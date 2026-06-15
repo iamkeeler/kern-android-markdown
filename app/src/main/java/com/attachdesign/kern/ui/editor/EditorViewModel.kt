@@ -263,7 +263,7 @@ class EditorViewModel(
         }
     }
 
-    fun loadFile(projectId: Long, filePath: String) {
+    fun loadFile(projectId: Long, filePath: String, focusOnStart: Boolean = false) {
         viewModelScope.launch {
             val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) } ?: return@launch
             val content = storageManager.readFile(project, filePath)
@@ -288,7 +288,7 @@ class EditorViewModel(
                 activeFilePath = filePath,
                 fileName = filePath.substringAfterLast('/'),
                 paragraphs = ImmutableParagraphList(parsedBlocks),
-                focusedParagraphIndex = -1,
+                focusedParagraphIndex = if (focusOnStart) 0 else -1,
                 hemingwayMetrics = null, // Clear metrics until requested
                 explorerCurrentPath = parentPath,
                 projectFiles = enriched

@@ -210,7 +210,7 @@ class MainScreenViewModel(
         }
     }
 
-    fun createFile(name: String, targetProject: ProjectEntity? = null) {
+    fun createFile(name: String, targetProject: ProjectEntity? = null, onCreated: ((String) -> Unit)? = null) {
         viewModelScope.launch {
             val proj = targetProject ?: _activeProject.value ?: withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() } ?: return@launch
             val fileName = if (name.endsWith(".md")) name else "$name.md"
@@ -228,6 +228,7 @@ class MainScreenViewModel(
             } else {
                 refreshAllFiles()
             }
+            onCreated?.invoke(relativePath)
         }
     }
 

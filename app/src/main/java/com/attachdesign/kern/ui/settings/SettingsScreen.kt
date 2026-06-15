@@ -52,6 +52,7 @@ fun SettingsTabsContent(
     val editorFontSetting   by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
     val editorFontSizeScaleSetting by db.settingDao().getSettingFlow("editor_font_size_scale").collectAsState(initial = null)
     val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsState(initial = null)
+    val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
 
     val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
     val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsState(initial = null)
@@ -65,6 +66,7 @@ fun SettingsTabsContent(
     val currentFontFamily          = editorFontSetting?.value ?: "serif"
     val currentFontSizeScale = editorFontSizeScaleSetting?.value?.toFloatOrNull() ?: 1.0f
     val currentSticky              = stickySetting?.value?.toBoolean() ?: true
+    val currentLaunchNewFile       = launchNewFileSetting?.value?.toBoolean() ?: true
 
     val currentAutoHeader          = autoHeaderSetting?.value?.toBoolean() ?: true
     val currentAutoComplete        = autoCompleteSetting?.value?.toBoolean() ?: true
@@ -265,6 +267,51 @@ fun SettingsTabsContent(
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
                                       db.settingDao().insertSetting(SettingEntity("sticky_selection", value.toString()))
+                                  }
+                              },
+                              colors = SwitchDefaults.colors(
+                                  checkedThumbColor = theme.accent,
+                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                              )
+                          )
+                      }
+
+                      Spacer(Modifier.height(12.dp))
+                      HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
+                      Spacer(Modifier.height(12.dp))
+
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clickable {
+                                  coroutineScope.launch(Dispatchers.IO) {
+                                      db.settingDao().insertSetting(SettingEntity("launch_new_file", (!currentLaunchNewFile).toString()))
+                                  }
+                              }
+                              .padding(vertical = 8.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.SpaceBetween
+                      ) {
+                          Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                               Text(
+                                  text = "Launch New File",
+                                  color = theme.textPrimary,
+                                  fontSize = 13.sp,
+                                  fontFamily = appFont,
+                                  fontWeight = FontWeight.Medium
+                              )
+                              Text(
+                                  text = "Automatically open the editor when a new file is created.",
+                                  color = theme.textMuted,
+                                  fontSize = 11.sp,
+                                  lineHeight = 15.sp
+                              )
+                          }
+                          Switch(
+                              checked = currentLaunchNewFile,
+                              onCheckedChange = { value ->
+                                  coroutineScope.launch(Dispatchers.IO) {
+                                      db.settingDao().insertSetting(SettingEntity("launch_new_file", value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(

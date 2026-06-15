@@ -77,6 +77,8 @@ fun MainScreen(
 
     val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsState(initial = null)
     val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
+    val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
+    val shouldLaunchNewFile = launchNewFileSetting?.value?.toBoolean() ?: true
     var theme by remember { mutableStateOf(ThemeEngine.DefaultLight.toColorTheme()) }
 
     LaunchedEffect(selectedThemeIdSetting, editorFontSetting) {
@@ -472,7 +474,13 @@ fun MainScreen(
             theme       = theme,
             onDismiss   = { createFileDialogTargetProject = null },
             onConfirm   = { name ->
-                vm.createFile(name, targetProj)
+                if (shouldLaunchNewFile) {
+                    vm.createFile(name, targetProj) { relativePath ->
+                        onItemClick(EditorKey(targetProj.id, relativePath, focusOnStart = true))
+                    }
+                } else {
+                    vm.createFile(name, targetProj)
+                }
                 createFileDialogTargetProject = null
             }
         )
