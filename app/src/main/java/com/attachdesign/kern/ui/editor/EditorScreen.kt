@@ -73,7 +73,8 @@ fun EditorScreen(
     filePath: String,
     viewModel: EditorViewModel,
     onBackClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    focusOnStart: Boolean = false
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,7 +82,7 @@ fun EditorScreen(
 
     // Load file if changed
     LaunchedEffect(projectId, filePath) {
-        viewModel.loadFile(projectId, filePath)
+        viewModel.loadFile(projectId, filePath, focusOnStart)
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize().background(uiState.activeTheme.background)) {
@@ -183,12 +184,16 @@ fun EditorScreen(
                             Box(
                                 modifier = Modifier
                                     .shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(uiState.activeTheme.surface)
-                                    .clickable { isToolbarMinimized = false }
-                                    .padding(12.dp)
                             ) {
-                                Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar", tint = uiState.activeTheme.accent)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(uiState.activeTheme.surface)
+                                        .clickable { isToolbarMinimized = false }
+                                        .padding(12.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar", tint = uiState.activeTheme.accent)
+                                }
                             }
                         } else {
                             FloatingFormattingToolbar(
@@ -532,84 +537,87 @@ fun FloatingFormattingToolbar(
     onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false)
-            .clip(RoundedCornerShape(12.dp))
-            .background(theme.surface)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Box(
+        modifier = modifier.shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false)
     ) {
-        var isHeaderMenuExpanded by remember { mutableStateOf(false) }
-        Box(contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp) // standard IconButton size approx
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .combinedClickable(
-                        onClick = onHeaderClick,
-                        onLongClick = { isHeaderMenuExpanded = true }
-                    )
-                    .semantics { contentDescription = "Toggle header level" },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = 16.sp)
-            }
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(theme.surface)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            var isHeaderMenuExpanded by remember { mutableStateOf(false) }
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp) // standard IconButton size approx
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .combinedClickable(
+                            onClick = onHeaderClick,
+                            onLongClick = { isHeaderMenuExpanded = true }
+                        )
+                        .semantics { contentDescription = "Toggle header level" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = 16.sp)
+                }
 
-            DropdownMenu(
-                expanded = isHeaderMenuExpanded,
-                onDismissRequest = { isHeaderMenuExpanded = false }
-            ) {
-                (1..6).forEach { level ->
-                    DropdownMenuItem(
-                        text = { Text("Header $level", color = theme.textPrimary) },
-                        onClick = {
-                            isHeaderMenuExpanded = false
-                            onHeaderSet(level)
-                        }
-                    )
+                DropdownMenu(
+                    expanded = isHeaderMenuExpanded,
+                    onDismissRequest = { isHeaderMenuExpanded = false }
+                ) {
+                    (1..6).forEach { level ->
+                        DropdownMenuItem(
+                            text = { Text("Header $level", color = theme.textPrimary) },
+                            onClick = {
+                                isHeaderMenuExpanded = false
+                                onHeaderSet(level)
+                            }
+                        )
+                    }
                 }
             }
-        }
-        IconButton(
-            onClick = { onFormat("**", "**") },
-            modifier = Modifier.semantics { contentDescription = "Format selection bold" }
-        ) {
-            Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = 16.sp)
-        }
-        IconButton(
-            onClick = { onFormat("*", "*") },
-            modifier = Modifier.semantics { contentDescription = "Format selection italic" }
-        ) {
-            Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = 16.sp)
-        }
-        IconButton(
-            onClick = { onFormat("~~", "~~") },
-            modifier = Modifier.semantics { contentDescription = "Format selection strikethrough" }
-        ) {
-            Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = 16.sp)
-        }
-        IconButton(
-            onClick = { onFormat("`", "`") },
-            modifier = Modifier.semantics { contentDescription = "Format selection inline code" }
-        ) {
-            Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = 15.sp)
-        }
-        IconButton(
-            onClick = { onFormat("[", "](url)") },
-            modifier = Modifier.semantics { contentDescription = "Format selection as link" }
-        ) {
-            Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = 16.sp)
-        }
+            IconButton(
+                onClick = { onFormat("**", "**") },
+                modifier = Modifier.semantics { contentDescription = "Format selection bold" }
+            ) {
+                Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = 16.sp)
+            }
+            IconButton(
+                onClick = { onFormat("*", "*") },
+                modifier = Modifier.semantics { contentDescription = "Format selection italic" }
+            ) {
+                Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = 16.sp)
+            }
+            IconButton(
+                onClick = { onFormat("~~", "~~") },
+                modifier = Modifier.semantics { contentDescription = "Format selection strikethrough" }
+            ) {
+                Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = 16.sp)
+            }
+            IconButton(
+                onClick = { onFormat("`", "`") },
+                modifier = Modifier.semantics { contentDescription = "Format selection inline code" }
+            ) {
+                Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = 15.sp)
+            }
+            IconButton(
+                onClick = { onFormat("[", "](url)") },
+                modifier = Modifier.semantics { contentDescription = "Format selection as link" }
+            ) {
+                Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = 16.sp)
+            }
 
-        Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
-        IconButton(
-            onClick = onMinimizeClick,
-            modifier = Modifier.semantics { contentDescription = "Minimize toolbar" }
-        ) {
-            Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Minimize formatting toolbar", tint = theme.textMuted)
+            IconButton(
+                onClick = onMinimizeClick,
+                modifier = Modifier.semantics { contentDescription = "Minimize toolbar" }
+            ) {
+                Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Minimize formatting toolbar", tint = theme.textMuted)
+            }
         }
     }
 }

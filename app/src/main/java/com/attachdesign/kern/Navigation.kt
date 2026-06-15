@@ -46,6 +46,7 @@ fun MainNavigation(
                 EditorScreen(
                     projectId = key.projectId,
                     filePath = key.filePath,
+                    focusOnStart = key.focusOnStart,
                     viewModel = editorViewModel,
                     onBackClick = {
                         editorViewModel.closeFile()
