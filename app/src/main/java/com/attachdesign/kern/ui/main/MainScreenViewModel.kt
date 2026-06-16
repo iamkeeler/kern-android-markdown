@@ -210,7 +210,7 @@ class MainScreenViewModel(
         }
     }
 
-    fun createFile(name: String, targetProject: ProjectEntity? = null) {
+    fun createFile(name: String, targetProject: ProjectEntity? = null, onCreated: ((ProjectEntity, String) -> Unit)? = null) {
         viewModelScope.launch {
             val proj = targetProject ?: _activeProject.value ?: withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() } ?: return@launch
             val fileName = if (name.endsWith(".md")) name else "$name.md"
@@ -223,11 +223,17 @@ class MainScreenViewModel(
                     lastModified = System.currentTimeMillis(),
                     syncState = if (proj.isExternal) "SYNCED" else "PENDING"))
             }
+
+            if (isRootCreation) {
+                _currentPath.value = ""
+            }
+
             if (_activeProject.value != null) {
                 loadDrillFiles(proj, _currentPath.value)
             } else {
                 refreshAllFiles()
             }
+            onCreated?.invoke(proj, relativePath)
         }
     }
 
