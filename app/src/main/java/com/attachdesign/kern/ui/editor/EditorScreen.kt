@@ -92,11 +92,12 @@ fun EditorScreen(
 
         Row(modifier = Modifier.fillMaxSize()) {
             // Editor Canvas (Main container)
-            Column(
+            Box(
                 modifier = Modifier
                     .weight(if (isDualPane && uiState.isSidebarOpen) 0.65f else 1f)
                     .fillMaxHeight()
             ) {
+                Column(modifier = Modifier.fillMaxSize()) {
                 // Header (Breadcrumbs)
                 Box {
                     Column {
@@ -129,23 +130,6 @@ fun EditorScreen(
                         )
                     }
 
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = uiState.isReadabilityPopupOpen,
-                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Top),
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 70.dp, end = 16.dp).zIndex(10f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(320.dp)
-                                .heightIn(max = 400.dp)
-                                .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp), clip = false)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(uiState.activeTheme.surface)
-                                .padding(16.dp)
-                        ) {
-                            MetricsTab(uiState)
-                        }
-                    }
                 }
 
                 val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -230,6 +214,25 @@ fun EditorScreen(
                                 }
                             )
                         }
+                    }
+                }
+                }
+
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isReadabilityPopupOpen,
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Top),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 70.dp, end = 16.dp).zIndex(10f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .heightIn(max = 400.dp)
+                            .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp), clip = false)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(uiState.activeTheme.surface)
+                            .padding(16.dp)
+                    ) {
+                        MetricsTab(uiState)
                     }
                 }
             }
@@ -342,7 +345,7 @@ fun EditorHeader(
                         tint = theme.textMuted
                     )
                 }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(theme.surface)) {
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showMenu = false; onMoreOptionsAction("Rename") })
                     DropdownMenuItem(text = { Text("Cloud Sync") }, onClick = { showMenu = false; onMoreOptionsAction("Cloud Sync") })
@@ -556,7 +559,8 @@ fun FloatingFormattingToolbar(
 
             DropdownMenu(
                 expanded = isHeaderMenuExpanded,
-                onDismissRequest = { isHeaderMenuExpanded = false }
+                onDismissRequest = { isHeaderMenuExpanded = false },
+                modifier = Modifier.background(theme.surface)
             ) {
                 (1..6).forEach { level ->
                     DropdownMenuItem(

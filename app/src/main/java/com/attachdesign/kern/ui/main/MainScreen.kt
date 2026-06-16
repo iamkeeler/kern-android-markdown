@@ -468,7 +468,9 @@ fun MainScreen(
             theme       = theme,
             onDismiss   = { createFileDialogTargetProject = null },
             onConfirm   = { name ->
-                vm.createFile(name, targetProj)
+                vm.createFile(name, targetProj) { proj, path ->
+                    onItemClick(EditorKey(proj.id, path))
+                }
                 createFileDialogTargetProject = null
             }
         )
@@ -941,7 +943,9 @@ fun InputDialog(
                 label         = { Text(label) },
                 colors        = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = theme.accent,
-                    focusedLabelColor  = theme.accent
+                    focusedLabelColor  = theme.accent,
+                    focusedTextColor = theme.textPrimary,
+                    unfocusedTextColor = theme.textPrimary
                 )
             )
         },
@@ -973,9 +977,11 @@ fun CreateProjectDialog(
                     onValueChange = { name = it },
                     label         = { Text("Project Name") },
                     colors        = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = theme.accent,
-                        focusedLabelColor  = theme.accent
-                    )
+                    focusedBorderColor = theme.accent,
+                    focusedLabelColor  = theme.accent,
+                    focusedTextColor = theme.textPrimary,
+                    unfocusedTextColor = theme.textPrimary
+                )
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
