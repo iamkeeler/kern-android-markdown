@@ -63,6 +63,7 @@ import com.attachdesign.kern.data.sync.SyncProvider
 import com.attachdesign.kern.data.sync.SyncState
 import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.ui.theme.AppColorTheme
+import com.attachdesign.kern.ui.theme.appFontFamily
 import com.attachdesign.kern.ui.theme.AppThemeJson
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.settings.SettingsTabsContent
@@ -432,12 +433,7 @@ fun ParagraphField(
     val focusRequester = remember { FocusRequester() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
-    val editorFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val editorFont = theme.appFontFamily
 
     val textStyle = if (viewMode == ViewMode.RAW_PLAIN_TEXT) {
         TextStyle(fontFamily = FontFamily.Monospace, fontSize = (14 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (20 * fontSizeScale).sp)
@@ -622,12 +618,7 @@ fun SidebarPane(
     modifier: Modifier = Modifier
 ) {
     val theme = state.activeTheme
-    val editorFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val editorFont = theme.appFontFamily
     val title = when (state.sidebarMode) {
         SidebarMode.METRICS -> "Readability"
         SidebarMode.SETTINGS -> "Settings"

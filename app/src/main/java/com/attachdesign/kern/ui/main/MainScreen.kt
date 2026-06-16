@@ -35,13 +35,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.attachdesign.kern.EditorKey
 import com.attachdesign.kern.SettingsKey
-import com.attachdesign.kern.ui.settings.MinimalOutlinedButton
+import com.attachdesign.kern.ui.components.MinimalOutlinedButton
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.theme.AppColorTheme
+import com.attachdesign.kern.ui.theme.appFontFamily
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -100,12 +101,7 @@ fun MainScreen(
         }
     }
 
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.appFontFamily
 
     Column(
         modifier = modifier
@@ -638,12 +634,7 @@ private fun EmptyStateHint(
     body: String,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme
 ) {
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.appFontFamily
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -921,12 +912,7 @@ fun VfsNodeRow(
     SwipeableFileRow(
         node = node,
         theme = theme,
-        appFont = when (theme.editorFontFamily.lowercase()) {
-            "serif" -> FontFamily.Serif
-            "sans-serif", "sansserif" -> FontFamily.SansSerif
-            "monospace" -> FontFamily.Monospace
-            else -> FontFamily.Default
-        },
+        appFont = theme.appFontFamily,
         isExternalProject = isExternalProject,
         onClick = { onNodeClick(node) },
         onShare = { onShareClick(node) },
@@ -1027,12 +1013,7 @@ fun SearchVfsNodeRow(
     onEditClick: (VfsNode) -> Unit,
     onDeleteClick: (VfsNode) -> Unit
 ) {
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.appFontFamily
     val density = LocalDensity.current
     val revealWidthPx = with(density) { SWIPE_REVEAL_WIDTH.toPx() }
     val offsetX = remember { Animatable(0f) }

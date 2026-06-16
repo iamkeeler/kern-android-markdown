@@ -83,3 +83,11 @@ object ThemeEngine {
         }
     }
 }
+
+val AppColorTheme.appFontFamily: androidx.compose.ui.text.font.FontFamily
+    get() = when (this.editorFontFamily.lowercase()) {
+        "serif" -> androidx.compose.ui.text.font.FontFamily.Serif
+        "sans-serif", "sansserif" -> androidx.compose.ui.text.font.FontFamily.SansSerif
+        "monospace" -> androidx.compose.ui.text.font.FontFamily.Monospace
+        else -> androidx.compose.ui.text.font.FontFamily.Default
+    }
