@@ -1,5 +1,10 @@
 package com.attachdesign.kern.ui.settings
 
+import com.attachdesign.kern.ui.theme.appFontFamily
+import com.attachdesign.kern.ui.components.MinimalOutlinedButton
+import com.attachdesign.kern.ui.components.MinimalOutlinedButtonSmall
+
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -74,12 +79,7 @@ fun SettingsTabsContent(
     val currentAutoCompleteParens  = autoCompleteParensSetting?.value?.toBoolean() ?: true
     val currentAutoCompleteBrackets = autoCompleteBracketsSetting?.value?.toBoolean() ?: true
 
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.appFontFamily
 
     var activeTab by remember { mutableIntStateOf(0) }
 
@@ -617,12 +617,7 @@ fun SettingsScreen(
         }
     }
 
-     val appFont = when (theme.editorFontFamily.lowercase()) {
-         "serif" -> FontFamily.Serif
-         "sans-serif", "sansserif" -> FontFamily.SansSerif
-         "monospace" -> FontFamily.Monospace
-         else -> FontFamily.Default
-     }
+     val appFont = theme.appFontFamily
 
      Column(
          modifier = modifier
@@ -665,70 +660,3 @@ fun SettingsScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-fun MinimalOutlinedButton(
-    text: String,
-    onClick: () -> Unit,
-    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    modifier: Modifier = Modifier,
-    isPrimary: Boolean = false
-) {
-     val appFont = when (theme.editorFontFamily.lowercase()) {
-         "serif" -> FontFamily.Serif
-         "sans-serif", "sansserif" -> FontFamily.SansSerif
-         "monospace" -> FontFamily.Monospace
-         else -> FontFamily.Default
-     }
-    val bgColor = if (isPrimary) theme.accent else Color.Transparent
-    val textColor = if (isPrimary) theme.background else theme.textPrimary
-    val borderColor = if (isPrimary) theme.accent else theme.textMuted.copy(alpha = 0.3f)
-
-    Box(
-        modifier = modifier
-            .border(border = BorderStroke(1.dp, borderColor), shape = RoundedCornerShape(4.dp))
-            .background(bgColor, RoundedCornerShape(4.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 14.sp,
-            fontFamily = appFont,
-            fontWeight = if (isPrimary) FontWeight.Medium else FontWeight.Normal
-        )
-    }
-}
-
-@Composable
-fun MinimalOutlinedButtonSmall(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    modifier: Modifier = Modifier
-) {
-    val border    = if (selected) theme.accent else theme.textMuted.copy(alpha = 0.3f)
-    val bg        = if (selected) theme.accent.copy(alpha = 0.15f) else Color.Transparent
-    val textColor = if (selected) theme.accent else theme.textMuted
-
-    Box(
-        modifier = modifier
-            .border(border = BorderStroke(1.dp, border), shape = RoundedCornerShape(4.dp))
-            .background(bg, RoundedCornerShape(4.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
