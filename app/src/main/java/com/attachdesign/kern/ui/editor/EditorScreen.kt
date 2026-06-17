@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.*
@@ -101,6 +102,9 @@ fun EditorScreen(
                 // Header (Breadcrumbs)
                 Box {
                     Column {
+
+                        var showRenameDialog by remember { mutableStateOf(false) }
+
                         EditorHeader(
                             filePath = filePath,
                             theme = uiState.activeTheme,
@@ -112,17 +116,57 @@ fun EditorScreen(
                                 val currentMode = uiState.sidebarMode
                                 viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
                             },
+                            onUndoAction = {
+                                viewModel.undo()
+                            },
                             onMoreOptionsAction = { action ->
                                 // Stub hooks for Share, Rename, Cloud Sync, Duplicate, Delete
                                 when(action) {
                                     "Share" -> { /* TODO */ }
-                                    "Rename" -> { /* TODO */ }
+                                    "Rename" -> { showRenameDialog = true }
                                     "Cloud Sync" -> { /* TODO */ }
                                     "Duplicate" -> { /* TODO */ }
                                     "Delete" -> { /* TODO */ }
                                 }
                             }
                         )
+
+                        if (showRenameDialog) {
+                            var newName by remember { mutableStateOf(filePath.split('/').last()) }
+                            AlertDialog(
+                                onDismissRequest = { showRenameDialog = false },
+                                title = { Text("Rename File", color = uiState.activeTheme.textPrimary) },
+                                text = {
+                                    OutlinedTextField(
+                                        value = newName,
+                                        onValueChange = { newName = it },
+                                        singleLine = true,
+                                        textStyle = TextStyle(color = uiState.activeTheme.textPrimary),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = uiState.activeTheme.accent,
+                                            unfocusedBorderColor = uiState.activeTheme.textMuted
+                                        )
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        if (newName.isNotBlank()) {
+                                            viewModel.renameCurrentFile(newName)
+                                            showRenameDialog = false
+                                        }
+                                    }) {
+                                        Text("Rename", color = uiState.activeTheme.accent)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showRenameDialog = false }) {
+                                        Text("Cancel", color = uiState.activeTheme.textMuted)
+                                    }
+                                },
+                                containerColor = uiState.activeTheme.surface
+                            )
+                        }
+
 
                         HorizontalDivider(
                             thickness = 1.dp,
@@ -260,6 +304,7 @@ fun EditorHeader(
     onBackClick: () -> Unit,
     onMetricsToggle: () -> Unit,
     onSettingsToggle: () -> Unit,
+    onUndoAction: () -> Unit = {},
     onMoreOptionsAction: (String) -> Unit = {}
 ) {
     Row(
@@ -300,12 +345,15 @@ fun EditorHeader(
                 )
             }
 
-            Text(
+                        Text(
                 text = fileName,
                 color = theme.textPrimary,
                 fontSize = 20.sp,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable { onMoreOptionsAction("Rename") }
+                    .padding(horizontal = 6.dp, vertical = 8.dp)
             )
         }
 
@@ -313,6 +361,17 @@ fun EditorHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            IconButton(
+                onClick = onUndoAction,
+                modifier = Modifier.semantics { contentDescription = "Undo last action" }
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Undo,
+                    contentDescription = "Undo",
+                    tint = theme.textMuted,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
             IconButton(
                 onClick = onMetricsToggle,
                 modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
@@ -336,22 +395,12 @@ fun EditorHeader(
                 )
             }
 
-            var showMenu by remember { mutableStateOf(false) }
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(
-                        imageVector = Icons.Outlined.MoreVert,
-                        contentDescription = "More Options",
-                        tint = theme.textMuted
-                    )
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(theme.surface)) {
-                    DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
-                    DropdownMenuItem(text = { Text("Rename") }, onClick = { showMenu = false; onMoreOptionsAction("Rename") })
-                    DropdownMenuItem(text = { Text("Cloud Sync") }, onClick = { showMenu = false; onMoreOptionsAction("Cloud Sync") })
-                    DropdownMenuItem(text = { Text("Duplicate") }, onClick = { showMenu = false; onMoreOptionsAction("Duplicate") })
-                    DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false; onMoreOptionsAction("Delete") })
-                }
+                        IconButton(onClick = { onMoreOptionsAction("Share") }) {
+                Icon(
+                    imageVector = Icons.Outlined.Share,
+                    contentDescription = "Share",
+                    tint = theme.textMuted
+                )
             }
         }
     }
@@ -560,7 +609,8 @@ fun FloatingFormattingToolbar(
             DropdownMenu(
                 expanded = isHeaderMenuExpanded,
                 onDismissRequest = { isHeaderMenuExpanded = false },
-                modifier = Modifier.background(theme.surface)
+                modifier = Modifier.background(theme.surface),
+                properties = PopupProperties(focusable = false)
             ) {
                 (1..6).forEach { level ->
                     DropdownMenuItem(

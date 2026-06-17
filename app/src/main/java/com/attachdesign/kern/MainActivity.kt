@@ -1,6 +1,9 @@
 package com.attachdesign.kern
 
 import android.os.Bundle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,7 +34,31 @@ class MainActivity : ComponentActivity() {
 
     enableEdgeToEdge()
     setContent {
-      ModernAndroidMarkdownEditorTheme { Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) { MainNavigation(db, storageManager) } }
+      val view = androidx.compose.ui.platform.LocalView.current
+      val settingDao = db.settingDao()
+      val themeDao = db.themeDao()
+      val selectedThemeIdSetting = settingDao.getSettingFlow("selected_theme_id").collectAsState(initial = null)
+      var isDark by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+      androidx.compose.runtime.LaunchedEffect(selectedThemeIdSetting.value) {
+          kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+              val themeId = selectedThemeIdSetting.value?.value?.toLongOrNull()
+              if (themeId != null) {
+                  val dbTheme = themeDao.getThemeById(themeId)
+                  if (dbTheme != null) {
+                      val themeJson = com.attachdesign.kern.ui.theme.ThemeEngine.deserialize(dbTheme.jsonString)
+                      if (themeJson != null) {
+                          val colorTheme = themeJson.toColorTheme()
+                          kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                              isDark = colorTheme.isDark
+                          }
+                      }
+                  }
+              }
+          }
+      }
+
+      ModernAndroidMarkdownEditorTheme(darkTheme = isDark) { Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) { MainNavigation(db, storageManager) } }
     }
   }
 }
