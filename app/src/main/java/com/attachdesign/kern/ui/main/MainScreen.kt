@@ -383,7 +383,7 @@ fun MainScreen(
                                     theme = theme,
                                     appFont = appFont,
                                     onClick = { vm.navigateToFolderRoot(proj) },
-                                    onShare = { /* TODO: zip & share */ },
+                                    onShare = { shareNode(context, VfsNode.Directory(name = proj.name, relativePath = ""), proj, storageManager) },
                                     onEdit = { projectToRename = proj },
                                     onDelete = { projectToDelete = proj }
                                 )
@@ -418,7 +418,7 @@ fun MainScreen(
                                         if (node.isDirectory) vm.navigateToFolder(node, activeProj)
                                         else onItemClick(EditorKey(activeProj.id, node.relativePath))
                                     },
-                                    onShare = { /* TODO: share */ },
+                                    onShare = { shareNode(context, node, activeProj, storageManager) },
                                     onEdit = { nodeToRename = Pair(node, activeProj) },
                                     onDelete = { nodeToDelete = Pair(node, activeProj) }
                                 )
