@@ -686,6 +686,44 @@ class EditorViewModel(
         }
     }
 
+
+    fun undo() {
+        // TODO: Implement undo functionality
+    }
+
+    fun renameCurrentFile(newName: String) {
+        val currentState = _uiState.value
+        val project = currentState.activeProject ?: return
+        val currentPath = currentState.activeFilePath
+        if (currentPath.isEmpty()) return
+
+        viewModelScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                val newPath = currentPath.substringBeforeLast('/') + "/" + newName
+                val renamed = storageManager.renameFile(project, currentPath, newPath)
+                if (renamed) {
+                    val fileEntity = db.fileDao().getFileByPath(project.id, currentPath)
+                    if (fileEntity != null) {
+                        val updated = fileEntity.copy(
+                            name = newName,
+                            relativePath = newPath
+                        )
+                        db.fileDao().deleteFile(project.id, currentPath)
+                        db.fileDao().insertFile(updated)
+                    }
+                }
+                renamed
+            }
+            if (success) {
+                val newPath = currentPath.substringBeforeLast('/') + "/" + newName
+                _uiState.value = _uiState.value.copy(
+                    activeFilePath = newPath,
+                    fileName = newName
+                )
+            }
+        }
+    }
+
     fun toggleSidebar(mode: SidebarMode) {
         _uiState.value = _uiState.value.copy(sidebarMode = mode)
         if (mode == SidebarMode.METRICS) {
