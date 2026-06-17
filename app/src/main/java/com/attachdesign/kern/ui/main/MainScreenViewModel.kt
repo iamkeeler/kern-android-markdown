@@ -74,6 +74,14 @@ class MainScreenViewModel(
             seedQuotes()
             refreshAllFiles()
             selectRandomQuote()
+            withContext(Dispatchers.IO) {
+                val selectedProj = db.projectDao().getSelectedProject()
+                if (selectedProj != null) {
+                    withContext(Dispatchers.Main) {
+                        navigateToFolderRoot(selectedProj)
+                    }
+                }
+            }
         }
     }
 

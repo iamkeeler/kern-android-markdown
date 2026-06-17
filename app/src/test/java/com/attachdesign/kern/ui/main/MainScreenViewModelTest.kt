@@ -61,6 +61,9 @@ class MainScreenViewModelTest {
         coEvery { quoteDao.getAllQuotes() } returns emptyList()
         coEvery { fileDao.getFilesForProjects(any()) } returns emptyList()
         coEvery { projectDao.getSelectedProject() } returns null
+        coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
+        coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
+
     }
 
     @After

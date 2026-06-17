@@ -213,7 +213,7 @@ fun MainScreen(
                                 Text(
                                     text = "←",
                                     color = theme.accent,
-                                    fontSize = 14.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
                                         .clickable { vm.navigateUp() }
@@ -729,12 +729,12 @@ fun SwipeableFileRow(
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                     val icon = if (node.isDirectory) "📁" else "📄"
-                    Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+                    Text(icon, fontSize = 18.sp, modifier = Modifier.padding(bottom = 1.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text       = node.name,
                         color      = theme.textPrimary,
-                        fontSize   = 14.sp,
+                        fontSize   = 18.sp,
                         fontFamily = appFont,
                         fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
                         maxLines   = 1,
@@ -750,7 +750,7 @@ fun SwipeableFileRow(
                     Text(
                         text     = " . ".repeat(50),
                         color    = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = 14.sp,
+                        fontSize = 18.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         modifier = Modifier.weight(1f).alignByBaseline()
@@ -841,12 +841,12 @@ fun SwipeableProjectRow(
                 verticalAlignment = Alignment.Bottom
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                    Text("📁", fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+                    Text("📁", fontSize = 18.sp, modifier = Modifier.padding(bottom = 1.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = project.name,
                         color = theme.textPrimary,
-                        fontSize = 14.sp,
+                        fontSize = 18.sp,
                         fontFamily = appFont,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -861,7 +861,7 @@ fun SwipeableProjectRow(
                     Text(
                         text = " . ".repeat(50),
                         color = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = 14.sp,
+                        fontSize = 18.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         modifier = Modifier.weight(1f).alignByBaseline()
@@ -1080,13 +1080,13 @@ fun SearchVfsNodeRow(
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                     val icon = if (node.isDirectory) "📁" else "📄"
-                    Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
+                    Text(icon, fontSize = 18.sp, modifier = Modifier.padding(bottom = 1.dp))
                     Spacer(Modifier.width(8.dp))
                     Column(modifier = Modifier.alignByBaseline()) {
                         Text(
                             text       = node.name,
                             color      = theme.textPrimary,
-                            fontSize   = 14.sp,
+                            fontSize   = 18.sp,
                             fontFamily = appFont,
                             fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
                             maxLines   = 1,
@@ -1103,7 +1103,7 @@ fun SearchVfsNodeRow(
                     Text(
                         text     = " . ".repeat(50),
                         color    = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = 14.sp,
+                        fontSize = 18.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         modifier = Modifier.weight(1f).alignByBaseline()
