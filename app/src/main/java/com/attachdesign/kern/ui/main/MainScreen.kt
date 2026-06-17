@@ -1128,7 +1128,7 @@ private fun shareNode(
 ) {
     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
         val cacheDir = context.cacheDir
-        val shareDir = java.io.File(cacheDir, "share_temp")
+        val shareDir = java.io.File(cacheDir, "shared_exports")
         if (!shareDir.exists()) shareDir.mkdirs()
 
         val uriToShare: android.net.Uri? = if (node.isDirectory) {
