@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Share
@@ -366,7 +367,7 @@ fun EditorHeader(
                 modifier = Modifier.semantics { contentDescription = "Undo last action" }
             ) {
                 Icon(
-                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Undo,
+                    imageVector = Icons.AutoMirrored.Filled.Undo,
                     contentDescription = "Undo",
                     tint = theme.textMuted,
                     modifier = Modifier.size(22.dp)
