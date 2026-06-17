@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
       applicationContext,
       AppDatabase::class.java,
       "kern.db"
-    ).fallbackToDestructiveMigration()
+    )
       .build()
 
     storageManager = StorageManager(applicationContext)
