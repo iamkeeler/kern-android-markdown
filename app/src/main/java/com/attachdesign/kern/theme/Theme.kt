@@ -46,5 +46,14 @@ fun ModernAndroidMarkdownEditorTheme(
       else -> LightColorScheme
     }
 
+  val view = androidx.compose.ui.platform.LocalView.current
+  if (!view.isInEditMode) {
+      androidx.compose.runtime.SideEffect {
+          val window = (view.context as android.app.Activity).window
+          androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+          androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
+      }
+  }
+
   MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }
