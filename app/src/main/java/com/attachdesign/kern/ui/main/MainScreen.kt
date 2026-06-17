@@ -28,6 +28,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.activity.compose.BackHandler
+import android.widget.Toast
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,6 +78,22 @@ fun MainScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var isSortAscending by remember { mutableStateOf(true) }
+
+    var backPressedOnce by remember { mutableStateOf(false) }
+    BackHandler {
+        if (backPressedOnce) {
+            (context as? android.app.Activity)?.finish()
+        } else {
+            backPressedOnce = true
+            Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(backPressedOnce) {
+        if (backPressedOnce) {
+            delay(2000)
+            backPressedOnce = false
+        }
+    }
 
     val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsState(initial = null)
     val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
@@ -684,7 +704,7 @@ fun SwipeableFileRow(
     val scope = rememberCoroutineScope()
 
     Box(
-        modifier = Modifier
+        modifier = Modifier.height(IntrinsicSize.Min)
             .fillMaxWidth()
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
@@ -797,7 +817,7 @@ fun SwipeableProjectRow(
     val scope = rememberCoroutineScope()
 
     Box(
-        modifier = Modifier
+        modifier = Modifier.height(IntrinsicSize.Min)
             .fillMaxWidth()
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
@@ -1047,7 +1067,7 @@ fun SearchVfsNodeRow(
     val scope = rememberCoroutineScope()
 
     Box(
-        modifier = Modifier
+        modifier = Modifier.height(IntrinsicSize.Min)
             .fillMaxWidth()
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
