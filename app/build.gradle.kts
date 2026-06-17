@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "00.01.000"
+        versionName = (project.findProperty("VERSION_NAME") as? String) ?: "00.01.000"
     }
 
     buildTypes {

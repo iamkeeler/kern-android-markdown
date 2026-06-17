@@ -1147,54 +1147,60 @@ private fun shareNode(
     project: ProjectEntity,
     storageManager: StorageManager
 ) {
-    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+    val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    scope.launch {
         val cacheDir = context.cacheDir
-        val shareDir = java.io.File(cacheDir, "share_temp")
-        if (!shareDir.exists()) shareDir.mkdirs()
+        val shareDir = java.io.File(cacheDir, "shared_exports")
+        // Clean up stale temp files older than 1 hour
+        if (shareDir.exists()) {
+            shareDir.listFiles()?.forEach { file ->
+                if (file.lastModified() < System.currentTimeMillis() - 3_600_000) {
+                    file.delete()
+                }
+            }
+        } else {
+            shareDir.mkdirs()
+        }
 
         val uriToShare: android.net.Uri? = if (node.isDirectory) {
-            // Zip the folder
-            val zipFile = java.io.File(shareDir, "${node.name}.zip")
-            if (zipFile.exists()) zipFile.delete()
+            val zipFile = java.io.File(shareDir, "${node.name}_${System.currentTimeMillis()}.zip")
 
-            // Simple zip implementation is non-trivial without ZipOutputStream.
-            // Let's use ZipOutputStream
             try {
-                val zos = java.util.zip.ZipOutputStream(java.io.FileOutputStream(zipFile))
-                suspend fun addDirToZip(dirNode: VfsNode, parentPath: String) {
-                    val children = storageManager.listDirectory(project, dirNode.relativePath)
-                    for (child in children) {
-                        val entryName = if (parentPath.isEmpty()) child.name else "$parentPath/${child.name}"
-                        if (child.isDirectory) {
-                            zos.putNextEntry(java.util.zip.ZipEntry("$entryName/"))
-                            zos.closeEntry()
-                            addDirToZip(child, entryName)
-                        } else {
-                            zos.putNextEntry(java.util.zip.ZipEntry(entryName))
-                            val contentBytes = storageManager.readFile(project, child.relativePath).toByteArray()
-                            zos.write(contentBytes)
-                            zos.closeEntry()
+                java.util.zip.ZipOutputStream(java.io.FileOutputStream(zipFile)).use { zos ->
+                    suspend fun addDirToZip(dirNode: VfsNode, parentPath: String) {
+                        val children = storageManager.listDirectory(project, dirNode.relativePath)
+                        for (child in children) {
+                            val entryName = if (parentPath.isEmpty()) child.name else "$parentPath/${child.name}"
+                            if (child.isDirectory) {
+                                zos.putNextEntry(java.util.zip.ZipEntry("$entryName/"))
+                                zos.closeEntry()
+                                addDirToZip(child, entryName)
+                            } else {
+                                zos.putNextEntry(java.util.zip.ZipEntry(entryName))
+                                val contentBytes = storageManager.readFile(project, child.relativePath).toByteArray(kotlin.text.Charsets.UTF_8)
+                                zos.write(contentBytes)
+                                zos.closeEntry()
+                            }
                         }
                     }
+                    addDirToZip(node, "")
                 }
-                addDirToZip(node, "")
-                zos.close()
                 androidx.core.content.FileProvider.getUriForFile(
                     context,
-                    "${context.packageName}.provider",
+                    "${context.packageName}.fileprovider",
                     zipFile
                 )
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("ShareNode", "Failed to zip directory", e)
                 null
             }
         } else {
             val shareFile = java.io.File(shareDir, node.name)
             val contentStr = storageManager.readFile(project, node.relativePath)
-            shareFile.writeText(contentStr)
+            shareFile.writeText(contentStr, kotlin.text.Charsets.UTF_8)
             androidx.core.content.FileProvider.getUriForFile(
                 context,
-                "${context.packageName}.provider",
+                "${context.packageName}.fileprovider",
                 shareFile
             )
         }
@@ -1204,7 +1210,7 @@ private fun shareNode(
                 val shareIntent = android.content.Intent().apply {
                     action = android.content.Intent.ACTION_SEND
                     putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                    type = if (node.isDirectory) "application/zip" else "text/markdown"
+                    type = if (node.isDirectory) "application/zip" else "text/plain"
                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 context.startActivity(android.content.Intent.createChooser(shareIntent, "Share ${node.name}"))

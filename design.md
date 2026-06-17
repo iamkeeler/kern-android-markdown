@@ -1,4 +1,39 @@
 # Application Visual & Interface Design Specifications
+
+## 1. Visual Theme & Atmosphere
+A restrained, gallery-airy interface with confident asymmetric layouts and fluid spring-physics motion. The atmosphere is clinical yet warm — like a well-lit architecture studio.
+
+## 2. Color Palette & Roles
+- **Canvas White** (#FCFBFA) — Primary background surface
+- **Pure Surface** (#F4F3F0) — Card and container fill
+- **Charcoal Ink** (#1A1A18) — Primary text, Zinc-950 depth
+- **Muted Steel** (#7C7A75) — Secondary text, descriptions, metadata
+- **Whisper Border** (rgba(226,232,240,0.5)) — Card borders, 1px structural lines
+- **Utility Blue** (#2E5BFF) — Single accent for CTAs, active states, focus rings
+(Max 1 accent. Saturation < 80%. No purple/neon.)
+
+## 3. Component Stylings
+* **Buttons:** Flat, no outer glow. Tactile -1px translate on active. Accent fill for primary, ghost/outline for secondary.
+* **Cards:** Generously rounded corners (2.5rem). Diffused whisper shadow. Used only when elevation serves hierarchy. High-density: replace with border-top dividers.
+* **Inputs:** Label above, error below. Focus ring in accent color. No floating labels.
+* **Loaders:** Skeletal shimmer matching exact layout dimensions. No circular spinners.
+* **Empty States:** Composed, illustrated compositions — not just "No data" text.
+
+## 4. Layout Principles
+(Grid-first responsive architecture. Asymmetric splits for Hero sections.
+Strict single-column collapse below 768px. Max-width containment.
+No flexbox percentage math. Generous internal padding.)
+
+## 5. Motion & Interaction
+(Spring physics for all interactive elements. Staggered cascade reveals.
+Perpetual micro-loops on active dashboard components. Hardware-accelerated
+transforms only. Isolated Client Components for CPU-heavy animations.)
+
+## 6. Anti-Patterns (Banned)
+(Explicit list of forbidden patterns: no emojis, no Inter, no pure black,
+no neon glows, no 3-column equal grids, no AI copywriting clichés,
+no generic placeholder names, no broken image links.)
+
 ## Typography, Density, and Structural Directives
 
 ### 1. Typography-First Philosophy
@@ -11,9 +46,7 @@ The interface prioritizes reading readability, spatial organization, and intenti
   * `Display Title (H1)`: 22sp / Bold / Tracking: -0.25sp
   * `Section Header (H2)`: 16sp / Medium / Tracking: 0sp
   * `Subsection Header (H3)`: 13sp / Semi-Bold / Tracking: +0.15sp
-  * `Body Markdown Workspace`: 15sp / Regular / Line Height: 1.6x (24sp equivalent line bounding)
-
----
+  * `Body Markdown Workspace`: 15sp / Regular / Line Height: 1.6x (22sp equivalent line bounding)
 
 ### 2. Layout Modalities & Surface Densities
 
@@ -24,7 +57,7 @@ The interface prioritizes reading readability, spatial organization, and intenti
 #### 2.2 The Breadcrumb Header (The Navigation Nexus)
 The primary system navigation relies on an integrated, high-density breadcrumb pathway anchored inside the Top App Bar.
 * **Visual Representation:** `ProjectName › ParentDirectory › active_file.md`
-* **Interaction Elements:** The layout elements are rendered inline using a singular, flat string look but respond independently to pointer touches. 
+* **Interaction Elements:** The layout elements are rendered inline using a singular, flat string look but respond independently to pointer touches.
 * **State Signalling:** Structural directory anchors utilize muted neutral values. The active editing node switches to high-contrast monochrome values.
 
 #### 2.3 Adaptive Workspace Split-States (Dual-Pane Configuration)
@@ -32,8 +65,6 @@ The primary system navigation relies on an integrated, high-density breadcrumb p
 * **The Structural Split:**
   * **Left Component (35% Width Range):** The Project Hierarchy Explorer pane. Features a clean, unbordered file tree displaying document items with precise 8dp vertical spacing boundaries. Background surfaces match the primary system backing color.
   * **Right Component (65% Width Range):** The Core Document Workspace Canvas. Positioned as a linear block container with central alignment bounds. Max text line width values are constrained to a `680dp` bounding box to preserve optimal reading scan lines.
-
----
 
 ### 3. System Color Palettes & Color Tokens
 
@@ -47,7 +78,23 @@ To allow simple and robust runtime theming (via JSON theme serialization or Jetp
 | `color.text.muted` | Low-priority metadata labels, file paths, line numbers. | `#7C7A75` (Muted warm grey) | `#8C8C8C` (Muted cool grey) |
 | `color.accent` | Focus indicators, primary buttons, syntax accent highlights. | `#2E5BFF` (Utility blue) | `#5E81FF` (Bright utility blue) |
 
----
+## 7. Interface Density & Aesthetic Constraints
+When writing UI bindings, you must adhere strictly to the parameters defined in this document:
+* **No Cards/Dividers:** Discard standard mobile framing patterns like floating cards. Visible divider lines are generally avoided, but structural dividers/lines that resemble formatting elements found in printed books (such as thin bookish separator lines) are permitted.
+* **Layout Margins:** Enforce an 8dp grid spacing system strictly. Line height for the core editing workspace must be locked at exactly 1.6x.
+* **Adaptive Split-States:** Implement the adaptive split-screen layout for width constraints >= 600dp (35% left file tree rail, 65% central document workspace canvas capped at a max text line width of 680dp).
+* **Animations:** For inline-reveal animations, use an instantaneous alpha fade pipeline (0ms to 50ms). Do not use sliding or spatial displacement dampening curves.
+
+## 8. Performance & Concurrency Invariants
+The text insertion loop operates at a targeted threshold under **11 milliseconds** per character stroke. To guarantee frame drops are prevented:
+* All parsed paragraph block representations must pass through Jetpack Compose explicitly wrapped or annotated using `@Immutable` or `@Stable`.
+* Do not pass naked `List<T>` properties down the layout tree. Wrap nested structures in custom immutable domain wrappers or leverage `kotlinx.collections.immutable.ImmutableList`.
+* Implement differential update loops inside the Text Processor. The view tier must read state slices wrapped in a standard `derivedStateOf {}` scope block to prevent non-impacted screen elements from parsing text changes.
+
+## 9. State Invariant & Cursor Offset Mechanics
+The custom parser alters text representations on the fly when adding markdown delimiters. To prevent cursor snap dislocations and layout indexing fractures:
+* Implement an explicit **Index Transformation Matrix** layer. This structural contract translates an absolute presentation index (where the cursor sits inside the displayed text string) to an exact domain indexing pointer (the string coordinate inside the raw file cache).
+* When programmatic text wrapping operations change string layout definitions via the selection tray toolbar, the transition sequence must mutate text contents and selection vectors within a singular, atomic state swap instruction.
 
 ### 4. Interactive Components & Micro-Interactions
 
