@@ -1,6 +1,11 @@
 package com.attachdesign.kern.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -14,7 +19,12 @@ data class AppThemeJson(
     val textMutedHex: String,
     val accentHex: String,
     val codeBackgroundHex: String,
+    val dangerHex: String = "#CC3333",
+    val warningHex: String = "#FFC04D",
+    val infoHex: String = "#5CD6D6",
+    val successHex: String = "#D65CD6", // using existing purple for passive, wait let's use more semantic ones for hemingway if needed, or just specific hemingway colors
     val editorFontFamily: String = "Monospace"
+
 ) {
     fun toColorTheme(): AppColorTheme {
         return AppColorTheme(
@@ -26,7 +36,14 @@ data class AppThemeJson(
             textMuted = Color(android.graphics.Color.parseColor(textMutedHex)),
             accent = Color(android.graphics.Color.parseColor(accentHex)),
             codeBackground = Color(android.graphics.Color.parseColor(codeBackgroundHex)),
-            editorFontFamily = editorFontFamily
+            danger = Color(android.graphics.Color.parseColor(dangerHex)),
+            warning = Color(android.graphics.Color.parseColor(warningHex)),
+            info = Color(android.graphics.Color.parseColor(infoHex)),
+            success = Color(android.graphics.Color.parseColor(successHex)),
+            editorFontFamily = editorFontFamily,
+            dimensions = AppDimensions(),
+            typography = AppTypographySizes()
+
         )
     }
 }
@@ -40,7 +57,66 @@ data class AppColorTheme(
     val textMuted: Color,
     val accent: Color,
     val codeBackground: Color,
-    val editorFontFamily: String
+    val danger: Color,
+    val warning: Color,
+    val info: Color,
+    val success: Color,
+    val editorFontFamily: String,
+    val dimensions: AppDimensions,
+    val typography: AppTypographySizes
+
+)
+
+
+data class AppDimensions(
+    val spacingTiny: Dp = 2.dp,
+    val spacingSmall: Dp = 4.dp,
+    val spacingMedium: Dp = 8.dp,
+    val spacingLarge: Dp = 12.dp,
+    val spacingExtraLarge: Dp = 16.dp,
+    val spacingHuge: Dp = 24.dp,
+    val spacingEnormous: Dp = 32.dp,
+    val spacingMassive: Dp = 40.dp,
+    val spacingGiant: Dp = 48.dp,
+    val spacingTitan: Dp = 70.dp,
+
+    val paddingTiny: Dp = 4.dp,
+    val paddingSmall: Dp = 8.dp,
+    val paddingMedium: Dp = 12.dp,
+    val paddingLarge: Dp = 16.dp,
+    val paddingExtraLarge: Dp = 24.dp,
+
+    val cornerRadiusSmall: Dp = 4.dp,
+    val cornerRadiusMedium: Dp = 8.dp,
+    val cornerRadiusLarge: Dp = 12.dp,
+
+    val elevationSmall: Dp = 2.dp,
+    val elevationMedium: Dp = 6.dp,
+    val elevationLarge: Dp = 8.dp,
+
+    val iconSmall: Dp = 16.dp,
+    val iconMedium: Dp = 24.dp,
+    val iconLarge: Dp = 32.dp,
+    val iconHuge: Dp = 48.dp,
+
+    val buttonHeight: Dp = 48.dp,
+    val borderWidth: Dp = 1.dp,
+    val dividerThickness: Dp = 1.dp
+)
+
+data class AppTypographySizes(
+    val tiny: TextUnit = 11.sp,
+    val small: TextUnit = 12.sp,
+    val body: TextUnit = 13.sp,
+    val bodyLarge: TextUnit = 15.sp,
+    val subtitle: TextUnit = 16.sp,
+    val title: TextUnit = 18.sp,
+    val h1: TextUnit = 24.sp,
+    val h2: TextUnit = 20.sp,
+    val h3: TextUnit = 18.sp,
+    val h4: TextUnit = 16.sp,
+    val h5: TextUnit = 13.sp,
+    val h6: TextUnit = 12.sp,
 )
 
 object ThemeEngine {
