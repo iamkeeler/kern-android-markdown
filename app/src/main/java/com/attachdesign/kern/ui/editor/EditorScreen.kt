@@ -123,7 +123,7 @@ fun EditorScreen(
                         )
 
                         HorizontalDivider(
-                            thickness = 1.dp,
+                            thickness = theme.dimensions.borderWidth,
                             color = uiState.activeTheme.textMuted.copy(alpha = 0.15f)
                         )
                     }
@@ -131,16 +131,16 @@ fun EditorScreen(
                     androidx.compose.animation.AnimatedVisibility(
                         visible = uiState.isReadabilityPopupOpen,
                         enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Top),
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 70.dp, end = 16.dp).zIndex(10f)
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = theme.dimensions.spacingTitan, end = theme.dimensions.spacingExtraLarge).zIndex(10f)
                     ) {
                         Box(
                             modifier = Modifier
                                 .width(320.dp)
                                 .heightIn(max = 400.dp)
-                                .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp), clip = false)
-                                .clip(RoundedCornerShape(12.dp))
+                                .shadow(elevation = theme.dimensions.spacingMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
+                                .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
                                 .background(uiState.activeTheme.surface)
-                                .padding(16.dp)
+                                .padding(theme.dimensions.spacingExtraLarge)
                         ) {
                             MetricsTab(uiState)
                         }
@@ -154,7 +154,7 @@ fun EditorScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .imePadding()
-                        .padding(horizontal = if (widthDp >= 720.dp) 24.dp else 16.dp)
+                        .padding(horizontal = if (widthDp >= 720.dp) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge)
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
@@ -178,19 +178,19 @@ fun EditorScreen(
                         visible = true,
                         enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom),
                         exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom),
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp, top = 16.dp, start = 16.dp)
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = theme.dimensions.spacingExtraLarge, bottom = theme.dimensions.spacingHuge, top = theme.dimensions.spacingExtraLarge, start = theme.dimensions.spacingExtraLarge)
                     ) {
                         if (isToolbarMinimized) {
                             Box(
                                 modifier = Modifier
-                                    .shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false)
+                                    .shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
                                         .background(uiState.activeTheme.surface)
                                         .clickable { isToolbarMinimized = false }
-                                        .padding(12.dp)
+                                        .padding(theme.dimensions.spacingLarge)
                                 ) {
                                     Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar", tint = uiState.activeTheme.accent)
                                 }
@@ -265,7 +265,7 @@ fun EditorHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(theme.dimensions.spacingExtraLarge),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -278,12 +278,12 @@ fun EditorHeader(
             Text(
                 text = "~",
                 color = theme.accent,
-                fontSize = 20.sp,
+                fontSize = theme.typography.h2,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .clickable { onBackClick() }
-                    .padding(horizontal = 6.dp, vertical = 8.dp)
+                    .padding(horizontal = theme.dimensions.elevationMedium, vertical = theme.dimensions.spacingMedium)
             )
 
             val segments = filePath.split('/')
@@ -294,7 +294,7 @@ fun EditorHeader(
                 Text(
                     text = "/$folders",
                     color = theme.textMuted,
-                    fontSize = 20.sp,
+                    fontSize = theme.typography.h2,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium
                 )
@@ -303,7 +303,7 @@ fun EditorHeader(
             Text(
                 text = fileName,
                 color = theme.textPrimary,
-                fontSize = 20.sp,
+                fontSize = theme.typography.h2,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -311,7 +311,7 @@ fun EditorHeader(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
         ) {
             IconButton(
                 onClick = onMetricsToggle,
@@ -321,7 +321,7 @@ fun EditorHeader(
                     imageVector = Icons.Outlined.Analytics,
                     contentDescription = "Readability metrics",
                     tint = theme.textMuted,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(theme.dimensions.iconMedium)
                 )
             }
             IconButton(
@@ -332,7 +332,7 @@ fun EditorHeader(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = "Settings",
                     tint = theme.textMuted,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(theme.dimensions.iconMedium)
                 )
             }
 
@@ -377,7 +377,7 @@ fun EditorCanvas(
             .fillMaxSize()
             .widthIn(max = 680.dp), // Cap max text width
         contentPadding = PaddingValues(bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
     ) {
         itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, wrapper ->
             val paragraph = wrapper.block
@@ -445,25 +445,25 @@ fun ParagraphField(
     }
 
     val textStyle = if (viewMode == ViewMode.RAW_PLAIN_TEXT) {
-        TextStyle(fontFamily = FontFamily.Monospace, fontSize = (14 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (20 * fontSizeScale).sp)
+        TextStyle(fontFamily = FontFamily.Monospace, fontSize = (14 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (theme.typography.h2.value * fontSizeScale).sp)
     } else {
         when (blockType) {
             MarkdownBlockType.HEADER_1 -> TextStyle(fontFamily = editorFont, fontSize = (22 * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = (30 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_2 -> TextStyle(fontFamily = editorFont, fontSize = (18 * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = (26 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_3 -> TextStyle(fontFamily = editorFont, fontSize = (15 * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (22 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_4 -> TextStyle(fontFamily = editorFont, fontSize = (14 * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (20 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_5 -> TextStyle(fontFamily = editorFont, fontSize = (13 * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (18 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_6 -> TextStyle(fontFamily = editorFont, fontSize = (12 * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (17 * fontSizeScale).sp)
-            MarkdownBlockType.CODE_BLOCK -> TextStyle(fontFamily = FontFamily.Monospace, fontSize = (13 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (19 * fontSizeScale).sp)
-            MarkdownBlockType.BLOCKQUOTE -> TextStyle(fontFamily = editorFont, fontSize = (15 * fontSizeScale).sp, fontStyle = FontStyle.Italic, color = theme.textMuted, lineHeight = (24 * fontSizeScale).sp)
-            else -> TextStyle(fontFamily = editorFont, fontSize = (15 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (24 * fontSizeScale).sp) // 1.6x Line height (15sp body)
+            MarkdownBlockType.HEADER_2 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.title.value * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = (26 * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_3 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (22 * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_4 -> TextStyle(fontFamily = editorFont, fontSize = (14 * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (theme.typography.h2.value * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_5 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.body.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (theme.typography.title.value * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_6 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.small.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = ((theme.typography.small.value + 5f) * fontSizeScale).sp)
+            MarkdownBlockType.CODE_BLOCK -> TextStyle(fontFamily = FontFamily.Monospace, fontSize = (theme.typography.body.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = ((theme.typography.body.value + 6f) * fontSizeScale).sp)
+            MarkdownBlockType.BLOCKQUOTE -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, fontStyle = FontStyle.Italic, color = theme.textMuted, lineHeight = (theme.typography.h1.value * fontSizeScale).sp)
+            else -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (theme.typography.h1.value * fontSizeScale).sp) // 1.6x Line height (15sp body)
         }
     }
 
     val paddingModifier = when {
-        viewMode == ViewMode.RAW_PLAIN_TEXT -> Modifier.padding(vertical = 4.dp)
-        blockType == MarkdownBlockType.BLOCKQUOTE -> Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
-        else -> Modifier.padding(vertical = 4.dp)
+        viewMode == ViewMode.RAW_PLAIN_TEXT -> Modifier.padding(vertical = theme.dimensions.spacingSmall)
+        blockType == MarkdownBlockType.BLOCKQUOTE -> Modifier.padding(start = theme.dimensions.spacingLarge, top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingSmall)
+        else -> Modifier.padding(vertical = theme.dimensions.spacingSmall)
     }
 
     Box(
@@ -476,7 +476,7 @@ fun ParagraphField(
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .width(4.dp)
+                    .width(theme.dimensions.spacingSmall)
                     .fillMaxHeight()
                     .background(theme.accent)
             )
@@ -538,21 +538,21 @@ fun FloatingFormattingToolbar(
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier.shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp), clip = false)
+        modifier = modifier.shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
     ) {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
                 .background(theme.surface)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = theme.dimensions.spacingMedium, vertical = theme.dimensions.elevationMedium),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
         ) {
             var isHeaderMenuExpanded by remember { mutableStateOf(false) }
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp) // standard IconButton size approx
+                        .size(theme.dimensions.iconHuge) // standard IconButton size approx
                         .clip(androidx.compose.foundation.shape.CircleShape)
                         .combinedClickable(
                             onClick = onHeaderClick,
@@ -561,7 +561,7 @@ fun FloatingFormattingToolbar(
                         .semantics { contentDescription = "Toggle header level" },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = 16.sp)
+                    Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = theme.typography.subtitle)
                 }
 
                 DropdownMenu(
@@ -583,34 +583,34 @@ fun FloatingFormattingToolbar(
                 onClick = { onFormat("**", "**") },
                 modifier = Modifier.semantics { contentDescription = "Format selection bold" }
             ) {
-                Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = 16.sp)
+                Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = theme.typography.subtitle)
             }
             IconButton(
                 onClick = { onFormat("*", "*") },
                 modifier = Modifier.semantics { contentDescription = "Format selection italic" }
             ) {
-                Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = 16.sp)
+                Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = theme.typography.subtitle)
             }
             IconButton(
                 onClick = { onFormat("~~", "~~") },
                 modifier = Modifier.semantics { contentDescription = "Format selection strikethrough" }
             ) {
-                Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = 16.sp)
+                Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = theme.typography.subtitle)
             }
             IconButton(
                 onClick = { onFormat("`", "`") },
                 modifier = Modifier.semantics { contentDescription = "Format selection inline code" }
             ) {
-                Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = 15.sp)
+                Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = theme.typography.bodyLarge)
             }
             IconButton(
                 onClick = { onFormat("[", "](url)") },
                 modifier = Modifier.semantics { contentDescription = "Format selection as link" }
             ) {
-                Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = 16.sp)
+                Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = theme.typography.subtitle)
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(theme.dimensions.spacingSmall))
 
             IconButton(
                 onClick = onMinimizeClick,
@@ -642,27 +642,27 @@ fun SidebarPane(
         else -> ""
     }
 
-    Column(modifier = modifier.padding(16.dp)) {
+    Column(modifier = modifier.padding(theme.dimensions.spacingExtraLarge)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, color = theme.textPrimary, fontSize = 18.sp, fontFamily = editorFont, fontWeight = FontWeight.Light)
+            Text(title, color = theme.textPrimary, fontSize = theme.typography.title, fontFamily = editorFont, fontWeight = FontWeight.Light)
             IconButton(
                 onClick = onCloseClick,
                 modifier = Modifier.semantics { contentDescription = "Close sidebar" }
             ) {
-                Text("✕", color = theme.textPrimary, fontSize = 16.sp)
+                Text("✕", color = theme.textPrimary, fontSize = theme.typography.subtitle)
             }
         }
         
         HorizontalDivider(
-            thickness = 1.dp,
+            thickness = theme.dimensions.borderWidth,
             color = theme.textMuted.copy(alpha = 0.15f)
         )
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(theme.dimensions.spacingExtraLarge))
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (state.sidebarMode) {
@@ -687,46 +687,46 @@ fun MetricsTab(state: EditorUiState) {
 
     if (metrics == null) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = theme.dimensions.spacingMassive),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Analyzing Readability...", color = theme.textMuted, fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            CircularProgressIndicator(color = theme.accent, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+            Text("Analyzing Readability...", color = theme.textMuted, fontSize = theme.typography.body)
+            Spacer(modifier = Modifier.height(theme.dimensions.spacingMedium))
+            CircularProgressIndicator(color = theme.accent, strokeWidth = theme.dimensions.spacingTiny, modifier = Modifier.size(theme.dimensions.spacingHuge))
         }
         return
     }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingExtraLarge)
     ) {
         // Readability section (flat, bookish)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp)
+                .padding(vertical = theme.dimensions.spacingLarge)
         ) {
-            Text("Readability", color = theme.textMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(metrics.readabilityGrade, color = theme.accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(6.dp))
+            Text("Readability", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
+            Text(metrics.readabilityGrade, color = theme.accent, fontSize = theme.typography.h1, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(theme.dimensions.elevationMedium))
             Text(
                 text = "Target Grade level is Grade 8-9 for general audience.",
                 color = theme.textMuted,
-                fontSize = 12.sp,
-                lineHeight = 16.sp
+                fontSize = theme.typography.small,
+                lineHeight = theme.typography.subtitle
             )
         }
 
-        HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
+        HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
 
         // Standard counts (flat, bookish)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(vertical = theme.dimensions.spacingLarge),
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingExtraLarge)
         ) {
             val countItems = listOf(
                 "Words" to metrics.wordCount.toString(),
@@ -738,29 +738,29 @@ fun MetricsTab(state: EditorUiState) {
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(value, color = theme.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(label, color = theme.textMuted, fontSize = 11.sp)
+                    Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
+                    Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
                 }
             }
         }
 
-        HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
+        HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
 
         // Hemingway highlight stats (flat, bookish)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(vertical = theme.dimensions.spacingLarge),
+            verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
         ) {
-            Text("Hemingway Suggestions", color = theme.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text("Hemingway Suggestions", color = theme.textPrimary, fontSize = theme.typography.body, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
 
-            HemingwayStatRow("Very Hard Sentences", metrics.veryHardSentenceCount, Color(0xFFFF4D4D), theme)
-            HemingwayStatRow("Hard Sentences", metrics.hardSentenceCount, Color(0xFFFFC04D), theme)
-            HemingwayStatRow("Adverbs", metrics.adverbCount, Color(0xFF5CD6D6), theme)
-            HemingwayStatRow("Passive Voices", metrics.passiveVoiceCount, Color(0xFFD65CD6), theme)
+            HemingwayStatRow("Very Hard Sentences", metrics.veryHardSentenceCount, theme.danger, theme)
+            HemingwayStatRow("Hard Sentences", metrics.hardSentenceCount, theme.warning, theme)
+            HemingwayStatRow("Adverbs", metrics.adverbCount, theme.info, theme)
+            HemingwayStatRow("Passive Voices", metrics.passiveVoiceCount, theme.success, theme)
         }
     }
 }
@@ -775,16 +775,16 @@ fun HemingwayStatRow(label: String, count: Int, color: Color, theme: com.attachd
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(10.dp)
-                    .background(color, RoundedCornerShape(2.dp))
+                    .size(theme.dimensions.spacingLarge)
+                    .background(color, RoundedCornerShape(theme.dimensions.spacingTiny))
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(label, color = theme.textPrimary, fontSize = 12.sp)
+            Spacer(modifier = Modifier.width(theme.dimensions.spacingMedium))
+            Text(label, color = theme.textPrimary, fontSize = theme.typography.small)
         }
         Text(
             text = count.toString(),
             color = if (count > 0) color else theme.textMuted,
-            fontSize = 12.sp,
+            fontSize = theme.typography.small,
             fontWeight = FontWeight.Bold
         )
     }

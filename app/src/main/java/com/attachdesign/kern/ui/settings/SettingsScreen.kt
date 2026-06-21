@@ -91,8 +91,8 @@ fun SettingsTabsContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(vertical = theme.dimensions.spacingSmall),
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingExtraLarge),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val tabs = listOf("Styles", "Behavior", "Themes", "Sync", "About")
@@ -101,22 +101,22 @@ fun SettingsTabsContent(
                 Text(
                     text = tabName,
                     color = if (selected) theme.accent else theme.textMuted,
-                    fontSize = 13.sp,
+                    fontSize = theme.typography.body,
                     fontFamily = appFont,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier
                         .clickable { activeTab = idx }
-                        .padding(vertical = 6.dp)
+                        .padding(vertical = theme.dimensions.elevationMedium)
                 )
             }
         }
 
         HorizontalDivider(
-            thickness = 1.dp,
+            thickness = theme.dimensions.borderWidth,
             color = theme.textMuted.copy(alpha = 0.15f)
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
         Column(
             modifier = Modifier
@@ -126,8 +126,8 @@ fun SettingsTabsContent(
         ) {
             when (activeTab) {
                 0 -> { // Styles tab
-                    Text("View Mode", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
+                    Text("View Mode", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     val modes = listOf(
                         "RENDERED"           to "Live Preview",
                         "SYNTAX_HIGHLIGHTED" to "Syntax Highlighted",
@@ -142,11 +142,11 @@ fun SettingsTabsContent(
                                         db.settingDao().insertSetting(SettingEntity("view_mode", mode))
                                     }
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = theme.dimensions.spacingMedium),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
+                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
                             RadioButton(
                                 selected = currentViewMode == mode,
                                 onClick = {
@@ -159,12 +159,12 @@ fun SettingsTabsContent(
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
-                    Text("Editor Font", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
+                    Text("Editor Font", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     val fonts = listOf(
                         "serif"      to "Serif (Book)",
                         "sans-serif" to "Sans-Serif (Modern)",
@@ -179,11 +179,11 @@ fun SettingsTabsContent(
                                         db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
                                     }
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = theme.dimensions.spacingMedium),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
+                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
                             RadioButton(
                                 selected = currentFontFamily == font,
                                 onClick = {
@@ -196,12 +196,12 @@ fun SettingsTabsContent(
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
-                    Text("Editor Font Size", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
+                    Text("Editor Font Size", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     val fontSizes = listOf(
                         0.8f to "Small",
                         1.0f to "Medium",
@@ -217,11 +217,11 @@ fun SettingsTabsContent(
                                         db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", scale.toString()))
                                     }
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = theme.dimensions.spacingMedium),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(label, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
+                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
                             RadioButton(
                                 selected = currentFontSizeScale == scale,
                                 onClick = {
@@ -243,23 +243,23 @@ fun SettingsTabsContent(
                                     db.settingDao().insertSetting(SettingEntity("sticky_selection", (!currentSticky).toString()))
                                 }
                             }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = theme.dimensions.spacingMedium),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                       ) {
-                          Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                          Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                               Text(
                                   text = "Sticky Selection",
                                   color = theme.textPrimary,
-                                  fontSize = 13.sp,
+                                  fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
                                   text = "Keep selections active when applying toolbar formatting.",
                                   color = theme.textMuted,
-                                  fontSize = 11.sp,
-                                  lineHeight = 15.sp
+                                  fontSize = theme.typography.tiny,
+                                  lineHeight = theme.typography.bodyLarge
                               )
                           }
                           Switch(
@@ -276,9 +276,9 @@ fun SettingsTabsContent(
                           )
                       }
 
-                      Spacer(Modifier.height(12.dp))
-                      HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                      Spacer(Modifier.height(12.dp))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                      HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
                       Row(
                           modifier = Modifier
@@ -288,23 +288,23 @@ fun SettingsTabsContent(
                                       db.settingDao().insertSetting(SettingEntity("launch_new_file", (!currentLaunchNewFile).toString()))
                                   }
                               }
-                              .padding(vertical = 8.dp),
+                              .padding(vertical = theme.dimensions.spacingMedium),
                           verticalAlignment = Alignment.CenterVertically,
                           horizontalArrangement = Arrangement.SpaceBetween
                       ) {
-                          Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                          Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                                Text(
                                   text = "Launch New File",
                                   color = theme.textPrimary,
-                                  fontSize = 13.sp,
+                                  fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
                                   text = "Automatically open the editor when a new file is created.",
                                   color = theme.textMuted,
-                                  fontSize = 11.sp,
-                                  lineHeight = 15.sp
+                                  fontSize = theme.typography.tiny,
+                                  lineHeight = theme.typography.bodyLarge
                               )
                           }
                           Switch(
@@ -321,9 +321,9 @@ fun SettingsTabsContent(
                           )
                       }
 
-                      Spacer(Modifier.height(12.dp))
-                      HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                      Spacer(Modifier.height(12.dp))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                      HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
                       Row(
                           modifier = Modifier
@@ -333,23 +333,23 @@ fun SettingsTabsContent(
                                       db.settingDao().insertSetting(SettingEntity("auto_header_spacing", (!currentAutoHeader).toString()))
                                   }
                               }
-                              .padding(vertical = 8.dp),
+                              .padding(vertical = theme.dimensions.spacingMedium),
                           verticalAlignment = Alignment.CenterVertically,
                           horizontalArrangement = Arrangement.SpaceBetween
                       ) {
-                          Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                          Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                                Text(
                                   text = "Auto Header Spacing",
                                   color = theme.textPrimary,
-                                  fontSize = 13.sp,
+                                  fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
                                   text = "#Text becomes # Text automatically.",
                                   color = theme.textMuted,
-                                  fontSize = 11.sp,
-                                  lineHeight = 15.sp
+                                  fontSize = theme.typography.tiny,
+                                  lineHeight = theme.typography.bodyLarge
                               )
                           }
                           Switch(
@@ -366,33 +366,33 @@ fun SettingsTabsContent(
                           )
                       }
 
-                      Spacer(Modifier.height(12.dp))
-                      HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                      Spacer(Modifier.height(12.dp))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                      HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .padding(vertical = 8.dp),
+                              .padding(vertical = theme.dimensions.spacingMedium),
                           verticalAlignment = Alignment.CenterVertically,
                           horizontalArrangement = Arrangement.SpaceBetween
                       ) {
-                          Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                          Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                                Text(
                                   text = "Auto Complete",
                                   color = theme.textPrimary,
-                                  fontSize = 13.sp,
+                                  fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
                                   text = "Auto-pair quotes, brackets, and braces.",
                                   color = theme.textMuted,
-                                  fontSize = 11.sp,
-                                  lineHeight = 15.sp
+                                  fontSize = theme.typography.tiny,
+                                  lineHeight = theme.typography.bodyLarge
                               )
                           }
-                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                          Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)) {
                               MinimalOutlinedButtonSmall(text = "Yes", selected = currentAutoComplete, onClick = {
                                   coroutineScope.launch(Dispatchers.IO) {
                                       db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", "true"))
@@ -407,12 +407,12 @@ fun SettingsTabsContent(
                       }
 
                       if (currentAutoComplete) {
-                          Spacer(Modifier.height(8.dp))
+                          Spacer(Modifier.height(theme.dimensions.spacingMedium))
                           Row(
                               modifier = Modifier
                                   .fillMaxWidth()
-                                  .padding(bottom = 10.dp),
-                              horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                  .padding(bottom = theme.dimensions.spacingLarge),
+                              horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
                           ) {
                               MinimalOutlinedButtonSmall(text = "\"\"", selected = currentAutoCompleteQuotes, onClick = {
                                   coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity("auto_complete_quotes", (!currentAutoCompleteQuotes).toString())) }
@@ -436,11 +436,11 @@ fun SettingsTabsContent(
                     Text(
                         text = "Presets",
                         color = theme.textMuted,
-                        fontSize = 11.sp,
+                        fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.(theme.typography.tiny.value / 2).sp
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
 
                     val presets = listOf(
                         "Cream & Charcoal (Default)" to ThemeEngine.DefaultLight,
@@ -457,31 +457,31 @@ fun SettingsTabsContent(
                                         db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
                                     }
                                 }
-                                .padding(vertical = 10.dp),
+                                .padding(vertical = theme.dimensions.spacingLarge),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                             Text(name, color = theme.textPrimary, fontSize = 13.sp, fontFamily = appFont)
+                             Text(name, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
                             val isCurrent = theme.name == presetJson.name
                             if (isCurrent) {
-                                Text("Active", color = theme.accent, fontSize = 11.sp,
+                                Text("Active", color = theme.accent, fontSize = theme.typography.tiny,
                                     fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
                             }
                         }
                     }
 
-                    Spacer(Modifier.height(12.dp))
-                    HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
                     Text(
                         text = "Custom",
                         color = theme.textMuted,
-                        fontSize = 11.sp,
+                        fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.(theme.typography.tiny.value / 2).sp
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
                     MinimalOutlinedButton(
                         text = "Export Current Theme",
@@ -504,14 +504,14 @@ fun SettingsTabsContent(
                         theme = theme,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
                     var inputThemeJson by remember { mutableStateOf("") }
                     OutlinedTextField(
                         value = inputThemeJson,
                         onValueChange = { inputThemeJson = it },
-                        label = { Text("Paste Theme JSON", fontSize = 12.sp, color = theme.textMuted) },
-                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = theme.textPrimary),
+                        label = { Text("Paste Theme JSON", fontSize = theme.typography.small, color = theme.textMuted) },
+                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = theme.typography.small, color = theme.textPrimary),
                         modifier = Modifier.fillMaxWidth().height(100.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor   = theme.textPrimary,
@@ -523,7 +523,7 @@ fun SettingsTabsContent(
                             cursorColor = theme.accent
                         )
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
                     MinimalOutlinedButton(
                         text = "Import Custom Theme",
@@ -547,50 +547,50 @@ fun SettingsTabsContent(
                     )
                 }
                 3 -> { // Sync tab
-                     Text("Cloud Sync", color = theme.textPrimary, fontSize = 14.sp, fontFamily = appFont, fontWeight = FontWeight.Bold)
-                     Spacer(Modifier.height(8.dp))
+                     Text("Cloud Sync", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                     Spacer(Modifier.height(theme.dimensions.spacingMedium))
                      Text(
                          "We are actively working on adding cloud synchronization features so you can access your documents anywhere. Stay tuned for updates!",
                          color = theme.textMuted,
-                         fontSize = 13.sp,
+                         fontSize = theme.typography.body,
                          fontFamily = appFont,
-                         lineHeight = 18.sp
+                         lineHeight = theme.typography.title
                      )
-                     Spacer(Modifier.height(16.dp))
+                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                 }
                 4 -> { // About tab
                      Row(
-                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingMedium),
                          horizontalArrangement = Arrangement.SpaceBetween,
                          verticalAlignment = Alignment.CenterVertically
                      ) {
-                         Text("Kern", color = theme.textPrimary, fontSize = 14.sp,
+                         Text("Kern", color = theme.textPrimary, fontSize = theme.typography.bodyLarge,
                              fontFamily = appFont, fontWeight = FontWeight.Medium)
-                         Text("Version 1.0", color = theme.textMuted, fontSize = 11.sp,
+                         Text("Version 1.0", color = theme.textMuted, fontSize = theme.typography.tiny,
                              fontFamily = FontFamily.Monospace)
                      }
                      Row(
-                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
                          horizontalArrangement = Arrangement.SpaceBetween,
                          verticalAlignment = Alignment.CenterVertically
                      ) {
-                         Text("Design & Development", color = theme.textMuted, fontSize = 12.sp)
-                         Text("Attach.design", color = theme.textPrimary, fontSize = 13.sp,
+                         Text("Design & Development", color = theme.textMuted, fontSize = theme.typography.small)
+                         Text("Attach.design", color = theme.textPrimary, fontSize = theme.typography.body,
                              fontFamily = appFont, fontWeight = FontWeight.Medium)
                      }
 
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
                     Text(
                         text = "Open Source Libraries",
                         color = theme.textMuted,
-                        fontSize = 11.sp,
+                        fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.(theme.typography.tiny.value / 2).sp
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(theme.dimensions.elevationMedium))
 
                     val libraries = listOf(
                         "Jetpack Compose"                to "Apache 2.0 · Google",
@@ -604,19 +604,19 @@ fun SettingsTabsContent(
                     )
                     libraries.forEach { (lib, license) ->
                          Row(
-                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                             modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.elevationMedium),
                              horizontalArrangement = Arrangement.SpaceBetween,
                              verticalAlignment = Alignment.CenterVertically
                          ) {
-                             Text(lib, color = theme.textPrimary, fontSize = 13.sp,
+                             Text(lib, color = theme.textPrimary, fontSize = theme.typography.body,
                                  fontFamily = appFont, modifier = Modifier.weight(1f))
-                            Text(license, color = theme.textMuted, fontSize = 11.sp,
+                            Text(license, color = theme.textMuted, fontSize = theme.typography.tiny,
                                 fontFamily = FontFamily.Monospace)
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(theme.dimensions.spacingMassive))
         }
     }
 }
@@ -676,19 +676,19 @@ fun SettingsScreen(
              .fillMaxSize()
              .background(theme.background)
              .safeDrawingPadding()
-             .padding(horizontal = 24.dp, vertical = 16.dp)
+             .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
      ) {
          // ── Page title row ────────────────────────────────────────────────────
          Row(
              modifier = Modifier
                  .fillMaxWidth()
-                 .padding(top = 8.dp, bottom = 8.dp),
+                 .padding(top = theme.dimensions.spacingMedium, bottom = theme.dimensions.spacingMedium),
              verticalAlignment = Alignment.CenterVertically,
              horizontalArrangement = Arrangement.SpaceBetween
          ) {
              Text(
                  text = "Settings",
-                 fontSize = 28.sp,
+                 fontSize = theme.typography.h1,
                  fontFamily = appFont,
                  fontWeight = FontWeight.Light,
                  color = theme.textPrimary,
@@ -701,7 +701,7 @@ fun SettingsScreen(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
         // Shared settings component
         SettingsTabsContent(
@@ -734,16 +734,16 @@ fun MinimalOutlinedButton(
 
     Box(
         modifier = modifier
-            .border(border = BorderStroke(1.dp, borderColor), shape = RoundedCornerShape(4.dp))
-            .background(bgColor, RoundedCornerShape(4.dp))
+            .border(border = BorderStroke(theme.dimensions.borderWidth, borderColor), shape = RoundedCornerShape(theme.dimensions.spacingSmall))
+            .background(bgColor, RoundedCornerShape(theme.dimensions.spacingSmall))
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = theme.dimensions.spacingExtraLarge, vertical = theme.dimensions.spacingMedium),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = textColor,
-            fontSize = 14.sp,
+            fontSize = theme.typography.bodyLarge,
             fontFamily = appFont,
             fontWeight = if (isPrimary) FontWeight.Medium else FontWeight.Normal
         )
@@ -764,16 +764,16 @@ fun MinimalOutlinedButtonSmall(
 
     Box(
         modifier = modifier
-            .border(border = BorderStroke(1.dp, border), shape = RoundedCornerShape(4.dp))
-            .background(bg, RoundedCornerShape(4.dp))
+            .border(border = BorderStroke(theme.dimensions.borderWidth, border), shape = RoundedCornerShape(theme.dimensions.spacingSmall))
+            .background(bg, RoundedCornerShape(theme.dimensions.spacingSmall))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = theme.dimensions.spacingLarge, vertical = theme.dimensions.elevationMedium),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = textColor,
-            fontSize = 12.sp,
+            fontSize = theme.typography.small,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Medium
         )
