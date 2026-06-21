@@ -58,6 +58,7 @@ data class EditorUiState(
     val autoCompleteBraces: Boolean = true,
     val autoCompleteParens: Boolean = true,
     val autoCompleteBrackets: Boolean = true,
+    val sentenceCapitalization: Boolean = true,
     val editorFontSizeScale: Float = 1.0f,
     val hemingwayMetrics: HemingwayMetrics? = null,
     val sidebarMode: SidebarMode = SidebarMode.CLOSED,
@@ -125,7 +126,15 @@ class EditorViewModel(
                 }
             }
         }
-        viewModelScope.launch(Dispatchers.IO) {
+                viewModelScope.launch(Dispatchers.IO) {
+            db.settingDao().getSettingFlow("sentence_capitalization").collect { setting ->
+                val enabled = setting?.value?.toBoolean() ?: true
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(sentenceCapitalization = enabled)
+                }
+            }
+        }
+viewModelScope.launch(Dispatchers.IO) {
             db.settingDao().getSettingFlow("auto_complete_enabled").collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
@@ -210,6 +219,7 @@ class EditorViewModel(
         val autoCompleteBracesSetting = db.settingDao().getSetting("auto_complete_braces")?.value ?: "true"
         val autoCompleteParensSetting = db.settingDao().getSetting("auto_complete_parens")?.value ?: "true"
         val autoCompleteBracketsSetting = db.settingDao().getSetting("auto_complete_brackets")?.value ?: "true"
+        val sentenceCapitalizationSetting = db.settingDao().getSetting("sentence_capitalization")?.value ?: "true"
         val editorFontSizeScaleSetting = db.settingDao().getSetting("editor_font_size_scale")?.value ?: "1.0"
 
         withContext(Dispatchers.Main) {
@@ -223,6 +233,7 @@ class EditorViewModel(
                 autoCompleteBraces = autoCompleteBracesSetting.toBoolean(),
                 autoCompleteParens = autoCompleteParensSetting.toBoolean(),
                 autoCompleteBrackets = autoCompleteBracketsSetting.toBoolean(),
+                sentenceCapitalization = sentenceCapitalizationSetting.toBoolean(),
                 editorFontSizeScale = editorFontSizeScaleSetting.toFloatOrNull() ?: 1.0f,
                 syncProvider = SyncProvider.valueOf(syncProviderSetting)
             )
@@ -448,7 +459,8 @@ class EditorViewModel(
             autoCompleteSingleQuotes = currentState.autoCompleteSingleQuotes,
             autoCompleteBraces = currentState.autoCompleteBraces,
             autoCompleteParens = currentState.autoCompleteParens,
-            autoCompleteBrackets = currentState.autoCompleteBrackets
+            autoCompleteBrackets = currentState.autoCompleteBrackets,
+            sentenceCapitalization = currentState.sentenceCapitalization
         )
 
         val finalValue = TextFieldValue(
@@ -797,6 +809,16 @@ class EditorViewModel(
             }
         }
     }
+
+    fun changeSentenceCapitalization(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(sentenceCapitalization = enabled)
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                db.settingDao().insertSetting(SettingEntity("sentence_capitalization", enabled.toString()))
+            }
+        }
+    }
+
 
     fun selectTheme(themeEntity: ThemeEntity) {
         viewModelScope.launch {

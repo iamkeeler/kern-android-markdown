@@ -96,7 +96,8 @@ object MarkdownEditorEngine {
         autoCompleteSingleQuotes: Boolean = true,
         autoCompleteBraces: Boolean = true,
         autoCompleteParens: Boolean = true,
-        autoCompleteBrackets: Boolean = true
+        autoCompleteBrackets: Boolean = true,
+        sentenceCapitalization: Boolean = true
     ): TransformResult {
         // Selection wrapping: wraps active selection in matching delimiters
         val wasSelectionActive = oldSelStart != oldSelEnd
@@ -147,6 +148,44 @@ object MarkdownEditorEngine {
                 textState = hashes + " " + textState.substring(headerLen)
                 if (cursorState > headerLen) {
                     cursorState += 1
+                }
+            }
+        }
+
+
+        // 1.5 Auto Sentence Capitalization
+        if (sentenceCapitalization && isInsertion && newText.length == oldText.length + 1) {
+            val insertedChar = textState[cursorState - 1]
+            if (insertedChar.isLowerCase()) {
+                // Check if it's the start of the text block or start of a sentence
+                var shouldCapitalize = false
+
+                // If it's the very first character of the string
+                if (cursorState == 1) {
+                    shouldCapitalize = true
+                } else {
+                    // Check backwards to find if we're at the start of a sentence
+                    // A sentence start is: [ . | ! | ? ] followed by whitespace(s)
+                    var i = cursorState - 2
+
+                    // Skip any leading whitespaces
+                    while (i >= 0 && textState[i].isWhitespace()) {
+                        i--
+                    }
+
+                    if (i < 0) {
+                        // All whitespaces before this character, so it's start of paragraph
+                        shouldCapitalize = true
+                    } else {
+                        val prevNonSpace = textState[i]
+                        if (prevNonSpace == '.' || prevNonSpace == '!' || prevNonSpace == '?') {
+                            shouldCapitalize = true
+                        }
+                    }
+                }
+
+                if (shouldCapitalize) {
+                    textState = textState.substring(0, cursorState - 1) + insertedChar.uppercaseChar() + textState.substring(cursorState)
                 }
             }
         }
