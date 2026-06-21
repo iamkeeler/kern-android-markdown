@@ -1,6 +1,12 @@
 package com.attachdesign.kern
 
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,11 +20,30 @@ import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.theme.ModernAndroidMarkdownEditorTheme
 
 class MainActivity : ComponentActivity() {
+  companion object {
+    private const val REQUEST_CODE_STORAGE_PERMISSION = 1001
+  }
+
+  private fun checkAndRequestPermissions() {
+    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+      val readPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+      val writePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+      if (readPermission != PackageManager.PERMISSION_GRANTED || writePermission != PackageManager.PERMISSION_GRANTED) {
+        ActivityCompat.requestPermissions(
+          this,
+          arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE),
+          REQUEST_CODE_STORAGE_PERMISSION
+        )
+      }
+    }
+  }
+
   private lateinit var db: AppDatabase
   private lateinit var storageManager: StorageManager
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    checkAndRequestPermissions()
 
     db = Room.databaseBuilder(
       applicationContext,
