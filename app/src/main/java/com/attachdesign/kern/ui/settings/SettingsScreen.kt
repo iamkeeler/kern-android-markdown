@@ -53,6 +53,7 @@ fun SettingsTabsContent(
     val editorFontSizeScaleSetting by db.settingDao().getSettingFlow("editor_font_size_scale").collectAsState(initial = null)
     val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsState(initial = null)
     val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
+    val sentenceCapitalizationSetting by db.settingDao().getSettingFlow("sentence_capitalization").collectAsState(initial = null)
 
     val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
     val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsState(initial = null)
@@ -67,6 +68,7 @@ fun SettingsTabsContent(
     val currentFontSizeScale = editorFontSizeScaleSetting?.value?.toFloatOrNull() ?: 1.0f
     val currentSticky              = stickySetting?.value?.toBoolean() ?: true
     val currentLaunchNewFile       = launchNewFileSetting?.value?.toBoolean() ?: true
+    val currentSentenceCapitalization = sentenceCapitalizationSetting?.value?.toBoolean() ?: true
 
     val currentAutoHeader          = autoHeaderSetting?.value?.toBoolean() ?: true
     val currentAutoComplete        = autoCompleteSetting?.value?.toBoolean() ?: true
@@ -357,6 +359,52 @@ fun SettingsTabsContent(
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
                                       db.settingDao().insertSetting(SettingEntity("auto_header_spacing", value.toString()))
+                                  }
+                              },
+                              colors = SwitchDefaults.colors(
+                                  checkedThumbColor = theme.accent,
+                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                              )
+                          )
+                      }
+
+                      Spacer(Modifier.height(12.dp))
+                      HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
+                      Spacer(Modifier.height(12.dp))
+
+
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clickable {
+                                  coroutineScope.launch(Dispatchers.IO) {
+                                      db.settingDao().insertSetting(SettingEntity("sentence_capitalization", (!currentSentenceCapitalization).toString()))
+                                  }
+                              }
+                              .padding(vertical = 8.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.SpaceBetween
+                      ) {
+                          Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                               Text(
+                                  text = "Sentence Capitalization",
+                                  color = theme.textPrimary,
+                                  fontSize = 13.sp,
+                                  fontFamily = appFont,
+                                  fontWeight = FontWeight.Medium
+                              )
+                              Text(
+                                  text = "Automatically capitalize the first letter of sentences.",
+                                  color = theme.textMuted,
+                                  fontSize = 11.sp,
+                                  lineHeight = 15.sp
+                              )
+                          }
+                          Switch(
+                              checked = currentSentenceCapitalization,
+                              onCheckedChange = { value ->
+                                  coroutineScope.launch(Dispatchers.IO) {
+                                      db.settingDao().insertSetting(SettingEntity("sentence_capitalization", value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
