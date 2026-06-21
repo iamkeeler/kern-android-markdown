@@ -6,6 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.attachdesign.kern.data.local.ProjectEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.os.Environment
 import java.io.File
 
 class StorageManager(private val context: Context) {
@@ -70,11 +71,31 @@ class StorageManager(private val context: Context) {
      */
     private fun getProjectRootFile(project: ProjectEntity): File {
         val rootDirName = if (project.isExternal) "external_saf" else "sandbox"
-        val rootDir = File(context.filesDir, rootDirName)
-        if (!rootDir.exists()) {
-            rootDir.mkdirs()
+
+        // Migration logic: move old files to the new accessible directory
+        val oldRootDir = File(context.filesDir, rootDirName)
+        val newDocumentsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Kern")
+        val newRootDir = File(newDocumentsDir, rootDirName)
+
+        if (!newRootDir.exists()) {
+            newRootDir.mkdirs()
         }
-        val projectDir = getSafeFile(rootDir, project.path)
+
+        // If old root exists and new root is empty, copy everything over to preserve user data
+        if (oldRootDir.exists() && oldRootDir.isDirectory && newRootDir.exists()) {
+            val oldFiles = oldRootDir.listFiles()
+            if (oldFiles != null && oldFiles.isNotEmpty() && newRootDir.listFiles()?.isEmpty() == true) {
+                try {
+                    oldRootDir.copyRecursively(newRootDir, overwrite = true)
+                    // Optionally delete old files after successful copy:
+                    // oldRootDir.deleteRecursively()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        val projectDir = getSafeFile(newRootDir, project.path)
         if (!projectDir.exists()) {
             projectDir.mkdirs()
         }
