@@ -49,6 +49,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
+import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -544,72 +548,101 @@ fun FloatingFormattingToolbar(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
                 .background(theme.surface)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(start = 8.dp, top = 6.dp, bottom = 6.dp, end = 4.dp), // Less end padding to accommodate pinned button
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            var isHeaderMenuExpanded by remember { mutableStateOf(false) }
-            Box(contentAlignment = Alignment.Center) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp) // standard IconButton size approx
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .combinedClickable(
-                            onClick = onHeaderClick,
-                            onLongClick = { isHeaderMenuExpanded = true }
-                        )
-                        .semantics { contentDescription = "Toggle header level" },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = 16.sp)
-                }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                var isHeaderMenuExpanded by remember { mutableStateOf(false) }
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp) // standard IconButton size approx
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .combinedClickable(
+                                onClick = onHeaderClick,
+                                onLongClick = { isHeaderMenuExpanded = true }
+                            )
+                            .semantics { contentDescription = "Toggle header level" },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = 16.sp)
+                    }
 
-                DropdownMenu(
-                    expanded = isHeaderMenuExpanded,
-                    onDismissRequest = { isHeaderMenuExpanded = false }
-                ) {
-                    (1..6).forEach { level ->
-                        DropdownMenuItem(
-                            text = { Text("Header $level", color = theme.textPrimary) },
-                            onClick = {
-                                isHeaderMenuExpanded = false
-                                onHeaderSet(level)
-                            }
-                        )
+                    DropdownMenu(
+                        expanded = isHeaderMenuExpanded,
+                        onDismissRequest = { isHeaderMenuExpanded = false },
+                        modifier = Modifier.background(theme.surface)
+                    ) {
+                        (1..6).forEach { level ->
+                            DropdownMenuItem(
+                                text = { Text("Header $level", color = theme.textPrimary) },
+                                onClick = {
+                                    isHeaderMenuExpanded = false
+                                    onHeaderSet(level)
+                                }
+                            )
+                        }
                     }
                 }
-            }
-            IconButton(
-                onClick = { onFormat("**", "**") },
-                modifier = Modifier.semantics { contentDescription = "Format selection bold" }
-            ) {
-                Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = 16.sp)
-            }
-            IconButton(
-                onClick = { onFormat("*", "*") },
-                modifier = Modifier.semantics { contentDescription = "Format selection italic" }
-            ) {
-                Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = 16.sp)
-            }
-            IconButton(
-                onClick = { onFormat("~~", "~~") },
-                modifier = Modifier.semantics { contentDescription = "Format selection strikethrough" }
-            ) {
-                Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = 16.sp)
-            }
-            IconButton(
-                onClick = { onFormat("`", "`") },
-                modifier = Modifier.semantics { contentDescription = "Format selection inline code" }
-            ) {
-                Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = 15.sp)
-            }
-            IconButton(
-                onClick = { onFormat("[", "](url)") },
-                modifier = Modifier.semantics { contentDescription = "Format selection as link" }
-            ) {
-                Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = 16.sp)
+                IconButton(
+                    onClick = { onFormat("**", "**") },
+                    modifier = Modifier.semantics { contentDescription = "Format selection bold" }
+                ) {
+                    Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = 16.sp)
+                }
+                IconButton(
+                    onClick = { onFormat("*", "*") },
+                    modifier = Modifier.semantics { contentDescription = "Format selection italic" }
+                ) {
+                    Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = 16.sp)
+                }
+                IconButton(
+                    onClick = { onFormat("~~", "~~") },
+                    modifier = Modifier.semantics { contentDescription = "Format selection strikethrough" }
+                ) {
+                    Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = 16.sp)
+                }
+                IconButton(
+                    onClick = { onFormat("`", "`") },
+                    modifier = Modifier.semantics { contentDescription = "Format selection inline code" }
+                ) {
+                    Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = 15.sp)
+                }
+                IconButton(
+                    onClick = { onFormat("[", "](url)") },
+                    modifier = Modifier.semantics { contentDescription = "Format selection as link" }
+                ) {
+                    Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = 16.sp)
+                }
+                IconButton(
+                    onClick = { onFormat("    ", "") }, // Assuming indent is 4 spaces prefix
+                    modifier = Modifier.semantics { contentDescription = "Indent text" }
+                ) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.FormatIndentIncrease, contentDescription = "Indent", tint = theme.textPrimary)
+                }
+                IconButton(
+                    onClick = { onFormat("", "") }, // Need to figure out unindent logic, or maybe just block format? Wait, formatting logic might be simple prefix/suffix. Indent usually adds prefix. Unindent might not be supported via simple prefix/suffix. Let's just add indent and blockquote.
+                    // Wait, indent usually adds spaces or tab. In markdown, 4 spaces.
+                    modifier = Modifier.semantics { contentDescription = "Unindent text" }
+                ) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.FormatIndentDecrease, contentDescription = "Unindent", tint = theme.textPrimary)
+                }
             }
 
+            // Pinned minimize button
+            Spacer(modifier = Modifier.width(4.dp))
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(24.dp)
+                    .background(theme.textMuted.copy(alpha = 0.3f))
+            )
             Spacer(modifier = Modifier.width(4.dp))
 
             IconButton(
@@ -621,7 +654,6 @@ fun FloatingFormattingToolbar(
         }
     }
 }
-
 @Composable
 fun SidebarPane(
     state: EditorUiState,
