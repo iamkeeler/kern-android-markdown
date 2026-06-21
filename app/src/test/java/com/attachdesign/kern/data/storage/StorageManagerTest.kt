@@ -24,7 +24,7 @@ class StorageManagerTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         storageManager = StorageManager(context)
-        sandboxDir = File(context.filesDir, "sandbox")
+        sandboxDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), "Kern/sandbox")
         project = ProjectEntity(name = "TestProject", path = "TestProjectDir", isExternal = false, isSelected = false)
     }
 
