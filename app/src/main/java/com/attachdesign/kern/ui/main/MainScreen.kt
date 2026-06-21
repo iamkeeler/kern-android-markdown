@@ -134,13 +134,13 @@ fun MainScreen(
             .fillMaxSize()
             .background(theme.background)
             .safeDrawingPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
     ) {
         // ── Brand Header (always visible) ──────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 4.dp),
+                .padding(top = theme.dimensions.spacingMedium, bottom = theme.dimensions.spacingSmall),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -148,22 +148,22 @@ fun MainScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Kern",
-                    fontSize = 28.sp,
+                    fontSize = theme.typography.h1,
                     fontFamily = appFont,
                     fontWeight = FontWeight.Light,
                     color = theme.textPrimary,
                     letterSpacing = (-0.5).sp
                 )
                 state.activeQuote?.let { quote ->
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     Text(
                         text = "“${quote.text}” — ${quote.author}, ${quote.year}",
-                        fontSize = 12.sp,
+                        fontSize = theme.typography.small,
                         fontFamily = appFont,
                         fontWeight = FontWeight.Normal,
                         color = theme.textMuted,
-                        lineHeight = 16.sp,
-                        modifier = Modifier.padding(end = 16.dp)
+                        lineHeight = theme.typography.subtitle,
+                        modifier = Modifier.padding(end = theme.dimensions.spacingExtraLarge)
                     )
                 }
             }
@@ -177,14 +177,14 @@ fun MainScreen(
                     isSearchActive = !isSearchActive
                     if (!isSearchActive) searchQuery = ""
                 }) {
-                    Text(if (isSearchActive) "✕" else "🔍", fontSize = 18.sp)
+                    Text(if (isSearchActive) "✕" else "🔍", fontSize = theme.typography.title)
                 }
                 IconButton(onClick = { onItemClick(SettingsKey) }) {
                     Icon(
                         imageVector = Icons.Outlined.Settings,
                         contentDescription = "Settings",
                         tint = theme.textMuted,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(theme.dimensions.iconMedium)
                     )
                 }
             }
@@ -193,15 +193,15 @@ fun MainScreen(
         // ── Action Row (Breadcrumbs or Search) ─────────────────────────────────
         HorizontalDivider(
             color = theme.textMuted.copy(alpha = 0.15f),
-            thickness = 1.dp,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+            thickness = theme.dimensions.borderWidth,
+            modifier = Modifier.padding(top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingMedium)
         )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .padding(bottom = 8.dp),
+                .height(theme.dimensions.iconHuge)
+                .padding(bottom = theme.dimensions.spacingMedium),
             contentAlignment = Alignment.CenterStart
         ) {
             androidx.compose.animation.AnimatedContent(
@@ -212,8 +212,8 @@ fun MainScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search files...", color = theme.textMuted, fontSize = 13.sp) },
-                        textStyle = TextStyle(fontSize = 13.sp, color = theme.textPrimary),
+                        placeholder = { Text("Search files...", color = theme.textMuted, fontSize = theme.typography.body) },
+                        textStyle = TextStyle(fontSize = theme.typography.body, color = theme.textPrimary),
                         modifier = Modifier.fillMaxSize(),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
@@ -232,18 +232,18 @@ fun MainScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
                         ) {
                             // Clear back button
                             if (state.activeProject != null) {
                                 Text(
                                     text = "←",
                                     color = theme.accent,
-                                    fontSize = 14.sp,
+                                    fontSize = theme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
                                         .clickable { vm.navigateUp() }
-                                        .padding(end = 8.dp)
+                                        .padding(end = theme.dimensions.spacingMedium)
                                 )
                             }
 
@@ -251,7 +251,7 @@ fun MainScreen(
                             Text(
                                 text = "files",
                                 color = if (state.activeProject == null) theme.textPrimary else theme.accent,
-                                fontSize = 12.sp,
+                                fontSize = theme.typography.small,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.clickable {
@@ -262,13 +262,13 @@ fun MainScreen(
                             )
 
                             state.activeProject?.let { proj ->
-                                Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
 
                                 val isProjRoot = state.currentPath.isEmpty()
                                 Text(
                                     text = proj.name.lowercase(),
                                     color = if (isProjRoot) theme.textPrimary else theme.accent,
-                                    fontSize = 12.sp,
+                                    fontSize = theme.typography.small,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
                                     modifier = Modifier.clickable {
@@ -281,13 +281,13 @@ fun MainScreen(
                                 if (state.currentPath.isNotEmpty()) {
                                     val segments = state.currentPath.split('/')
                                     segments.forEachIndexed { index, segment ->
-                                        Text("/", color = theme.textMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                        Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
                                         val isLast = index == segments.lastIndex
                                         val segmentPath = segments.take(index + 1).joinToString("/")
                                         Text(
                                             text = segment,
                                             color = if (isLast) theme.textPrimary else theme.accent,
-                                            fontSize = 12.sp,
+                                            fontSize = theme.typography.small,
                                             fontFamily = FontFamily.Monospace,
                                             fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
                                             modifier = Modifier.clickable {
@@ -301,12 +301,12 @@ fun MainScreen(
                             }
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium), verticalAlignment = Alignment.CenterVertically) {
                             if (state.activeProject == null) {
                                 Text(
                                     text = "[+ workspace]",
                                     color = theme.accent,
-                                    fontSize = 11.sp,
+                                    fontSize = theme.typography.tiny,
                                     fontFamily = FontFamily.Monospace,
                                     modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
                                 )
@@ -315,11 +315,11 @@ fun MainScreen(
                             Text(
                                 text = if (isSortAscending) "[A-Z]" else "[Z-A]",
                                 color = theme.accent,
-                                fontSize = 11.sp,
+                                fontSize = theme.typography.tiny,
                                 fontFamily = FontFamily.Monospace,
                                 modifier = Modifier
                                     .clickable { isSortAscending = !isSortAscending }
-                                    .padding(vertical = 4.dp, horizontal = 8.dp)
+                                    .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingMedium)
                             )
                         }
                     }
@@ -454,8 +454,8 @@ fun MainScreen(
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(bottom = 16.dp, end = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(bottom = theme.dimensions.spacingExtraLarge, end = theme.dimensions.spacingExtraLarge),
+                    verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge),
                     horizontalAlignment = Alignment.End
                 ) {
                     MinimalOutlinedButton(
@@ -524,9 +524,9 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { nodeToDelete = null },
             title = { Text("Delete ${if (node.isDirectory) "Folder" else "File"}?",
-                color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
             text  = { Text("Are you sure you want to delete '${node.name}'? This cannot be undone.",
-                color = theme.textPrimary, fontSize = 13.sp) },
+                color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteNode(node, project); nodeToDelete = null }) {
                     Text("Delete", color = theme.accent)
@@ -571,9 +571,9 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { projectToDelete = null },
             title = { Text("Delete Workspace?",
-                color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
             text  = { Text("Are you sure you want to delete '${proj.name}'? This cannot be undone.",
-                color = theme.textPrimary, fontSize = 13.sp) },
+                color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteProject(proj); projectToDelete = null }) {
                     Text("Delete", color = theme.accent)
@@ -601,16 +601,16 @@ private fun ProjectSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp, bottom = 4.dp),
+            .padding(top = theme.dimensions.spacingExtraLarge, bottom = theme.dimensions.spacingSmall),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.elevationMedium),
             modifier = Modifier
                 .clickable { onHeaderClick() }
-                .padding(vertical = 4.dp)
+                .padding(vertical = theme.dimensions.spacingSmall)
         ) {
             Text(
                 text = buildString {
@@ -618,16 +618,16 @@ private fun ProjectSectionHeader(
                     if (project.isExternal) append("  ☁️")
                 },
                 color = if (isSelected) theme.accent else theme.textMuted,
-                fontSize = 10.sp,
+                fontSize = theme.typography.tiny,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp
+                letterSpacing = 1.(theme.typography.tiny.value / 2).sp
             )
             if (isSelected) {
                 Text(
                     text = "• active",
                     color = theme.accent,
-                    fontSize = 9.sp,
+                    fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Normal
                 )
@@ -635,26 +635,26 @@ private fun ProjectSectionHeader(
         }
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "[+ file]",
                 color = theme.accent,
-                fontSize = 10.sp,
+                fontSize = theme.typography.tiny,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .clickable { onCreateFileClick() }
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .padding(horizontal = theme.dimensions.spacingSmall, vertical = theme.dimensions.spacingTiny)
             )
             Text(
                 text = "[+ folder]",
                 color = theme.accent,
-                fontSize = 10.sp,
+                fontSize = theme.typography.tiny,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .clickable { onCreateFolderClick() }
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .padding(horizontal = theme.dimensions.spacingSmall, vertical = theme.dimensions.spacingTiny)
             )
         }
     }
@@ -673,13 +673,13 @@ private fun EmptyStateHint(
         else -> FontFamily.Default
     }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = theme.dimensions.iconHuge),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(title, color = theme.textPrimary, fontFamily = appFont,
-            fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text(body, color = theme.textMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+            fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(theme.dimensions.spacingSmall))
+        Text(body, color = theme.textMuted, fontSize = theme.typography.small, textAlign = TextAlign.Center)
     }
 }
 
@@ -739,7 +739,7 @@ fun SwipeableFileRow(
         ) {
             SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), onClick = onShare)
             SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), onClick = onEdit)
-            SwipeAction(label = "Delete",color = Color(0xFFCC3333), onClick = onDelete)
+            SwipeAction(label = "Delete",color = theme.danger, onClick = onDelete)
         }
 
         // ── Content row (on top, slides left) ─────────────────────────────────
@@ -755,7 +755,7 @@ fun SwipeableFileRow(
                         onClick()
                     }
                 }
-                .padding(vertical = 8.dp)
+                .padding(vertical = theme.dimensions.spacingMedium)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -764,12 +764,12 @@ fun SwipeableFileRow(
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                     val icon = if (node.isDirectory) "📁" else "📄"
-                    Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Text(icon, fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
                     Text(
                         text       = node.name,
                         color      = theme.textPrimary,
-                        fontSize   = 14.sp,
+                        fontSize   = theme.typography.bodyLarge,
                         fontFamily = appFont,
                         fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
                         maxLines   = 1,
@@ -778,23 +778,23 @@ fun SwipeableFileRow(
                     )
                     val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
                     if (isSynced) {
-                        Spacer(Modifier.width(4.dp))
-                        Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                        Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
                     }
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(theme.dimensions.spacingSmall))
                     Text(
                         text     = " . ".repeat(50),
                         color    = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = 14.sp,
+                        fontSize = theme.typography.bodyLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         modifier = Modifier.weight(1f).alignByBaseline()
                     )
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(theme.dimensions.spacingMedium))
                 val details = if (node.isDirectory) "DIR"
                 else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-                Text(details, color = theme.textMuted, fontSize = 11.sp,
+                Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
@@ -852,7 +852,7 @@ fun SwipeableProjectRow(
         ) {
             SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = onShare)
             SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = onEdit)
-            SwipeAction(label = "Delete", color = Color(0xFFCC3333), onClick = onDelete)
+            SwipeAction(label = "Delete", color = theme.danger, onClick = onDelete)
         }
 
         // ── Content row (on top, slides left) ─────────────────────────────────
@@ -868,7 +868,7 @@ fun SwipeableProjectRow(
                         onClick()
                     }
                 }
-                .padding(vertical = 8.dp)
+                .padding(vertical = theme.dimensions.spacingMedium)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -876,12 +876,12 @@ fun SwipeableProjectRow(
                 verticalAlignment = Alignment.Bottom
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                    Text("📁", fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Text("📁", fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
                     Text(
                         text = project.name,
                         color = theme.textPrimary,
-                        fontSize = 14.sp,
+                        fontSize = theme.typography.bodyLarge,
                         fontFamily = appFont,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -889,21 +889,21 @@ fun SwipeableProjectRow(
                         modifier = Modifier.alignByBaseline()
                     )
                     if (project.isExternal) {
-                        Spacer(Modifier.width(4.dp))
-                        Text("☁️", fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                        Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
                     }
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(theme.dimensions.spacingSmall))
                     Text(
                         text = " . ".repeat(50),
                         color = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = 14.sp,
+                        fontSize = theme.typography.bodyLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         modifier = Modifier.weight(1f).alignByBaseline()
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                Text("DIR", color = theme.textMuted, fontSize = 11.sp,
+                Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                Text("DIR", color = theme.textMuted, fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
@@ -927,7 +927,7 @@ private fun SwipeAction(
         Text(
             text = label,
             color = Color.White,
-            fontSize = 11.sp,
+            fontSize = theme.typography.tiny,
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.SansSerif,
             textAlign = TextAlign.Center
@@ -975,7 +975,7 @@ fun InputDialog(
     var value by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        title = { Text(title, color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
         text = {
             OutlinedTextField(
                 value         = value,
@@ -1007,9 +1007,9 @@ fun CreateProjectDialog(
     var isExternal by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Project Workspace", color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        title = { Text("Add Project Workspace", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)) {
                 OutlinedTextField(
                     value         = name,
                     onValueChange = { name = it },
@@ -1025,12 +1025,12 @@ fun CreateProjectDialog(
                 ) {
                     Checkbox(checked = isExternal, onCheckedChange = { isExternal = it },
                         colors = CheckboxDefaults.colors(checkedColor = theme.accent))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
                     Column {
                         Text("External project ☁️", color = theme.textPrimary,
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            fontSize = theme.typography.body, fontWeight = FontWeight.Bold)
                         Text("Files stored in external / scoped storage.",
-                            color = theme.textMuted, fontSize = 10.sp)
+                            color = theme.textMuted, fontSize = theme.typography.tiny)
                     }
                 }
             }
@@ -1097,7 +1097,7 @@ fun SearchVfsNodeRow(
         ) {
             SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = { onShareClick(node) })
             SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = { onEditClick(node) })
-            SwipeAction(label = "Delete", color = Color(0xFFCC3333), onClick = { onDeleteClick(node) })
+            SwipeAction(label = "Delete", color = theme.danger, onClick = { onDeleteClick(node) })
         }
 
         Box(
@@ -1112,7 +1112,7 @@ fun SearchVfsNodeRow(
                         onNodeClick(node)
                     }
                 }
-                .padding(vertical = 8.dp)
+                .padding(vertical = theme.dimensions.spacingMedium)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1121,13 +1121,13 @@ fun SearchVfsNodeRow(
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                     val icon = if (node.isDirectory) "📁" else "📄"
-                    Text(icon, fontSize = 14.sp, modifier = Modifier.padding(bottom = 1.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Text(icon, fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
                     Column(modifier = Modifier.alignByBaseline()) {
                         Text(
                             text       = node.name,
                             color      = theme.textPrimary,
-                            fontSize   = 14.sp,
+                            fontSize   = theme.typography.bodyLarge,
                             fontFamily = appFont,
                             fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
                             maxLines   = 1,
@@ -1136,24 +1136,24 @@ fun SearchVfsNodeRow(
                         Text(
                             text = "in ${project.name}/${node.relativePath.substringBeforeLast('/', "")}",
                             color = theme.textMuted,
-                            fontSize = 10.sp,
+                            fontSize = theme.typography.tiny,
                             fontFamily = FontFamily.Monospace
                         )
                     }
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(theme.dimensions.spacingSmall))
                     Text(
                         text     = " . ".repeat(50),
                         color    = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = 14.sp,
+                        fontSize = theme.typography.bodyLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         modifier = Modifier.weight(1f).alignByBaseline()
                     )
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(theme.dimensions.spacingMedium))
                 val details = if (node.isDirectory) "DIR"
                 else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-                Text(details, color = theme.textMuted, fontSize = 11.sp,
+                Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
