@@ -74,6 +74,11 @@ class MainScreenViewModel(
             seedQuotes()
             refreshAllFiles()
             selectRandomQuote()
+            val selected = withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() }
+            if (selected != null) {
+                _activeProject.value = selected
+                loadDrillFiles(selected, "")
+            }
         }
     }
 
@@ -103,15 +108,6 @@ class MainScreenViewModel(
             relativePath = "Welcome.md", isDirectory = false,
             lastModified = System.currentTimeMillis(), syncState = "PENDING"))
 
-        storageManager.createDirectory(sandboxProj, "Work")
-        db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Work",
-            relativePath = "Work", isDirectory = true,
-            lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
-
-        storageManager.writeFile(sandboxProj, "Work/Notes.md", "## Meeting Notes\n\n- Project explorer architecture")
-        db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes.md",
-            relativePath = "Work/Notes.md", isDirectory = false,
-            lastModified = System.currentTimeMillis(), syncState = "PENDING"))
     }
 
     // ── Combined root list ─────────────────────────────────────────────────────

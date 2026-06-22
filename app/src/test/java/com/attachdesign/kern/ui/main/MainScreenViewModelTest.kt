@@ -60,7 +60,10 @@ class MainScreenViewModelTest {
         coEvery { quoteDao.getCount() } returns 1
         coEvery { quoteDao.getAllQuotes() } returns emptyList()
         coEvery { fileDao.getFilesForProjects(any()) } returns emptyList()
+        coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
+        coEvery { fileDao.insertFile(any()) } returns 1L
         coEvery { projectDao.getSelectedProject() } returns null
+        coEvery { projectDao.insertProject(any()) } returns 1L
     }
 
     @After

@@ -102,6 +102,9 @@ class MainScreenTest {
       )
     }
 
+    // Click on 'files' to navigate up/back to workspaces list
+    composeTestRule.onNodeWithText("files").performClick()
+
     // Click on the project item to navigate into the workspace directory
     composeTestRule.onNodeWithText("Main Project").performClick()
 
