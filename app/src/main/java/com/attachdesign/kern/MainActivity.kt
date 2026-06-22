@@ -15,7 +15,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.room.Room
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import com.attachdesign.kern.data.local.AppDatabase
+import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.theme.ModernAndroidMarkdownEditorTheme
 
@@ -51,6 +55,12 @@ class MainActivity : ComponentActivity() {
       "kern.db"
     ).fallbackToDestructiveMigration()
       .build()
+
+    lifecycleScope.launch(Dispatchers.IO) {
+      if (db.settingDao().getSetting("editor_font_family") == null) {
+        db.settingDao().insertSetting(SettingEntity("editor_font_family", "serif"))
+      }
+    }
 
     storageManager = StorageManager(applicationContext)
 
