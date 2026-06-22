@@ -92,10 +92,19 @@ fun EditorScreen(
         val isDualPane = widthDp >= theme.dimensions.dualPaneBreakpoint
 
         Row(modifier = Modifier.fillMaxSize()) {
+            val editorWeight by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isDualPane && uiState.isSidebarOpen) 0.65f else 1f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                ),
+                label = "editorWeight"
+            )
+
             // Editor Canvas (Main container)
             Column(
                 modifier = Modifier
-                    .weight(if (isDualPane && uiState.isSidebarOpen) 0.65f else 1f)
+                    .weight(editorWeight)
                     .fillMaxHeight()
             ) {
                 // Header (Breadcrumbs)
@@ -240,7 +249,30 @@ fun EditorScreen(
             }
 
             // Collapsible Sidebar (Metrics, Settings, Themes, Sync Logs)
-            if (uiState.isSidebarOpen) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = uiState.isSidebarOpen,
+                enter = androidx.compose.animation.slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    )
+                ) + androidx.compose.animation.fadeIn(
+                    animationSpec = androidx.compose.animation.core.spring(
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    )
+                ),
+                exit = androidx.compose.animation.slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = androidx.compose.animation.core.spring(
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    )
+                ) + androidx.compose.animation.fadeOut(
+                    animationSpec = androidx.compose.animation.core.spring(
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    )
+                )
+            ) {
                 SidebarPane(
                     modifier = Modifier
                         .fillMaxHeight()

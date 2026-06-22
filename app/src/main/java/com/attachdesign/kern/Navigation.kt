@@ -12,6 +12,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.ui.editor.EditorScreen
@@ -30,6 +37,29 @@ fun MainNavigation(
     NavDisplay(
         backStack = backStack,
         onBack = { backStack.removeLastOrNull() },
+        transitionSpec = {
+            scaleIn(
+                initialScale = 0.92f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            ) togetherWith fadeOut(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            )
+        },
+        popTransitionSpec = {
+            fadeIn(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            ) togetherWith (scaleOut(
+                targetScale = 0.92f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            ) + fadeOut(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            ))
+        },
         entryProvider = entryProvider {
             entry<Main> {
                 MainScreen(
