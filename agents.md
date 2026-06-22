@@ -52,3 +52,9 @@ When writing UI bindings, you must adhere strictly to the parameters defined in 
 * **Feature Branching:** Core features must be developed on dedicated feature branches and subsequently merged into the main development branch once verified.
 * **Standard Git Hygiene:** Adhere to basic Git hygiene standards as a standard in Antigravity, ensuring clean staging, logical commit history, and prevention of untracked build artifacts or temporary files in the repository.
 
+---
+
+### 7. Component Selection Invariant (Material 3 Preference)
+* **No Custom UI Controls:** Never write custom UI controls or components if an existing Material 3 (M3) or Material 3 Experimental (M3E) control can fulfill the required functionality.
+* **Explicit Exceptions:** If a custom control is absolutely necessary, the implementation plan must explicitly state its usage and provide a clear, documented rationale explaining why the standard M3/M3E controls are insufficient.
+
