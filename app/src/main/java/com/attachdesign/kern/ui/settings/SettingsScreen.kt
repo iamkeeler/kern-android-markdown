@@ -97,7 +97,7 @@ fun SettingsTabsContent(
             horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingExtraLarge),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val tabs = listOf("Styles", "Behavior", "Themes", "Sync", "About")
+            val tabs = listOf("Visuals", "Behavior", "Sync", "About")
             tabs.forEachIndexed { idx, tabName ->
                 val selected = activeTab == idx
                 Text(
@@ -127,7 +127,124 @@ fun SettingsTabsContent(
                 .verticalScroll(rememberScrollState())
         ) {
             when (activeTab) {
-                0 -> { // Styles tab
+                0 -> { // Visuals tab
+                    Text(
+                        text = "Presets",
+                        color = theme.textMuted,
+                        fontSize = theme.typography.tiny,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
+                    )
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
+
+                    val presets = listOf(
+                        "Cream & Charcoal (Default)" to ThemeEngine.DefaultLight,
+                        "Inky Charcoal (Default)"   to ThemeEngine.DefaultDark
+                    )
+                    presets.forEach { (name, presetJson) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        val jsonString = ThemeEngine.serialize(presetJson)
+                                        val id = db.themeDao().insertTheme(ThemeEntity(name = presetJson.name, jsonString = jsonString))
+                                        db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
+                                    }
+                                }
+                                .padding(vertical = theme.dimensions.spacingLarge),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                             Text(name, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
+                            val isCurrent = theme.name == presetJson.name
+                            if (isCurrent) {
+                                Text("Active", color = theme.accent, fontSize = theme.typography.tiny,
+                                    fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
+
+                    Text(
+                        text = "Custom",
+                        color = theme.textMuted,
+                        fontSize = theme.typography.tiny,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
+                    )
+                    Spacer(Modifier.height(theme.dimensions.spacingMedium))
+
+                    MinimalOutlinedButton(
+                        text = "Export Current Theme",
+                        onClick = {
+                            val currentThemeJson = AppThemeJson(
+                                name = theme.name,
+                                isDark = theme.isDark,
+                                backgroundHex   = String.format("#%06X", (0xFFFFFF and theme.background.value.toLong().toInt())),
+                                surfaceHex      = String.format("#%06X", (0xFFFFFF and theme.surface.value.toLong().toInt())),
+                                textPrimaryHex  = String.format("#%06X", (0xFFFFFF and theme.textPrimary.value.toLong().toInt())),
+                                textMutedHex    = String.format("#%06X", (0xFFFFFF and theme.textMuted.value.toLong().toInt())),
+                                accentHex       = String.format("#%06X", (0xFFFFFF and theme.accent.value.toLong().toInt())),
+                                codeBackgroundHex = String.format("#%06X", (0xFFFFFF and theme.codeBackground.value.toLong().toInt())),
+                                editorFontFamily = theme.editorFontFamily
+                            )
+                            val serialized = ThemeEngine.serialize(currentThemeJson)
+                            clipboardManager.setText(AnnotatedString(serialized))
+                            Toast.makeText(context, "Theme JSON copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        },
+                        theme = theme,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
+
+                    var inputThemeJson by remember { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = inputThemeJson,
+                        onValueChange = { inputThemeJson = it },
+                        label = { Text("Paste Theme JSON", fontSize = theme.typography.small, color = theme.textMuted) },
+                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = theme.typography.small, color = theme.textPrimary),
+                        modifier = Modifier.fillMaxWidth().height(theme.dimensions.themeInputHeight),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor   = theme.textPrimary,
+                            unfocusedTextColor = theme.textPrimary,
+                            focusedBorderColor   = theme.accent,
+                            unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
+                            focusedLabelColor   = theme.accent,
+                            unfocusedLabelColor = theme.textMuted,
+                            cursorColor = theme.accent
+                        )
+                    )
+                    Spacer(Modifier.height(theme.dimensions.spacingMedium))
+
+                    MinimalOutlinedButton(
+                        text = "Import Custom Theme",
+                        onClick = {
+                            if (inputThemeJson.isNotBlank()) {
+                                val themeJson = ThemeEngine.deserialize(inputThemeJson)
+                                if (themeJson != null) {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        val id = db.themeDao().insertTheme(ThemeEntity(name = themeJson.name, jsonString = inputThemeJson))
+                                        db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
+                                    }
+                                    Toast.makeText(context, "Custom theme applied successfully!", Toast.LENGTH_SHORT).show()
+                                    inputThemeJson = ""
+                                } else {
+                                    Toast.makeText(context, "Invalid Theme JSON schema!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        theme = theme,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
                     Text("View Mode", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     val modes = listOf(
@@ -480,121 +597,7 @@ fun SettingsTabsContent(
                           }
                       }
                 }
-                2 -> { // Themes tab
-                    Text(
-                        text = "Presets",
-                        color = theme.textMuted,
-                        fontSize = theme.typography.tiny,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
-                    )
-                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
-
-                    val presets = listOf(
-                        "Cream & Charcoal (Default)" to ThemeEngine.DefaultLight,
-                        "Inky Charcoal (Default)"   to ThemeEngine.DefaultDark
-                    )
-                    presets.forEach { (name, presetJson) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        val jsonString = ThemeEngine.serialize(presetJson)
-                                        val id = db.themeDao().insertTheme(ThemeEntity(name = presetJson.name, jsonString = jsonString))
-                                        db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
-                                    }
-                                }
-                                .padding(vertical = theme.dimensions.spacingLarge),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                             Text(name, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            val isCurrent = theme.name == presetJson.name
-                            if (isCurrent) {
-                                Text("Active", color = theme.accent, fontSize = theme.typography.tiny,
-                                    fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
-                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
-
-                    Text(
-                        text = "Custom",
-                        color = theme.textMuted,
-                        fontSize = theme.typography.tiny,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
-                    )
-                    Spacer(Modifier.height(theme.dimensions.spacingMedium))
-
-                    MinimalOutlinedButton(
-                        text = "Export Current Theme",
-                        onClick = {
-                            val currentThemeJson = AppThemeJson(
-                                name = theme.name,
-                                isDark = theme.isDark,
-                                backgroundHex   = String.format("#%06X", (0xFFFFFF and theme.background.value.toLong().toInt())),
-                                surfaceHex      = String.format("#%06X", (0xFFFFFF and theme.surface.value.toLong().toInt())),
-                                textPrimaryHex  = String.format("#%06X", (0xFFFFFF and theme.textPrimary.value.toLong().toInt())),
-                                textMutedHex    = String.format("#%06X", (0xFFFFFF and theme.textMuted.value.toLong().toInt())),
-                                accentHex       = String.format("#%06X", (0xFFFFFF and theme.accent.value.toLong().toInt())),
-                                codeBackgroundHex = String.format("#%06X", (0xFFFFFF and theme.codeBackground.value.toLong().toInt())),
-                                editorFontFamily = theme.editorFontFamily
-                            )
-                            val serialized = ThemeEngine.serialize(currentThemeJson)
-                            clipboardManager.setText(AnnotatedString(serialized))
-                            Toast.makeText(context, "Theme JSON copied to clipboard!", Toast.LENGTH_SHORT).show()
-                        },
-                        theme = theme,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
-
-                    var inputThemeJson by remember { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = inputThemeJson,
-                        onValueChange = { inputThemeJson = it },
-                        label = { Text("Paste Theme JSON", fontSize = theme.typography.small, color = theme.textMuted) },
-                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = theme.typography.small, color = theme.textPrimary),
-                        modifier = Modifier.fillMaxWidth().height(theme.dimensions.themeInputHeight),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor   = theme.textPrimary,
-                            unfocusedTextColor = theme.textPrimary,
-                            focusedBorderColor   = theme.accent,
-                            unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
-                            focusedLabelColor   = theme.accent,
-                            unfocusedLabelColor = theme.textMuted,
-                            cursorColor = theme.accent
-                        )
-                    )
-                    Spacer(Modifier.height(theme.dimensions.spacingMedium))
-
-                    MinimalOutlinedButton(
-                        text = "Import Custom Theme",
-                        onClick = {
-                            if (inputThemeJson.isNotBlank()) {
-                                val themeJson = ThemeEngine.deserialize(inputThemeJson)
-                                if (themeJson != null) {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        val id = db.themeDao().insertTheme(ThemeEntity(name = themeJson.name, jsonString = inputThemeJson))
-                                        db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
-                                    }
-                                    Toast.makeText(context, "Custom theme applied successfully!", Toast.LENGTH_SHORT).show()
-                                    inputThemeJson = ""
-                                } else {
-                                    Toast.makeText(context, "Invalid Theme JSON schema!", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
-                        theme = theme,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                3 -> { // Sync tab
+                2 -> { // Sync tab
                      Text("Cloud Sync", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
                      Spacer(Modifier.height(theme.dimensions.spacingMedium))
                      Text(
@@ -606,7 +609,7 @@ fun SettingsTabsContent(
                      )
                      Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                 }
-                4 -> { // About tab
+                3 -> { // About tab
                      Row(
                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingMedium),
                          horizontalArrangement = Arrangement.SpaceBetween,
