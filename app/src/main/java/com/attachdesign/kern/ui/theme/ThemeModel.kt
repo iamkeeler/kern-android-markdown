@@ -23,7 +23,7 @@ data class AppThemeJson(
     val warningHex: String = "#FFC04D",
     val infoHex: String = "#5CD6D6",
     val successHex: String = "#D65CD6", // using existing purple for passive, wait let's use more semantic ones for hemingway if needed, or just specific hemingway colors
-    val editorFontFamily: String = "Monospace"
+    val editorFontFamily: String = "serif"
 
 ) {
     fun toColorTheme(): AppColorTheme {
@@ -140,7 +140,7 @@ object ThemeEngine {
         textMutedHex = "#7A7060",
         accentHex = "#C8541A",
         codeBackgroundHex = "#E8E2D6",
-        editorFontFamily = "Monospace"
+        editorFontFamily = "serif"
     )
 
     val DefaultDark = AppThemeJson(
@@ -152,7 +152,7 @@ object ThemeEngine {
         textMutedHex = "#A89F8C",
         accentHex = "#C8541A",
         codeBackgroundHex = "#2A2925",
-        editorFontFamily = "Monospace"
+        editorFontFamily = "serif"
     )
 
     private val json = Json { ignoreUnknownKeys = true }
