@@ -63,6 +63,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
@@ -157,16 +158,8 @@ fun MainScreen(
             .safeDrawingPadding()
             .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
     ) {
-        // ── Brand Header (always visible) ──────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = theme.dimensions.spacingMedium, bottom = theme.dimensions.spacingSmall),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Kern title + quote — always shown
-            Column(modifier = Modifier.weight(1f)) {
+        TopAppBar(
+            title = {
                 Text(
                     text = "Kern",
                     fontSize = theme.typography.h1,
@@ -175,25 +168,8 @@ fun MainScreen(
                     color = theme.textPrimary,
                     letterSpacing = (theme.typography.h1.value * -0.02f).sp
                 )
-                state.activeQuote?.let { quote ->
-                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
-                    Text(
-                        text = "“${quote.text}” — ${quote.author}, ${quote.year}",
-                        fontSize = theme.typography.small,
-                        fontFamily = appFont,
-                        fontWeight = FontWeight.Normal,
-                        color = theme.textMuted,
-                        lineHeight = theme.typography.subtitle,
-                        modifier = Modifier.padding(end = theme.dimensions.spacingExtraLarge)
-                    )
-                }
-            }
-
-            // Icon row: search toggle + settings
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
+            },
+            actions = {
                 IconButton(onClick = {
                     isSearchActive = !isSearchActive
                     if (!isSearchActive) searchQuery = ""
@@ -208,7 +184,27 @@ fun MainScreen(
                         modifier = Modifier.size(theme.dimensions.iconMedium)
                     )
                 }
-            }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                titleContentColor = theme.textPrimary,
+                actionIconContentColor = theme.textMuted
+            ),
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        state.activeQuote?.let { quote ->
+            Spacer(Modifier.height(theme.dimensions.spacingSmall))
+            Text(
+                text = "“${quote.text}” — ${quote.author}, ${quote.year}",
+                fontSize = theme.typography.small,
+                fontFamily = appFont,
+                fontWeight = FontWeight.Normal,
+                color = theme.textMuted,
+                lineHeight = theme.typography.subtitle,
+                modifier = Modifier.padding(bottom = theme.dimensions.spacingSmall)
+            )
         }
 
         // ── Action Row (Breadcrumbs or Search) ─────────────────────────────────
