@@ -29,6 +29,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import androidx.documentfile.provider.DocumentFile
 import android.widget.Toast
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -74,6 +80,21 @@ fun MainScreen(
     var projectToDelete        by remember { mutableStateOf<ProjectEntity?>(null) }
     var nodeToRename           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
     var projectToRename        by remember { mutableStateOf<ProjectEntity?>(null) }
+
+    var selectedFolderUri by remember { mutableStateOf("") }
+    val openDocumentTreeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(it, takeFlags)
+                selectedFolderUri = it.toString()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -477,10 +498,16 @@ fun MainScreen(
     // ── Dialogs ────────────────────────────────────────────────────────────────
     if (state.isCreateProjectDialogOpen) {
         CreateProjectDialog(
-            theme     = theme,
-            onDismiss = { vm.setCreateDialogOpen(false) },
-            onCreate  = { name, isExternal ->
-                vm.createProject(name, isExternal)
+            theme          = theme,
+            selectedUri    = selectedFolderUri,
+            onSelectFolder = { openDocumentTreeLauncher.launch(null) },
+            onDismiss      = {
+                selectedFolderUri = ""
+                vm.setCreateDialogOpen(false)
+            },
+            onCreate       = { name, uri ->
+                vm.createProject(name, isExternal = uri.isNotEmpty(), path = uri.ifEmpty { null })
+                selectedFolderUri = ""
                 vm.setCreateDialogOpen(false)
             }
         )
@@ -999,11 +1026,19 @@ fun InputDialog(
 @Composable
 fun CreateProjectDialog(
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    selectedUri: String,
+    onSelectFolder: () -> Unit,
     onDismiss: () -> Unit,
-    onCreate: (name: String, isExternal: Boolean) -> Unit
+    onCreate: (name: String, uri: String) -> Unit
 ) {
-    var name       by remember { mutableStateOf("") }
-    var isExternal by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    LaunchedEffect(selectedUri) {
+        if (name.isBlank() && selectedUri.isNotEmpty()) {
+            val doc = DocumentFile.fromTreeUri(context, Uri.parse(selectedUri))
+            doc?.name?.let { name = it }
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Project Workspace", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
@@ -1018,24 +1053,28 @@ fun CreateProjectDialog(
                         focusedLabelColor  = theme.accent
                     )
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { isExternal = !isExternal }
-                ) {
-                    Checkbox(checked = isExternal, onCheckedChange = { isExternal = it },
-                        colors = CheckboxDefaults.colors(checkedColor = theme.accent))
-                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                    Column {
-                        Text("External project ☁️", color = theme.textPrimary,
-                            fontSize = theme.typography.body, fontWeight = FontWeight.Bold)
-                        Text("Files stored in external / scoped storage.",
-                            color = theme.textMuted, fontSize = theme.typography.tiny)
+                Column(verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)) {
+                    Text(
+                        text = if (selectedUri.isEmpty()) "Link local directory" else "Linked folder: ${Uri.parse(selectedUri).lastPathSegment?.substringAfterLast(":") ?: ""}",
+                        color = theme.accent,
+                        fontSize = theme.typography.body,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { onSelectFolder() }
+                            .padding(vertical = theme.dimensions.spacingSmall)
+                    )
+                    if (selectedUri.isNotEmpty()) {
+                        Text(
+                            text = "Files in this directory will be loaded.",
+                            color = theme.textMuted,
+                            fontSize = theme.typography.tiny
+                        )
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (name.isNotBlank()) onCreate(name, isExternal) }, enabled = name.isNotBlank()) {
+            TextButton(onClick = { if (name.isNotBlank()) onCreate(name, selectedUri) }, enabled = name.isNotBlank()) {
                 Text("Create", color = theme.accent)
             }
         },
