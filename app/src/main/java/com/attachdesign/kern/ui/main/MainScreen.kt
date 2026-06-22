@@ -712,6 +712,7 @@ private fun EmptyStateHint(
 
 // ── Swipe-to-reveal helpers ───────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableFileRow(
     node: VfsNode,
@@ -723,109 +724,99 @@ fun SwipeableFileRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val density = LocalDensity.current
-    val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
-    val offsetX = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-
-    Box(
-        modifier = Modifier.height(IntrinsicSize.Min)
-            .fillMaxWidth()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        kotlinx.coroutines.GlobalScope.launch {
-                            if (offsetX.value < -revealWidthPx / 2) {
-                                offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
-                            } else {
-                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                            }
-                        }
-                    },
-                    onDragCancel = {
-                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
-                    },
-                    onHorizontalDrag = { _, delta ->
-                        kotlinx.coroutines.GlobalScope.launch {
-                            val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
-                            offsetX.snapTo(target)
-                        }
-                    }
-                )
-            }
-    ) {
-        // ── Action strip (behind) ──────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(theme.dimensions.swipeActionRevealWidth)
-                .fillMaxHeight(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = onShare)
-            SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = onEdit)
-            SwipeAction(label = "Delete",color = theme.danger, theme = theme, onClick = onDelete)
+    val coroutineScope = rememberCoroutineScope()
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { dismissValue ->
+            dismissValue == SwipeToDismissBoxValue.EndToStart
         }
+    )
 
-        // ── Content row (on top, slides left) ─────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
-                .background(theme.background)
-                .clickable {
-                    if (offsetX.value != 0f) {
-                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
-                    } else {
-                        onClick()
-                    }
-                }
-                .padding(vertical = theme.dimensions.spacingMedium)
-        ) {
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                    val icon = if (node.isDirectory) "📁" else "📄"
-                    Text(icon, fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
-                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                    Text(
-                        text       = node.name,
-                        color      = theme.textPrimary,
-                        fontSize   = theme.typography.bodyLarge,
-                        fontFamily = appFont,
-                        fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
-                        maxLines   = 1,
-                        overflow   = TextOverflow.Ellipsis,
-                        modifier   = Modifier.alignByBaseline()
-                    )
-                    val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
-                    if (isSynced) {
-                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                        Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
+                    onShare()
+                    coroutineScope.launch { dismissState.reset() }
+                })
+                SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
+                    onEdit()
+                    coroutineScope.launch { dismissState.reset() }
+                })
+                SwipeAction(label = "Delete",color = theme.danger, theme = theme, onClick = {
+                    onDelete()
+                    coroutineScope.launch { dismissState.reset() }
+                })
+            }
+        },
+        content = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.background)
+                    .clickable {
+                        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
+                            coroutineScope.launch { dismissState.reset() }
+                        } else {
+                            onClick()
+                        }
                     }
-                    Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                    Text(
-                        text     = " . ".repeat(50),
-                        color    = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = theme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Clip,
-                        modifier = Modifier.weight(1f).alignByBaseline()
-                    )
+                    .padding(vertical = theme.dimensions.spacingMedium)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                        val icon = if (node.isDirectory) "📁" else "📄"
+                        Text(icon, fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
+                        Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                        Text(
+                            text       = node.name,
+                            color      = theme.textPrimary,
+                            fontSize   = theme.typography.bodyLarge,
+                            fontFamily = appFont,
+                            fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
+                            maxLines   = 1,
+                            overflow   = TextOverflow.Ellipsis,
+                            modifier   = Modifier.alignByBaseline()
+                        )
+                        val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
+                        if (isSynced) {
+                            Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                            Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                        }
+                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                        Text(
+                            text     = " . ".repeat(50),
+                            color    = theme.textMuted.copy(alpha = 0.4f),
+                            fontSize = theme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.weight(1f).alignByBaseline()
+                        )
+                    }
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                    val details = if (node.isDirectory) "DIR"
+                    else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
+                    Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
+                        fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
                 }
-                Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                val details = if (node.isDirectory) "DIR"
-                else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-                Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
-                    fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
-    }
+    )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableProjectRow(
     project: ProjectEntity,
@@ -836,103 +827,92 @@ fun SwipeableProjectRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val density = LocalDensity.current
-    val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
-    val offsetX = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-
-    Box(
-        modifier = Modifier.height(IntrinsicSize.Min)
-            .fillMaxWidth()
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        kotlinx.coroutines.GlobalScope.launch {
-                            if (offsetX.value < -revealWidthPx / 2) {
-                                offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
-                            } else {
-                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                            }
-                        }
-                    },
-                    onDragCancel = {
-                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
-                    },
-                    onHorizontalDrag = { _, delta ->
-                        kotlinx.coroutines.GlobalScope.launch {
-                            val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
-                            offsetX.snapTo(target)
-                        }
-                    }
-                )
-            }
-    ) {
-        // ── Action strip (behind) ──────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(theme.dimensions.swipeActionRevealWidth)
-                .fillMaxHeight(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = onShare)
-            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = onEdit)
-            SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = onDelete)
+    val coroutineScope = rememberCoroutineScope()
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { dismissValue ->
+            dismissValue == SwipeToDismissBoxValue.EndToStart
         }
+    )
 
-        // ── Content row (on top, slides left) ─────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
-                .background(theme.background)
-                .clickable {
-                    if (offsetX.value != 0f) {
-                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
-                    } else {
-                        onClick()
-                    }
-                }
-                .padding(vertical = theme.dimensions.spacingMedium)
-        ) {
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                    Text("📁", fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
-                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                    Text(
-                        text = project.name,
-                        color = theme.textPrimary,
-                        fontSize = theme.typography.bodyLarge,
-                        fontFamily = appFont,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.alignByBaseline()
-                    )
-                    if (project.isExternal) {
-                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                        Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
+                    onShare()
+                    coroutineScope.launch { dismissState.reset() }
+                })
+                SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
+                    onEdit()
+                    coroutineScope.launch { dismissState.reset() }
+                })
+                SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = {
+                    onDelete()
+                    coroutineScope.launch { dismissState.reset() }
+                })
+            }
+        },
+        content = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.background)
+                    .clickable {
+                        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
+                            coroutineScope.launch { dismissState.reset() }
+                        } else {
+                            onClick()
+                        }
                     }
-                    Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                    Text(
-                        text = " . ".repeat(50),
-                        color = theme.textMuted.copy(alpha = 0.4f),
-                        fontSize = theme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Clip,
-                        modifier = Modifier.weight(1f).alignByBaseline()
-                    )
+                    .padding(vertical = theme.dimensions.spacingMedium)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                        Text("📁", fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
+                        Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                        Text(
+                            text = project.name,
+                            color = theme.textPrimary,
+                            fontSize = theme.typography.bodyLarge,
+                            fontFamily = appFont,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.alignByBaseline()
+                        )
+                        if (project.isExternal) {
+                            Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                            Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                        }
+                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                        Text(
+                            text = " . ".repeat(50),
+                            color = theme.textMuted.copy(alpha = 0.4f),
+                            fontSize = theme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.weight(1f).alignByBaseline()
+                        )
+                    }
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                    Text("DIR", color = theme.textMuted, fontSize = theme.typography.tiny,
+                        fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
                 }
-                Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                Text("DIR", color = theme.textMuted, fontSize = theme.typography.tiny,
-                    fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
-    }
+    )
 }
 
 @Composable

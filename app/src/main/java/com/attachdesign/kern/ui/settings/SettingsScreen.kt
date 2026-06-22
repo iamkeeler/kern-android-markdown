@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,26 +90,36 @@ fun SettingsTabsContent(
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Tabs Selector
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(vertical = theme.dimensions.spacingSmall),
-            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingExtraLarge),
-            verticalAlignment = Alignment.CenterVertically
+        ScrollableTabRow(
+            selectedTabIndex = activeTab,
+            containerColor = Color.Transparent,
+            contentColor = theme.accent,
+            edgePadding = 0.dp,
+            indicator = { tabPositions ->
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[activeTab]),
+                    color = theme.accent
+                )
+            },
+            divider = {},
+            modifier = Modifier.fillMaxWidth()
         ) {
             val tabs = listOf("Visuals", "Behavior", "Sync", "About")
             tabs.forEachIndexed { idx, tabName ->
                 val selected = activeTab == idx
-                Text(
-                    text = tabName,
-                    color = if (selected) theme.accent else theme.textMuted,
-                    fontSize = theme.typography.body,
-                    fontFamily = appFont,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier
-                        .clickable { activeTab = idx }
-                        .padding(vertical = theme.dimensions.elevationMedium)
+                Tab(
+                    selected = selected,
+                    onClick = { activeTab = idx },
+                    text = {
+                        Text(
+                            text = tabName,
+                            fontSize = theme.typography.body,
+                            fontFamily = appFont,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    selectedContentColor = theme.accent,
+                    unselectedContentColor = theme.textMuted
                 )
             }
         }
@@ -783,17 +794,19 @@ fun MinimalOutlinedButton(
     val textColor = if (isPrimary) theme.background else theme.textPrimary
     val borderColor = if (isPrimary) theme.accent else theme.textMuted.copy(alpha = 0.3f)
 
-    Box(
-        modifier = modifier
-            .border(border = BorderStroke(theme.dimensions.borderWidth, borderColor), shape = RoundedCornerShape(theme.dimensions.spacingSmall))
-            .background(bgColor, RoundedCornerShape(theme.dimensions.spacingSmall))
-            .clickable { onClick() }
-            .padding(horizontal = theme.dimensions.spacingExtraLarge, vertical = theme.dimensions.spacingMedium),
-        contentAlignment = Alignment.Center
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(theme.dimensions.spacingSmall),
+        border = BorderStroke(theme.dimensions.borderWidth, borderColor),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = bgColor,
+            contentColor = textColor
+        ),
+        contentPadding = PaddingValues(horizontal = theme.dimensions.spacingExtraLarge, vertical = theme.dimensions.spacingMedium)
     ) {
         Text(
             text = text,
-            color = textColor,
             fontSize = theme.typography.bodyLarge,
             fontFamily = appFont,
             fontWeight = if (isPrimary) FontWeight.Medium else FontWeight.Normal
@@ -813,17 +826,19 @@ fun MinimalOutlinedButtonSmall(
     val bg        = if (selected) theme.accent.copy(alpha = 0.15f) else Color.Transparent
     val textColor = if (selected) theme.accent else theme.textMuted
 
-    Box(
-        modifier = modifier
-            .border(border = BorderStroke(theme.dimensions.borderWidth, border), shape = RoundedCornerShape(theme.dimensions.spacingSmall))
-            .background(bg, RoundedCornerShape(theme.dimensions.spacingSmall))
-            .clickable { onClick() }
-            .padding(horizontal = theme.dimensions.spacingLarge, vertical = theme.dimensions.elevationMedium),
-        contentAlignment = Alignment.Center
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.defaultMinSize(minWidth = 1.dp, minHeight = 1.dp),
+        shape = RoundedCornerShape(theme.dimensions.spacingSmall),
+        border = BorderStroke(theme.dimensions.borderWidth, border),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = bg,
+            contentColor = textColor
+        ),
+        contentPadding = PaddingValues(horizontal = theme.dimensions.spacingLarge, vertical = theme.dimensions.elevationMedium)
     ) {
         Text(
             text = text,
-            color = textColor,
             fontSize = theme.typography.small,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Medium
