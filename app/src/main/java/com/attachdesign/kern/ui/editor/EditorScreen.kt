@@ -246,8 +246,7 @@ fun EditorScreen(
                         .fillMaxHeight()
                         .width(if (isDualPane) theme.dimensions.sidebarWidth else widthDp)
                         .background(uiState.activeTheme.surface)
-                        .statusBarsPadding()
-                        .padding(top = 4.dp),
+                        .statusBarsPadding(),
                     state = uiState,
                     viewModel = viewModel,
                     onCloseClick = { viewModel.toggleSidebar(SidebarMode.CLOSED) }
@@ -339,8 +338,7 @@ fun EditorHeader(
             titleContentColor = theme.textPrimary,
             navigationIconContentColor = theme.accent,
             actionIconContentColor = theme.textMuted
-        ),
-        modifier = Modifier.padding(top = 4.dp)
+        )
     )
 }
 
