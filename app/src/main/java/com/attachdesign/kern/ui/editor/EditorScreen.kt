@@ -87,7 +87,13 @@ fun EditorScreen(
         viewModel.loadFile(projectId, filePath, focusOnStart)
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize().background(uiState.activeTheme.background)) {
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .background(uiState.activeTheme.background)
+            .statusBarsPadding()
+            .padding(top = 4.dp)
+    ) {
         val widthDp = maxWidth
         val isDualPane = widthDp >= theme.dimensions.dualPaneBreakpoint
 
