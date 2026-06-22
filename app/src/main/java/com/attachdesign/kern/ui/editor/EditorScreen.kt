@@ -87,13 +87,7 @@ fun EditorScreen(
         viewModel.loadFile(projectId, filePath, focusOnStart)
     }
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(uiState.activeTheme.background)
-            .statusBarsPadding()
-            .padding(top = 4.dp)
-    ) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize().background(uiState.activeTheme.background)) {
         val widthDp = maxWidth
         val isDualPane = widthDp >= theme.dimensions.dualPaneBreakpoint
 
@@ -251,7 +245,9 @@ fun EditorScreen(
                     modifier = Modifier
                         .fillMaxHeight()
                         .width(if (isDualPane) theme.dimensions.sidebarWidth else widthDp)
-                        .background(uiState.activeTheme.surface),
+                        .background(uiState.activeTheme.surface)
+                        .statusBarsPadding()
+                        .padding(top = 4.dp),
                     state = uiState,
                     viewModel = viewModel,
                     onCloseClick = { viewModel.toggleSidebar(SidebarMode.CLOSED) }
@@ -261,6 +257,7 @@ fun EditorScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorHeader(
     filePath: String,
@@ -270,19 +267,19 @@ fun EditorHeader(
     onSettingsToggle: () -> Unit,
     onMoreOptionsAction: (String) -> Unit = {}
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(theme.dimensions.spacingExtraLarge),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState())
-        ) {
+    val fileName = filePath.split('/').last()
+
+    TopAppBar(
+        title = {
+            Text(
+                text = fileName,
+                color = theme.textPrimary,
+                fontSize = theme.typography.h2,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        navigationIcon = {
             IconButton(
                 onClick = onBackClick,
                 modifier = Modifier.padding(end = theme.dimensions.spacingSmall)
@@ -294,24 +291,8 @@ fun EditorHeader(
                     modifier = Modifier.size(theme.dimensions.iconMedium)
                 )
             }
-
-            Spacer(Modifier.width(theme.dimensions.spacingMedium))
-
-            val fileName = filePath.split('/').last()
-
-            Text(
-                text = fileName,
-                color = theme.textPrimary,
-                fontSize = theme.typography.h2,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
-        ) {
+        },
+        actions = {
             IconButton(
                 onClick = onMetricsToggle,
                 modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
@@ -352,8 +333,15 @@ fun EditorHeader(
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false; onMoreOptionsAction("Delete") })
                 }
             }
-        }
-    }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            titleContentColor = theme.textPrimary,
+            navigationIconContentColor = theme.accent,
+            actionIconContentColor = theme.textMuted
+        ),
+        modifier = Modifier.padding(top = 4.dp)
+    )
 }
 
 @Composable
