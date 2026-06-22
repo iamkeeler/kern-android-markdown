@@ -486,7 +486,7 @@ fun SettingsTabsContent(
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.(theme.typography.tiny.value / 2).sp
+                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
                     )
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
 
@@ -527,7 +527,7 @@ fun SettingsTabsContent(
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.(theme.typography.tiny.value / 2).sp
+                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
                     )
                     Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
@@ -636,7 +636,7 @@ fun SettingsTabsContent(
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.(theme.typography.tiny.value / 2).sp
+                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
                     )
                     Spacer(Modifier.height(theme.dimensions.elevationMedium))
 

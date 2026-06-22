@@ -79,6 +79,7 @@ fun EditorScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
+    val theme = uiState.activeTheme
 
     // Load file if changed
     LaunchedEffect(projectId, filePath) {
@@ -363,6 +364,7 @@ fun EditorCanvas(
     textFieldValues: Map<Int, TextFieldValue>,
     viewModel: EditorViewModel
 ) {
+    val theme = state.activeTheme
     val lazyListState = rememberLazyListState()
 
     LaunchedEffect(state.focusedParagraphIndex) {

@@ -621,7 +621,7 @@ private fun ProjectSectionHeader(
                 fontSize = theme.typography.tiny,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.(theme.typography.tiny.value / 2).sp
+                letterSpacing = (theme.typography.tiny.value * 0.136f).sp
             )
             if (isSelected) {
                 Text(
@@ -737,9 +737,9 @@ fun SwipeableFileRow(
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
-            SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), onClick = onShare)
-            SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), onClick = onEdit)
-            SwipeAction(label = "Delete",color = theme.danger, onClick = onDelete)
+            SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = onShare)
+            SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = onEdit)
+            SwipeAction(label = "Delete",color = theme.danger, theme = theme, onClick = onDelete)
         }
 
         // ── Content row (on top, slides left) ─────────────────────────────────
@@ -850,9 +850,9 @@ fun SwipeableProjectRow(
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
-            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = onShare)
-            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = onEdit)
-            SwipeAction(label = "Delete", color = theme.danger, onClick = onDelete)
+            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = onShare)
+            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = onEdit)
+            SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = onDelete)
         }
 
         // ── Content row (on top, slides left) ─────────────────────────────────
@@ -914,6 +914,7 @@ fun SwipeableProjectRow(
 private fun SwipeAction(
     label: String,
     color: Color,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     onClick: () -> Unit
 ) {
     Box(
@@ -1095,9 +1096,9 @@ fun SearchVfsNodeRow(
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
-            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), onClick = { onShareClick(node) })
-            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), onClick = { onEditClick(node) })
-            SwipeAction(label = "Delete", color = theme.danger, onClick = { onDeleteClick(node) })
+            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = { onShareClick(node) })
+            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = { onEditClick(node) })
+            SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = { onDeleteClick(node) })
         }
 
         Box(
