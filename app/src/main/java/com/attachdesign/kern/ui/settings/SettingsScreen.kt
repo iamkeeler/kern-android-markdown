@@ -255,8 +255,16 @@ fun SettingsTabsContent(
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
                     var sliderScale by remember(currentFontSizeScale) { mutableStateOf(currentFontSizeScale) }
+                    
+                    val sizeLabel = when {
+                        sliderScale <= 0.8f -> "Small"
+                        sliderScale <= 1.0f -> "Medium"
+                        sliderScale <= 1.2f -> "Large"
+                        else -> "Extra Large"
+                    }
+                    
                     Text(
-                        text = "Editor Font Size: ${(sliderScale * 100).toInt()}%",
+                        text = "Editor Font Size: $sizeLabel",
                         color = theme.textPrimary,
                         fontSize = theme.typography.bodyLarge,
                         fontFamily = appFont,
@@ -271,7 +279,8 @@ fun SettingsTabsContent(
                                 db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", sliderScale.toString()))
                             }
                         },
-                        valueRange = 0.6f..1.8f,
+                        valueRange = 0.8f..1.4f,
+                        steps = 2,
                         colors = SliderDefaults.colors(
                             thumbColor = theme.accent,
                             activeTrackColor = theme.accent,
@@ -279,6 +288,15 @@ fun SettingsTabsContent(
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = theme.dimensions.spacingSmall),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Small", color = theme.textMuted, fontSize = theme.typography.tiny)
+                        Text("Medium", color = theme.textMuted, fontSize = theme.typography.tiny)
+                        Text("Large", color = theme.textMuted, fontSize = theme.typography.tiny)
+                        Text("Extra Large", color = theme.textMuted, fontSize = theme.typography.tiny)
+                    }
 
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
@@ -725,44 +743,53 @@ fun SettingsScreen(
          else -> FontFamily.Default
      }
 
-     Column(
-         modifier = modifier
-             .fillMaxSize()
-             .background(theme.background)
-             .safeDrawingPadding()
-             .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
+     var isVisible by remember { mutableStateOf(false) }
+     LaunchedEffect(Unit) { isVisible = true }
+
+     androidx.compose.animation.AnimatedVisibility(
+         visible = isVisible,
+         enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(50)),
+         exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(50)),
+         modifier = modifier.fillMaxSize().background(theme.background)
      ) {
-         // ── Page title row ────────────────────────────────────────────────────
-         Row(
+         Column(
              modifier = Modifier
-                 .fillMaxWidth()
-                 .padding(top = theme.dimensions.spacingMedium, bottom = theme.dimensions.spacingMedium),
-             verticalAlignment = Alignment.CenterVertically,
-             horizontalArrangement = Arrangement.SpaceBetween
+                 .fillMaxSize()
+                 .safeDrawingPadding()
+                 .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
          ) {
-             Text(
-                 text = "Settings",
-                 fontSize = theme.typography.h1,
-                 fontFamily = appFont,
-                 fontWeight = FontWeight.Light,
-                 color = theme.textPrimary,
-                 letterSpacing = (-0.5).sp
-             )
-            MinimalOutlinedButton(
-                text = "Back",
-                onClick = onBackClick,
-                theme = theme
+             // ── Page title row ────────────────────────────────────────────────────
+             Row(
+                 modifier = Modifier
+                     .fillMaxWidth()
+                     .padding(top = theme.dimensions.spacingMedium, bottom = theme.dimensions.spacingMedium),
+                 verticalAlignment = Alignment.CenterVertically,
+                 horizontalArrangement = Arrangement.SpaceBetween
+             ) {
+                 Text(
+                     text = "Settings",
+                     fontSize = theme.typography.h1,
+                     fontFamily = appFont,
+                     fontWeight = FontWeight.Light,
+                     color = theme.textPrimary,
+                     letterSpacing = (-0.5).sp
+                 )
+                MinimalOutlinedButton(
+                    text = "Back",
+                    onClick = onBackClick,
+                    theme = theme
+                )
+            }
+    
+            Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+    
+            // Shared settings component
+            SettingsTabsContent(
+                db = db,
+                theme = theme,
+                modifier = Modifier.weight(1f)
             )
         }
-
-        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-
-        // Shared settings component
-        SettingsTabsContent(
-            db = db,
-            theme = theme,
-            modifier = Modifier.weight(1f)
-        )
     }
 }
 
