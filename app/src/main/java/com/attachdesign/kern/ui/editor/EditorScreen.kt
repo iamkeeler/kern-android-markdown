@@ -277,7 +277,7 @@ fun EditorHeader(
                 .horizontalScroll(rememberScrollState())
         ) {
             Text(
-                text = "~",
+                text = "←",
                 color = theme.accent,
                 fontSize = theme.typography.h2,
                 fontFamily = FontFamily.Monospace,
@@ -287,19 +287,9 @@ fun EditorHeader(
                     .padding(horizontal = theme.dimensions.elevationMedium, vertical = theme.dimensions.spacingMedium)
             )
 
-            val segments = filePath.split('/')
-            val folders = if (segments.size > 1) segments.dropLast(1).joinToString("/") + "/" else ""
-            val fileName = segments.last()
+            Spacer(Modifier.width(theme.dimensions.spacingMedium))
 
-            if (folders.isNotEmpty()) {
-                Text(
-                    text = "/$folders",
-                    color = theme.textMuted,
-                    fontSize = theme.typography.h2,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            val fileName = filePath.split('/').last()
 
             Text(
                 text = fileName,
