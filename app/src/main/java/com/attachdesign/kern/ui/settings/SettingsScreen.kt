@@ -176,12 +176,116 @@ fun SettingsTabsContent(
                         }
                     }
 
-                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+                    Text("View Mode", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
+                    val modes = listOf(
+                        "RENDERED"           to "Live Preview",
+                        "SYNTAX_HIGHLIGHTED" to "Syntax Highlighted",
+                        "RAW_PLAIN_TEXT"     to "Raw Plain-Text"
+                    )
+                    modes.forEach { (mode, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                     coroutineScope.launch(Dispatchers.IO) {
+                                         db.settingDao().insertSetting(SettingEntity("view_mode", mode))
+                                     }
+                                }
+                                .padding(vertical = theme.dimensions.spacingMedium),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
+                            RadioButton(
+                                selected = currentViewMode == mode,
+                                onClick = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        db.settingDao().insertSetting(SettingEntity("view_mode", mode))
+                                    }
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+                    Text("Editor Font", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
+                    val fonts = listOf(
+                        "serif"      to "Serif (Book)",
+                        "sans-serif" to "Sans-Serif (Modern)",
+                        "monospace"  to "Monospace (Code)"
+                    )
+                    fonts.forEach { (font, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
+                                    }
+                                }
+                                .padding(vertical = theme.dimensions.spacingMedium),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
+                            RadioButton(
+                                selected = currentFontFamily == font,
+                                onClick = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
+                                    }
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+                    var sliderScale by remember(currentFontSizeScale) { mutableStateOf(currentFontSizeScale) }
+                    Text(
+                        text = "Editor Font Size: ${(sliderScale * 100).toInt()}%",
+                        color = theme.textPrimary,
+                        fontSize = theme.typography.bodyLarge,
+                        fontFamily = appFont,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
+                    Slider(
+                        value = sliderScale,
+                        onValueChange = { sliderScale = it },
+                        onValueChangeFinished = {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", sliderScale.toString()))
+                            }
+                        },
+                        valueRange = 0.6f..1.8f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = theme.accent,
+                            activeTrackColor = theme.accent,
+                            inactiveTrackColor = theme.textMuted.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
                     Text(
-                        text = "Custom",
+                        text = "Custom Theme",
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
@@ -251,118 +355,6 @@ fun SettingsTabsContent(
                         theme = theme,
                         modifier = Modifier.fillMaxWidth()
                     )
-
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-
-                    Text("View Mode", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
-                    val modes = listOf(
-                        "RENDERED"           to "Live Preview",
-                        "SYNTAX_HIGHLIGHTED" to "Syntax Highlighted",
-                        "RAW_PLAIN_TEXT"     to "Raw Plain-Text"
-                    )
-                    modes.forEach { (mode, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("view_mode", mode))
-                                    }
-                                }
-                                .padding(vertical = theme.dimensions.spacingMedium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            RadioButton(
-                                selected = currentViewMode == mode,
-                                onClick = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("view_mode", mode))
-                                    }
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-
-                    Text("Editor Font", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
-                    val fonts = listOf(
-                        "serif"      to "Serif (Book)",
-                        "sans-serif" to "Sans-Serif (Modern)",
-                        "monospace"  to "Monospace (Code)"
-                    )
-                    fonts.forEach { (font, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
-                                    }
-                                }
-                                .padding(vertical = theme.dimensions.spacingMedium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            RadioButton(
-                                selected = currentFontFamily == font,
-                                onClick = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
-                                    }
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-
-                    Text("Editor Font Size", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
-                    val fontSizes = listOf(
-                        0.8f to "Small",
-                        1.0f to "Medium",
-                        1.2f to "Large",
-                        1.4f to "Extra Large"
-                    )
-                    fontSizes.forEach { (scale, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", scale.toString()))
-                                    }
-                                }
-                                .padding(vertical = theme.dimensions.spacingMedium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            RadioButton(
-                                selected = currentFontSizeScale == scale,
-                                onClick = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", scale.toString()))
-                                    }
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
-                            )
-                        }
-                    }
                 }
                 1 -> { // Behavior tab
                     Row(

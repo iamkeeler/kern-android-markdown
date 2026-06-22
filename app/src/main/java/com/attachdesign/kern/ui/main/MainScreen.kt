@@ -62,6 +62,11 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,6 +105,9 @@ fun MainScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var isSortAscending by remember { mutableStateOf(true) }
+    var draggedNode by remember { mutableStateOf<VfsNode?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    val folderBounds = remember { mutableStateMapOf<String, Rect>() }
 
     var backPressedOnce by remember { mutableStateOf(false) }
     BackHandler {
@@ -207,138 +215,188 @@ fun MainScreen(
             )
         }
 
-        // ── Action Row (Breadcrumbs or Search) ─────────────────────────────────
-        HorizontalDivider(
-            color = theme.textMuted.copy(alpha = 0.15f),
-            thickness = theme.dimensions.borderWidth,
-            modifier = Modifier.padding(top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingMedium)
-        )
+        if (isSearchActive) {
+            SearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                onSearch = {},
+                active = true,
+                onActiveChange = { active ->
+                    isSearchActive = active
+                    if (!active) searchQuery = ""
+                },
+                placeholder = { Text("Search files...", color = theme.textMuted) },
+                leadingIcon = { Text("🔍", fontSize = theme.typography.title) },
+                trailingIcon = {
+                    IconButton(onClick = {
+                        isSearchActive = false
+                        searchQuery = ""
+                    }) {
+                        Text("✕", fontSize = theme.typography.title)
+                    }
+                },
+                colors = SearchBarDefaults.colors(
+                    containerColor = theme.surface,
+                    inputFieldColors = TextFieldDefaults.colors(
+                        focusedTextColor = theme.textPrimary,
+                        unfocusedTextColor = theme.textPrimary,
+                        cursorColor = theme.accent,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                ),
+                modifier = Modifier.fillMaxWidth().padding(bottom = theme.dimensions.spacingMedium)
+            ) {
+                val filteredItems = remember(state.allItems, searchQuery, isSortAscending) {
+                    state.allItems.filterIsInstance<FileListItem.FileRow>().filter {
+                        it.node.name.contains(searchQuery, ignoreCase = true)
+                    }.let { list ->
+                        if (isSortAscending) list.sortedBy { it.node.name.lowercase() }
+                        else list.sortedByDescending { it.node.name.lowercase() }
+                    }
+                }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(theme.dimensions.iconHuge)
-                .padding(bottom = theme.dimensions.spacingMedium),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            androidx.compose.animation.AnimatedContent(
-                targetState = isSearchActive,
-                label = "SearchBreadcrumbsTransition"
-            ) { searching ->
-                if (searching) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search files...", color = theme.textMuted, fontSize = theme.typography.body) },
-                        textStyle = TextStyle(fontSize = theme.typography.body, color = theme.textPrimary),
-                        modifier = Modifier.fillMaxSize(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = theme.textPrimary,
-                            unfocusedTextColor = theme.textPrimary,
-                            focusedBorderColor = theme.accent,
-                            unfocusedBorderColor = theme.textMuted.copy(alpha = 0.3f),
-                            cursorColor = theme.accent
-                        )
+                if (filteredItems.isEmpty()) {
+                    EmptyStateHint(
+                        title = "No matches found",
+                        body = "Try searching for another filename.",
+                        theme = theme
                     )
                 } else {
-                    Row(
+                    LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalArrangement = Arrangement.Top
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
-                        ) {
-                            // Clear back button
-                            if (state.activeProject != null) {
-                                Text(
-                                    text = "←",
-                                    color = theme.accent,
-                                    fontSize = theme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .clickable { vm.navigateUp() }
-                                        .padding(end = theme.dimensions.spacingMedium)
-                                )
-                            }
+                        items(filteredItems) { item ->
+                            SearchVfsNodeRow(
+                                node = item.node,
+                                project = item.project,
+                                theme = theme,
+                                onNodeClick = { clicked ->
+                                    if (clicked.isDirectory) {
+                                        vm.navigateToFolder(clicked, item.project)
+                                        isSearchActive = false
+                                        searchQuery = ""
+                                    } else {
+                                        onItemClick(EditorKey(item.project.id, clicked.relativePath))
+                                    }
+                                },
+                                onShareClick = { clicked -> shareNode(context, clicked, item.project, storageManager) },
+                                onEditClick = { clicked -> nodeToRename = Pair(clicked, item.project) },
+                                onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            HorizontalDivider(
+                color = theme.textMuted.copy(alpha = 0.15f),
+                thickness = theme.dimensions.borderWidth,
+                modifier = Modifier.padding(top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingMedium)
+            )
 
-                            // files / notes / work
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(theme.dimensions.iconHuge)
+                    .padding(bottom = theme.dimensions.spacingMedium),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
+                    ) {
+                        if (state.activeProject != null) {
                             Text(
-                                text = "files",
-                                color = if (state.activeProject == null) theme.textPrimary else theme.accent,
+                                text = "←",
+                                color = theme.accent,
+                                fontSize = theme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable { vm.navigateUp() }
+                                    .padding(end = theme.dimensions.spacingMedium)
+                            )
+                        }
+
+                        Text(
+                            text = "files",
+                            color = if (state.activeProject == null) theme.textPrimary else theme.accent,
+                            fontSize = theme.typography.small,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.clickable {
+                                if (state.activeProject != null) {
+                                    vm.navigateUpToRoot()
+                                }
+                            }
+                        )
+
+                        state.activeProject?.let { proj ->
+                            Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
+
+                            val isProjRoot = state.currentPath.isEmpty()
+                            Text(
+                                text = proj.name.lowercase(),
+                                color = if (isProjRoot) theme.textPrimary else theme.accent,
                                 fontSize = theme.typography.small,
                                 fontFamily = FontFamily.Monospace,
-                                fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.clickable {
-                                    if (state.activeProject != null) {
-                                        vm.navigateUpToRoot()
+                                    if (!isProjRoot) {
+                                        vm.navigateToFolderRoot(proj)
                                     }
                                 }
                             )
 
-                            state.activeProject?.let { proj ->
-                                Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
-
-                                val isProjRoot = state.currentPath.isEmpty()
-                                Text(
-                                    text = proj.name.lowercase(),
-                                    color = if (isProjRoot) theme.textPrimary else theme.accent,
-                                    fontSize = theme.typography.small,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier.clickable {
-                                        if (!isProjRoot) {
-                                            vm.navigateToFolderRoot(proj)
-                                        }
-                                    }
-                                )
-
-                                if (state.currentPath.isNotEmpty()) {
-                                    val segments = state.currentPath.split('/')
-                                    segments.forEachIndexed { index, segment ->
-                                        Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
-                                        val isLast = index == segments.lastIndex
-                                        val segmentPath = segments.take(index + 1).joinToString("/")
-                                        Text(
-                                            text = segment,
-                                            color = if (isLast) theme.textPrimary else theme.accent,
-                                            fontSize = theme.typography.small,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
-                                            modifier = Modifier.clickable {
-                                                if (!isLast) {
-                                                    vm.navigateToSegment(proj, segmentPath)
-                                                }
+                            if (state.currentPath.isNotEmpty()) {
+                                val segments = state.currentPath.split('/')
+                                segments.forEachIndexed { index, segment ->
+                                    Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
+                                    val isLast = index == segments.lastIndex
+                                    val segmentPath = segments.take(index + 1).joinToString("/")
+                                    Text(
+                                        text = segment,
+                                        color = if (isLast) theme.textPrimary else theme.accent,
+                                        fontSize = theme.typography.small,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.clickable {
+                                            if (!isLast) {
+                                                vm.navigateToSegment(proj, segmentPath)
                                             }
-                                        )
-                                    }
+                                        }
+                                    )
                                 }
                             }
                         }
+                    }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium), verticalAlignment = Alignment.CenterVertically) {
-                            if (state.activeProject == null) {
-                                Text(
-                                    text = "[+ workspace]",
-                                    color = theme.accent,
-                                    fontSize = theme.typography.tiny,
-                                    fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
-                                )
-                            }
-
+                    Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium), verticalAlignment = Alignment.CenterVertically) {
+                        if (state.activeProject == null) {
                             Text(
-                                text = if (isSortAscending) "[A-Z]" else "[Z-A]",
+                                text = "[+ workspace]",
                                 color = theme.accent,
                                 fontSize = theme.typography.tiny,
                                 fontFamily = FontFamily.Monospace,
-                                modifier = Modifier
-                                    .clickable { isSortAscending = !isSortAscending }
-                                    .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingMedium)
+                                modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
                             )
                         }
+
+                        Text(
+                            text = if (isSortAscending) "[A-Z]" else "[Z-A]",
+                            color = theme.accent,
+                            fontSize = theme.typography.tiny,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .clickable { isSortAscending = !isSortAscending }
+                                .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingMedium)
+                        )
                     }
                 }
             }
@@ -347,56 +405,13 @@ fun MainScreen(
         // ── Single unified list and floating buttons container ─────────────────
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             AnimatedContent(
-                targetState = Triple(state.activeProject, state.currentPath, isSearchActive && searchQuery.isNotEmpty()),
+                targetState = Pair(state.activeProject, state.currentPath),
                 transitionSpec = {
                     fadeIn(animationSpec = tween(50)) togetherWith fadeOut(animationSpec = tween(50))
                 },
                 label = "FileExplorerTransition"
-            ) { (activeProj, currentPath, isSearchingLocal) ->
-                if (isSearchingLocal) {
-                    // Global search results view (intermingled files & folders)
-                    val filteredItems = remember(state.allItems, searchQuery, isSortAscending) {
-                        state.allItems.filterIsInstance<FileListItem.FileRow>().filter {
-                            it.node.name.contains(searchQuery, ignoreCase = true)
-                        }.let { list ->
-                            if (isSortAscending) list.sortedBy { it.node.name.lowercase() }
-                            else list.sortedByDescending { it.node.name.lowercase() }
-                        }
-                    }
-
-                    if (filteredItems.isEmpty()) {
-                        EmptyStateHint(
-                            title = "No matches found",
-                            body = "Try searching for another filename.",
-                            theme = theme
-                        )
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.Top
-                        ) {
-                            items(filteredItems) { item ->
-                                SearchVfsNodeRow(
-                                    node = item.node,
-                                    project = item.project,
-                                    theme = theme,
-                                    onNodeClick = { clicked ->
-                                        if (clicked.isDirectory) {
-                                            vm.navigateToFolder(clicked, item.project)
-                                            isSearchActive = false
-                                            searchQuery = ""
-                                        } else {
-                                            onItemClick(EditorKey(item.project.id, clicked.relativePath))
-                                        }
-                                    },
-                                    onShareClick = { clicked -> shareNode(context, clicked, item.project, storageManager) },
-                                    onEditClick = { clicked -> nodeToRename = Pair(clicked, item.project) },
-                                    onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
-                                )
-                            }
-                        }
-                    }
-                } else if (activeProj == null) {
+            ) { (activeProj, currentPath) ->
+                if (activeProj == null) {
                     // Root view: flat list of watched project folders
                     val sortedProjects = remember(state.projects, isSortAscending) {
                         if (isSortAscending) state.projects.sortedBy { it.name.lowercase() }
@@ -445,20 +460,72 @@ fun MainScreen(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Top
                         ) {
+                            if (currentPath.isNotEmpty()) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = theme.dimensions.spacingMedium)
+                                            .height(54.dp)
+                                            .background(theme.surface.copy(alpha = 0.5f))
+                                            .border(BorderStroke(1.dp, theme.textMuted.copy(alpha = 0.2f)), RoundedCornerShape(8.dp))
+                                            .onGloballyPositioned { coordinates ->
+                                                folderBounds["..parent.."] = coordinates.boundsInRoot()
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("📁 Drag & Drop here to Move Up a Level", color = theme.textMuted, fontSize = theme.typography.body)
+                                    }
+                                }
+                            }
                             items(sortedFiles, key = { it.relativePath }) { node ->
-                                SwipeableFileRow(
-                                    node = node,
-                                    theme = theme,
-                                    appFont = appFont,
-                                    isExternalProject = activeProj.isExternal,
-                                    onClick = {
-                                        if (node.isDirectory) vm.navigateToFolder(node, activeProj)
-                                        else onItemClick(EditorKey(activeProj.id, node.relativePath))
-                                    },
-                                    onShare = { shareNode(context, node, activeProj, storageManager) },
-                                    onEdit = { nodeToRename = Pair(node, activeProj) },
-                                    onDelete = { nodeToDelete = Pair(node, activeProj) }
-                                )
+                                val rowModifier = Modifier.onGloballyPositioned { coordinates ->
+                                    folderBounds[node.relativePath] = coordinates.boundsInRoot()
+                                }
+                                Box(modifier = rowModifier) {
+                                    SwipeableFileRow(
+                                        node = node,
+                                        theme = theme,
+                                        appFont = appFont,
+                                        isExternalProject = activeProj.isExternal,
+                                        onClick = {
+                                            if (node.isDirectory) vm.navigateToFolder(node, activeProj)
+                                            else onItemClick(EditorKey(activeProj.id, node.relativePath))
+                                        },
+                                        onShare = { shareNode(context, node, activeProj, storageManager) },
+                                        onEdit = { nodeToRename = Pair(node, activeProj) },
+                                        onDelete = { nodeToDelete = Pair(node, activeProj) },
+                                        onDragStart = { offset ->
+                                            draggedNode = node
+                                            dragOffset = Offset.Zero
+                                        },
+                                        onDrag = { dragAmount ->
+                                            dragOffset += dragAmount
+                                        },
+                                        onDragEnd = {
+                                            val currentItemBounds = folderBounds[node.relativePath]
+                                            if (currentItemBounds != null) {
+                                                val dropPoint = currentItemBounds.topLeft + dragOffset
+                                                val targetFolderKey = folderBounds.entries.find { entry ->
+                                                    entry.key != node.relativePath && !entry.key.startsWith(node.relativePath + "/") && entry.value.contains(dropPoint)
+                                                }?.key
+                                                
+                                                if (targetFolderKey != null) {
+                                                    if (targetFolderKey == "..parent..") {
+                                                        vm.moveNodeUp(node, activeProj)
+                                                    } else {
+                                                        val targetNode = VfsNode.Directory(
+                                                            name = targetFolderKey.substringAfterLast('/'),
+                                                            relativePath = targetFolderKey
+                                                        )
+                                                        vm.moveNode(node, targetNode, activeProj)
+                                                    }
+                                                }
+                                            }
+                                            draggedNode = null
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -486,6 +553,29 @@ fun MainScreen(
                         theme = theme,
                         isPrimary = true
                     )
+                }
+            }
+
+            // Drag preview overlay
+            if (draggedNode != null) {
+                val currentItemBounds = folderBounds[draggedNode!!.relativePath]
+                if (currentItemBounds != null) {
+                    val previewX = currentItemBounds.left + dragOffset.x
+                    val previewY = currentItemBounds.top + dragOffset.y
+                    Box(
+                        modifier = Modifier
+                            .offset { androidx.compose.ui.unit.IntOffset(previewX.toInt(), previewY.toInt()) }
+                            .background(theme.surface.copy(alpha = 0.9f))
+                            .border(BorderStroke(1.dp, theme.accent), RoundedCornerShape(4.dp))
+                            .padding(theme.dimensions.spacingMedium)
+                    ) {
+                        Text(
+                            text = draggedNode!!.name,
+                            color = theme.textPrimary,
+                            fontSize = theme.typography.body,
+                            fontFamily = appFont
+                        )
+                    }
                 }
             }
         }
@@ -708,7 +798,6 @@ private fun EmptyStateHint(
 
 // ── Swipe-to-reveal helpers ───────────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableFileRow(
     node: VfsNode,
@@ -718,101 +807,135 @@ fun SwipeableFileRow(
     onClick: () -> Unit,
     onShare: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDragStart: (Offset) -> Unit = {},
+    onDrag: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {}
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { dismissValue ->
-            dismissValue == SwipeToDismissBoxValue.EndToStart
-        }
-    )
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
 
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        enableDismissFromEndToStart = true,
-        backgroundContent = {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Transparent),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
-                    onShare()
-                    coroutineScope.launch { dismissState.reset() }
-                })
-                SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
-                    onEdit()
-                    coroutineScope.launch { dismissState.reset() }
-                })
-                SwipeAction(label = "Delete",color = theme.danger, theme = theme, onClick = {
-                    onDelete()
-                    coroutineScope.launch { dismissState.reset() }
-                })
+    Box(
+        modifier = Modifier
+            .height(IntrinsicSize.Min)
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset -> onDragStart(offset) },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount)
+                    },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { onDragEnd() }
+                )
             }
-        },
-        content = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(theme.background)
-                    .clickable {
-                        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
-                            coroutineScope.launch { dismissState.reset() }
-                        } else {
-                            onClick()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (offsetX.value < -revealWidthPx / 2) {
+                                offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
+                            } else {
+                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    },
+                    onHorizontalDrag = { _, delta ->
+                        scope.launch {
+                            val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
+                            offsetX.snapTo(target)
                         }
                     }
-                    .padding(vertical = theme.dimensions.spacingMedium)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                        val icon = if (node.isDirectory) "📁" else "📄"
-                        Text(icon, fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
-                        Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                        Text(
-                            text       = node.name,
-                            color      = theme.textPrimary,
-                            fontSize   = theme.typography.bodyLarge,
-                            fontFamily = appFont,
-                            fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
-                            maxLines   = 1,
-                            overflow   = TextOverflow.Ellipsis,
-                            modifier   = Modifier.alignByBaseline()
-                        )
-                        val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
-                        if (isSynced) {
-                            Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                            Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
-                        }
-                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                        Text(
-                            text     = " . ".repeat(50),
-                            color    = theme.textMuted.copy(alpha = 0.4f),
-                            fontSize = theme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Clip,
-                            modifier = Modifier.weight(1f).alignByBaseline()
-                        )
+                )
+            }
+    ) {
+        // ── Action strip (behind) ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(theme.dimensions.swipeActionRevealWidth)
+                .fillMaxHeight(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
+                onShare()
+                scope.launch { offsetX.animateTo(0f) }
+            })
+            SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
+                onEdit()
+                scope.launch { offsetX.animateTo(0f) }
+            })
+            SwipeAction(label = "Delete",color = theme.danger, theme = theme, onClick = {
+                onDelete()
+                scope.launch { offsetX.animateTo(0f) }
+            })
+        }
+
+        // ── Content row (on top, slides left) ─────────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                .background(theme.background)
+                .clickable {
+                    if (offsetX.value != 0f) {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    } else {
+                        onClick()
                     }
-                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                    val details = if (node.isDirectory) "DIR"
-                    else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-                    Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
-                        fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
                 }
+                .padding(vertical = theme.dimensions.spacingMedium)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                    val icon = if (node.isDirectory) "📁" else "📄"
+                    Text(icon, fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                    Text(
+                        text       = node.name,
+                        color      = theme.textPrimary,
+                        fontSize   = theme.typography.bodyLarge,
+                        fontFamily = appFont,
+                        fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
+                        maxLines   = 1,
+                        overflow   = TextOverflow.Ellipsis,
+                        modifier   = Modifier.alignByBaseline()
+                    )
+                    val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
+                    if (isSynced) {
+                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                        Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                    }
+                    Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                    Text(
+                        text     = " . ".repeat(50),
+                        color    = theme.textMuted.copy(alpha = 0.4f),
+                        fontSize = theme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.weight(1f).alignByBaseline()
+                    )
+                }
+                Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                val details = if (node.isDirectory) "DIR"
+                else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
+                Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
-    )
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableProjectRow(
     project: ProjectEntity,
@@ -821,94 +944,129 @@ fun SwipeableProjectRow(
     onClick: () -> Unit,
     onShare: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDragStart: (Offset) -> Unit = {},
+    onDrag: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {}
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { dismissValue ->
-            dismissValue == SwipeToDismissBoxValue.EndToStart
-        }
-    )
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
 
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        enableDismissFromEndToStart = true,
-        backgroundContent = {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Transparent),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
-                    onShare()
-                    coroutineScope.launch { dismissState.reset() }
-                })
-                SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
-                    onEdit()
-                    coroutineScope.launch { dismissState.reset() }
-                })
-                SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = {
-                    onDelete()
-                    coroutineScope.launch { dismissState.reset() }
-                })
+    Box(
+        modifier = Modifier
+            .height(IntrinsicSize.Min)
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset -> onDragStart(offset) },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount)
+                    },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { onDragEnd() }
+                )
             }
-        },
-        content = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(theme.background)
-                    .clickable {
-                        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
-                            coroutineScope.launch { dismissState.reset() }
-                        } else {
-                            onClick()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (offsetX.value < -revealWidthPx / 2) {
+                                offsetX.animateTo(-revealWidthPx, spring(stiffness = Spring.StiffnessMediumLow))
+                            } else {
+                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    },
+                    onHorizontalDrag = { _, delta ->
+                        scope.launch {
+                            val target = (offsetX.value + delta).coerceIn(-revealWidthPx, 0f)
+                            offsetX.snapTo(target)
                         }
                     }
-                    .padding(vertical = theme.dimensions.spacingMedium)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                        Text("📁", fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
-                        Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                        Text(
-                            text = project.name,
-                            color = theme.textPrimary,
-                            fontSize = theme.typography.bodyLarge,
-                            fontFamily = appFont,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.alignByBaseline()
-                        )
-                        if (project.isExternal) {
-                            Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                            Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
-                        }
-                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                        Text(
-                            text = " . ".repeat(50),
-                            color = theme.textMuted.copy(alpha = 0.4f),
-                            fontSize = theme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Clip,
-                            modifier = Modifier.weight(1f).alignByBaseline()
-                        )
+                )
+            }
+    ) {
+        // ── Action strip (behind) ──────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(theme.dimensions.swipeActionRevealWidth)
+                .fillMaxHeight(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
+                onShare()
+                scope.launch { offsetX.animateTo(0f) }
+            })
+            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
+                onEdit()
+                scope.launch { offsetX.animateTo(0f) }
+            })
+            SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = {
+                onDelete()
+                scope.launch { offsetX.animateTo(0f) }
+            })
+        }
+
+        // ── Content row (on top, slides left) ─────────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                .background(theme.background)
+                .clickable {
+                    if (offsetX.value != 0f) {
+                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                    } else {
+                        onClick()
                     }
-                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                    Text("DIR", color = theme.textMuted, fontSize = theme.typography.tiny,
-                        fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
                 }
+                .padding(vertical = theme.dimensions.spacingMedium)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                    Text("📁", fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
+                    Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                    Text(
+                        text = project.name,
+                        color = theme.textPrimary,
+                        fontSize = theme.typography.bodyLarge,
+                        fontFamily = appFont,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.alignByBaseline()
+                    )
+                    if (project.isExternal) {
+                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                        Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                    }
+                    Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                    Text(
+                        text = " . ".repeat(50),
+                        color = theme.textMuted.copy(alpha = 0.4f),
+                        fontSize = theme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.weight(1f).alignByBaseline()
+                    )
+                }
+                Spacer(Modifier.width(theme.dimensions.spacingMedium))
+                Text("DIR", color = theme.textMuted, fontSize = theme.typography.tiny,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
-    )
+    }
 }
 
 @Composable
