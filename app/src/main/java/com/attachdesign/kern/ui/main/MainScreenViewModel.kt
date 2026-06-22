@@ -382,6 +382,65 @@ class MainScreenViewModel(
         }
     }
 
+    fun moveNode(fromNode: VfsNode, toDir: VfsNode, project: ProjectEntity) {
+        viewModelScope.launch {
+            val fromPath = fromNode.relativePath
+            val toPath = if (toDir.relativePath.isEmpty()) fromNode.name else "${toDir.relativePath}/${fromNode.name}"
+            val success = storageManager.moveNode(project, fromPath, project, toPath)
+            if (success) {
+                withContext(ioDispatcher) {
+                    db.fileDao().deleteFile(project.id, fromPath)
+                    db.fileDao().insertFile(
+                        com.attachdesign.kern.data.local.FileEntity(
+                            projectId = project.id,
+                            name = fromNode.name,
+                            relativePath = toPath,
+                            isDirectory = fromNode.isDirectory,
+                            lastModified = System.currentTimeMillis(),
+                            syncState = "PENDING"
+                        )
+                    )
+                }
+            }
+            val active = _activeProject.value
+            if (active != null) loadDrillFiles(active, _currentPath.value)
+            else refreshAllFiles()
+        }
+    }
+
+    fun moveNodeUp(fromNode: VfsNode, project: ProjectEntity) {
+        viewModelScope.launch {
+            val fromPath = fromNode.relativePath
+            val parts = fromPath.split('/')
+            if (parts.size > 1) {
+                val newPath = if (parts.size <= 2) {
+                    parts.last()
+                } else {
+                    parts.dropLast(2).joinToString("/") + "/" + parts.last()
+                }
+                val success = storageManager.moveNode(project, fromPath, project, newPath)
+                if (success) {
+                    withContext(ioDispatcher) {
+                        db.fileDao().deleteFile(project.id, fromPath)
+                        db.fileDao().insertFile(
+                            com.attachdesign.kern.data.local.FileEntity(
+                                projectId = project.id,
+                                name = fromNode.name,
+                                relativePath = newPath,
+                                isDirectory = fromNode.isDirectory,
+                                lastModified = System.currentTimeMillis(),
+                                syncState = "PENDING"
+                            )
+                        )
+                    }
+                }
+            }
+            val active = _activeProject.value
+            if (active != null) loadDrillFiles(active, _currentPath.value)
+            else refreshAllFiles()
+        }
+    }
+
     private suspend fun seedQuotes() = withContext(ioDispatcher) {
         if (db.quoteDao().getCount() == 0) {
             val quotes = listOf(
