@@ -381,23 +381,23 @@ fun SettingsTabsContent(
                                       db.settingDao().insertSetting(SettingEntity("sentence_capitalization", (!currentSentenceCapitalization).toString()))
                                   }
                               }
-                              .padding(vertical = 8.dp),
+                              .padding(vertical = theme.dimensions.spacingMedium),
                           verticalAlignment = Alignment.CenterVertically,
                           horizontalArrangement = Arrangement.SpaceBetween
                       ) {
-                          Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                          Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                                Text(
                                   text = "Sentence Capitalization",
                                   color = theme.textPrimary,
-                                  fontSize = 13.sp,
+                                  fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
                                   text = "Automatically capitalize the first letter of sentences.",
                                   color = theme.textMuted,
-                                  fontSize = 11.sp,
-                                  lineHeight = 15.sp
+                                  fontSize = theme.typography.tiny,
+                                  lineHeight = theme.typography.bodyLarge
                               )
                           }
                           Switch(
@@ -414,9 +414,9 @@ fun SettingsTabsContent(
                           )
                       }
 
-                      Spacer(Modifier.height(12.dp))
-                      HorizontalDivider(thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.15f))
-                      Spacer(Modifier.height(12.dp))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                      HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
                       Row(
                           modifier = Modifier
@@ -560,7 +560,7 @@ fun SettingsTabsContent(
                         onValueChange = { inputThemeJson = it },
                         label = { Text("Paste Theme JSON", fontSize = theme.typography.small, color = theme.textMuted) },
                         textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = theme.typography.small, color = theme.textPrimary),
-                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        modifier = Modifier.fillMaxWidth().height(theme.dimensions.themeInputHeight),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor   = theme.textPrimary,
                             unfocusedTextColor = theme.textPrimary,

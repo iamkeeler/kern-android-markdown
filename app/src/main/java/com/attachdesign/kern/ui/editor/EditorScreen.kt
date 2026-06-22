@@ -88,7 +88,7 @@ fun EditorScreen(
 
     BoxWithConstraints(modifier = modifier.fillMaxSize().background(uiState.activeTheme.background)) {
         val widthDp = maxWidth
-        val isDualPane = widthDp >= 600.dp
+        val isDualPane = widthDp >= theme.dimensions.dualPaneBreakpoint
 
         Row(modifier = Modifier.fillMaxSize()) {
             // Editor Canvas (Main container)
@@ -136,8 +136,8 @@ fun EditorScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .width(320.dp)
-                                .heightIn(max = 400.dp)
+                                .width(theme.dimensions.sidebarWidth)
+                                .heightIn(max = theme.dimensions.popupMaxHeight)
                                 .shadow(elevation = theme.dimensions.spacingMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
                                 .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
                                 .background(uiState.activeTheme.surface)
@@ -155,7 +155,7 @@ fun EditorScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .imePadding()
-                        .padding(horizontal = if (widthDp >= 720.dp) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge)
+                        .padding(horizontal = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge)
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
@@ -243,7 +243,7 @@ fun EditorScreen(
                 SidebarPane(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .width(if (isDualPane) 320.dp else widthDp)
+                        .width(if (isDualPane) theme.dimensions.sidebarWidth else widthDp)
                         .background(uiState.activeTheme.surface),
                     state = uiState,
                     viewModel = viewModel,
@@ -377,8 +377,8 @@ fun EditorCanvas(
         state = lazyListState,
         modifier = Modifier
             .fillMaxSize()
-            .widthIn(max = 680.dp), // Cap max text width
-        contentPadding = PaddingValues(bottom = 120.dp),
+            .widthIn(max = theme.dimensions.maxTextLineWidth), // Cap max text width
+        contentPadding = PaddingValues(bottom = theme.dimensions.editorBottomPadding),
         verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
     ) {
         itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, wrapper ->
@@ -447,15 +447,15 @@ fun ParagraphField(
     }
 
     val textStyle = if (viewMode == ViewMode.RAW_PLAIN_TEXT) {
-        TextStyle(fontFamily = FontFamily.Monospace, fontSize = (14 * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (theme.typography.h2.value * fontSizeScale).sp)
+        TextStyle(fontFamily = FontFamily.Monospace, fontSize = (theme.typography.h4.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (theme.typography.h2.value * fontSizeScale).sp)
     } else {
         when (blockType) {
-            MarkdownBlockType.HEADER_1 -> TextStyle(fontFamily = editorFont, fontSize = (22 * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = (30 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_2 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.title.value * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = (26 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_3 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (22 * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_4 -> TextStyle(fontFamily = editorFont, fontSize = (14 * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (theme.typography.h2.value * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_5 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.body.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (theme.typography.title.value * fontSizeScale).sp)
-            MarkdownBlockType.HEADER_6 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.small.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = ((theme.typography.small.value + 5f) * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_1 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h1.value * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = ((theme.typography.h1.value * 1.25f) * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_2 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h2.value * fontSizeScale).sp, fontWeight = FontWeight.Bold, color = theme.textPrimary, lineHeight = ((theme.typography.h2.value * 1.3f) * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_3 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h3.value * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = ((theme.typography.h3.value * 1.3f) * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_4 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h4.value * fontSizeScale).sp, fontWeight = FontWeight.SemiBold, color = theme.textPrimary, lineHeight = (theme.typography.h2.value * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_5 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h5.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (theme.typography.title.value * fontSizeScale).sp)
+            MarkdownBlockType.HEADER_6 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h6.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = ((theme.typography.h6.value + 5f) * fontSizeScale).sp)
             MarkdownBlockType.CODE_BLOCK -> TextStyle(fontFamily = FontFamily.Monospace, fontSize = (theme.typography.body.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = ((theme.typography.body.value + 6f) * fontSizeScale).sp)
             MarkdownBlockType.BLOCKQUOTE -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, fontStyle = FontStyle.Italic, color = theme.textMuted, lineHeight = (theme.typography.h1.value * fontSizeScale).sp)
             else -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (theme.typography.h1.value * fontSizeScale).sp) // 1.6x Line height (15sp body)

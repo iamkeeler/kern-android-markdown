@@ -152,7 +152,7 @@ fun MainScreen(
                     fontFamily = appFont,
                     fontWeight = FontWeight.Light,
                     color = theme.textPrimary,
-                    letterSpacing = (-0.5).sp
+                    letterSpacing = (theme.typography.h1.value * -0.02f).sp
                 )
                 state.activeQuote?.let { quote ->
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
@@ -685,8 +685,6 @@ private fun EmptyStateHint(
 
 // ── Swipe-to-reveal helpers ───────────────────────────────────────────────────
 
-private val SWIPE_REVEAL_WIDTH = 216.dp // 3 × 72dp action buttons
-
 @Composable
 fun SwipeableFileRow(
     node: VfsNode,
@@ -699,7 +697,7 @@ fun SwipeableFileRow(
     onDelete: () -> Unit
 ) {
     val density = LocalDensity.current
-    val revealWidthPx = with(density) { SWIPE_REVEAL_WIDTH.toPx() }
+    val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
@@ -733,7 +731,7 @@ fun SwipeableFileRow(
         Row(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .width(SWIPE_REVEAL_WIDTH)
+                .width(theme.dimensions.swipeActionRevealWidth)
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
@@ -812,7 +810,7 @@ fun SwipeableProjectRow(
     onDelete: () -> Unit
 ) {
     val density = LocalDensity.current
-    val revealWidthPx = with(density) { SWIPE_REVEAL_WIDTH.toPx() }
+    val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
@@ -846,7 +844,7 @@ fun SwipeableProjectRow(
         Row(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .width(SWIPE_REVEAL_WIDTH)
+                .width(theme.dimensions.swipeActionRevealWidth)
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
@@ -919,7 +917,7 @@ private fun SwipeAction(
 ) {
     Box(
         modifier = Modifier
-            .width(72.dp)
+            .width(theme.dimensions.swipeActionWidth)
             .fillMaxHeight()
             .background(color)
             .clickable { onClick() },
@@ -1063,7 +1061,7 @@ fun SearchVfsNodeRow(
         else -> FontFamily.Default
     }
     val density = LocalDensity.current
-    val revealWidthPx = with(density) { SWIPE_REVEAL_WIDTH.toPx() }
+    val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
@@ -1092,7 +1090,7 @@ fun SearchVfsNodeRow(
         Row(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .width(SWIPE_REVEAL_WIDTH)
+                .width(theme.dimensions.swipeActionRevealWidth)
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {

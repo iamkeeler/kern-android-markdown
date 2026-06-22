@@ -101,7 +101,17 @@ data class AppDimensions(
 
     val buttonHeight: Dp = 48.dp,
     val borderWidth: Dp = 1.dp,
-    val dividerThickness: Dp = 1.dp
+    val dividerThickness: Dp = 1.dp,
+
+    val dualPaneBreakpoint: Dp = 600.dp,
+    val largeScreenBreakpoint: Dp = 720.dp,
+    val sidebarWidth: Dp = 320.dp,
+    val popupMaxHeight: Dp = 400.dp,
+    val maxTextLineWidth: Dp = 680.dp,
+    val editorBottomPadding: Dp = 120.dp,
+    val swipeActionWidth: Dp = 72.dp,
+    val swipeActionRevealWidth: Dp = 216.dp,
+    val themeInputHeight: Dp = 100.dp
 )
 
 data class AppTypographySizes(
