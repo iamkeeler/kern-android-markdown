@@ -64,6 +64,11 @@ class MainScreenViewModelTest {
         coEvery { fileDao.insertFile(any()) } returns 1L
         coEvery { projectDao.getSelectedProject() } returns null
         coEvery { projectDao.insertProject(any()) } returns 1L
+        coEvery { projectDao.deleteProjectById(any()) } returns Unit
+        coEvery { projectDao.updateProject(any()) } returns Unit
+        coEvery { projectDao.getProjectById(any()) } returns null
+        coEvery { fileDao.deleteFilesForProject(any()) } returns Unit
+        coEvery { fileDao.deleteFile(any(), any()) } returns Unit
     }
 
     @After
@@ -78,7 +83,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProject() } returns proj
         coEvery { fileDao.insertFile(any()) } returns 1L
 
-        viewModel = MainScreenViewModel(db, storageManager)
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
 
         // Act
         viewModel.createFile("newfile", proj)
@@ -103,7 +108,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProject() } returns proj
         coEvery { fileDao.insertFile(any()) } returns 1L
 
-        viewModel = MainScreenViewModel(db, storageManager)
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
 
         // Act
         viewModel.createFile("existing.md", proj)
@@ -128,7 +133,7 @@ class MainScreenViewModelTest {
         coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
         coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
 
-        viewModel = MainScreenViewModel(db, storageManager)
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
 
         viewModel.navigateToSegment(proj, "subfolder")
 
@@ -154,7 +159,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProject() } returns proj
         coEvery { fileDao.insertFile(any()) } returns 1L
 
-        viewModel = MainScreenViewModel(db, storageManager)
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
 
         // Act
         viewModel.createFile("test", proj)
@@ -176,7 +181,7 @@ class MainScreenViewModelTest {
         coEvery { fileDao.insertFile(any()) } returns 1L
         coEvery { projectDao.getAllProjects() } returns listOf(proj)
 
-        viewModel = MainScreenViewModel(db, storageManager)
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
 
         // Act
         viewModel.createFile("fallback")

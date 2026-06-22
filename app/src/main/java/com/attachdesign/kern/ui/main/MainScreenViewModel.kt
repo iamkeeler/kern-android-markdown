@@ -37,7 +37,8 @@ data class ProjectExplorerUiState(
 
 class MainScreenViewModel(
     private val db: AppDatabase,
-    private val storageManager: StorageManager
+    private val storageManager: StorageManager,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 ) : ViewModel() {
 
     private val _activeProject = MutableStateFlow<ProjectEntity?>(null)
@@ -74,49 +75,60 @@ class MainScreenViewModel(
             seedQuotes()
             refreshAllFiles()
             selectRandomQuote()
-            val selected = withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() }
+            val selected = withContext(ioDispatcher) { db.projectDao().getSelectedProject() }
             if (selected != null) {
                 _activeProject.value = selected
-                loadDrillFiles(selected, "")
+                if (selected.isExternal) {
+                    scanProject(selected)
+                } else {
+                    loadDrillFiles(selected, "")
+                }
             }
         }
     }
 
     // ── Seeding ────────────────────────────────────────────────────────────────
 
-    private suspend fun seedInitialData() = withContext(Dispatchers.IO) {
-        if (db.projectDao().getSelectedProject() != null) return@withContext
+    private suspend fun seedInitialData() = withContext(ioDispatcher) {
+        // Clean up legacy "Documents" project if it exists
+        db.projectDao().getAllProjects().find { it.name == "Documents" || it.path == "documents" }?.let { legacyProj ->
+            db.projectDao().deleteProjectById(legacyProj.id)
+            db.fileDao().deleteFilesForProject(legacyProj.id)
+        }
 
-        val sandboxId = db.projectDao().insertProject(
-            ProjectEntity(name = "Notes", path = "notes", isExternal = false, isSelected = true)
-        )
-        val sandboxProj = db.projectDao().getSelectedProject()!!
+        val allProjects = db.projectDao().getAllProjects()
+        if (allProjects.isEmpty()) {
+            val sandboxId = db.projectDao().insertProject(
+                ProjectEntity(name = "Notes", path = "notes", isExternal = false, isSelected = true)
+            )
+            val sandboxProj = db.projectDao().getSelectedProject()!!
 
-        db.projectDao().insertProject(
-            ProjectEntity(name = "Documents", path = "documents", isExternal = true, isSelected = false)
-        )
-
-        storageManager.writeFile(sandboxProj, "Welcome.md", """
-            # Welcome to Kern!
-            A typography-first Markdown editor for mobile and foldables.
-            ## Features
-            1. **Inline-Reveal WYSIWYG**: Tap to edit.
-            2. **Cloud Sync**: Cloud sync features are coming soon!
-            3. **Hemingway Analyzer**: Check Metrics for readability.
-        """.trimIndent())
-        db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
-            relativePath = "Welcome.md", isDirectory = false,
-            lastModified = System.currentTimeMillis(), syncState = "PENDING"))
-
+            storageManager.writeFile(sandboxProj, "Welcome.md", """
+                # Welcome to Kern!
+                A typography-first Markdown editor for mobile and foldables.
+                ## Features
+                1. **Inline-Reveal WYSIWYG**: Tap to edit.
+                2. **Cloud Sync**: Cloud sync features are coming soon!
+                3. **Hemingway Analyzer**: Check Metrics for readability.
+            """.trimIndent())
+            db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
+                relativePath = "Welcome.md", isDirectory = false,
+                lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+        } else {
+            // If there's no selected project now, select the first available one
+            if (db.projectDao().getSelectedProject() == null) {
+                db.projectDao().updateProject(allProjects.first().copy(isSelected = true))
+            }
+        }
     }
 
     // ── Combined root list ─────────────────────────────────────────────────────
 
     suspend fun refreshAllFiles() {
-        val projectList = withContext(Dispatchers.IO) { db.projectDao().getAllProjects() }
+        val projectList = withContext(ioDispatcher) { db.projectDao().getAllProjects() }
 
         val allProjectIds = projectList.map { it.id }
-        val allDbFiles = withContext(Dispatchers.IO) { db.fileDao().getFilesForProjects(allProjectIds) }
+        val allDbFiles = withContext(ioDispatcher) { db.fileDao().getFilesForProjects(allProjectIds) }
         val dbFilesByProject = allDbFiles.groupBy { it.projectId }
 
         val items = mutableListOf<FileListItem>()
@@ -162,7 +174,13 @@ class MainScreenViewModel(
     fun navigateToFolderRoot(project: ProjectEntity) {
         _activeProject.value = project
         _currentPath.value = ""
-        viewModelScope.launch { loadDrillFiles(project, "") }
+        viewModelScope.launch {
+            if (project.isExternal) {
+                scanProject(project)
+            } else {
+                loadDrillFiles(project, "")
+            }
+        }
     }
 
     fun navigateToSegment(project: ProjectEntity, path: String) {
@@ -173,9 +191,16 @@ class MainScreenViewModel(
 
     fun selectProject(project: ProjectEntity) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 db.projectDao().deselectAllProjects()
                 db.projectDao().updateProject(project.copy(isSelected = true))
+            }
+            _activeProject.value = project
+            _currentPath.value = ""
+            if (project.isExternal) {
+                scanProject(project)
+            } else {
+                loadDrillFiles(project, "")
             }
             refreshAllFiles()
         }
@@ -183,8 +208,56 @@ class MainScreenViewModel(
 
     private suspend fun loadDrillFiles(project: ProjectEntity, path: String) {
         val diskFiles = storageManager.listDirectory(project, path)
-        _drillFiles.value = withContext(Dispatchers.IO) {
+        _drillFiles.value = withContext(ioDispatcher) {
             VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(project.id))
+        }
+    }
+
+    fun scanProject(project: ProjectEntity) {
+        viewModelScope.launch {
+            val foundPaths = mutableSetOf<String>()
+            scanProjectFilesRecursively(project, "", foundPaths)
+            
+            // Prune files in DB that no longer exist on disk
+            withContext(ioDispatcher) {
+                val dbFiles = db.fileDao().getFilesForProject(project.id)
+                for (dbFile in dbFiles) {
+                    if (!foundPaths.contains(dbFile.relativePath)) {
+                        db.fileDao().deleteFile(project.id, dbFile.relativePath)
+                    }
+                }
+            }
+            
+            refreshAllFiles()
+            val active = _activeProject.value
+            if (active != null && active.id == project.id) {
+                loadDrillFiles(active, _currentPath.value)
+            }
+        }
+    }
+
+    private suspend fun scanProjectFilesRecursively(project: ProjectEntity, relativePath: String, foundPaths: MutableSet<String>) {
+        val diskFiles = storageManager.listDirectory(project, relativePath)
+        for (node in diskFiles) {
+            foundPaths.add(node.relativePath)
+            val dbFile = withContext(ioDispatcher) { db.fileDao().getFileByPath(project.id, node.relativePath) }
+            if (dbFile == null) {
+                withContext(ioDispatcher) {
+                    db.fileDao().insertFile(
+                        FileEntity(
+                            projectId = project.id,
+                            name = node.name,
+                            relativePath = node.relativePath,
+                            isDirectory = node.isDirectory,
+                            lastModified = if (node is VfsNode.File) node.lastModified else System.currentTimeMillis(),
+                            syncState = "SYNCED"
+                        )
+                    )
+                }
+            }
+            if (node.isDirectory) {
+                scanProjectFilesRecursively(project, node.relativePath, foundPaths)
+            }
         }
     }
 
@@ -192,28 +265,38 @@ class MainScreenViewModel(
 
     fun setCreateDialogOpen(open: Boolean) { _isCreateDialogOpen.value = open }
 
-    fun createProject(name: String, isExternal: Boolean) {
+    fun createProject(name: String, isExternal: Boolean, path: String? = null) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            val projectPath = path ?: name.lowercase().replace(" ", "_")
+            val id = withContext(ioDispatcher) {
                 db.projectDao().insertProject(
-                    ProjectEntity(name = name,
-                        path = name.lowercase().replace(" ", "_"),
+                    ProjectEntity(
+                        name = name,
+                        path = projectPath,
                         isExternal = isExternal,
-                        isSelected = false)
+                        isSelected = false
+                    )
                 )
             }
-            refreshAllFiles()
+            val insertedProject = withContext(ioDispatcher) {
+                db.projectDao().getProjectById(id)
+            }
+            if (insertedProject != null && isExternal) {
+                scanProject(insertedProject)
+            } else {
+                refreshAllFiles()
+            }
         }
     }
 
     fun createFile(name: String, targetProject: ProjectEntity? = null, onCreated: ((String) -> Unit)? = null) {
         viewModelScope.launch {
-            val proj = targetProject ?: _activeProject.value ?: withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() } ?: return@launch
+            val proj = targetProject ?: _activeProject.value ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
             val fileName = if (name.endsWith(".md")) name else "$name.md"
             val isRootCreation = targetProject != null || _activeProject.value == null
             val relativePath = if (isRootCreation || _currentPath.value.isEmpty()) fileName else "${_currentPath.value}/$fileName"
             storageManager.createFile(proj, relativePath)
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 db.fileDao().insertFile(FileEntity(projectId = proj.id, name = fileName,
                     relativePath = relativePath, isDirectory = false,
                     lastModified = System.currentTimeMillis(),
@@ -230,11 +313,11 @@ class MainScreenViewModel(
 
     fun createFolder(name: String, targetProject: ProjectEntity? = null) {
         viewModelScope.launch {
-            val proj = targetProject ?: _activeProject.value ?: withContext(Dispatchers.IO) { db.projectDao().getSelectedProject() } ?: return@launch
+            val proj = targetProject ?: _activeProject.value ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
             val isRootCreation = targetProject != null || _activeProject.value == null
             val relativePath = if (isRootCreation || _currentPath.value.isEmpty()) name else "${_currentPath.value}/$name"
             storageManager.createDirectory(proj, relativePath)
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 db.fileDao().insertFile(FileEntity(projectId = proj.id, name = name,
                     relativePath = relativePath, isDirectory = true,
                     lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
@@ -250,7 +333,7 @@ class MainScreenViewModel(
     fun deleteNode(node: VfsNode, project: ProjectEntity) {
         viewModelScope.launch {
             storageManager.deleteFile(project, node.relativePath)
-            withContext(Dispatchers.IO) { db.fileDao().deleteFile(project.id, node.relativePath) }
+            withContext(ioDispatcher) { db.fileDao().deleteFile(project.id, node.relativePath) }
             val active = _activeProject.value
             if (active != null) loadDrillFiles(active, _currentPath.value)
             else refreshAllFiles()
@@ -259,7 +342,7 @@ class MainScreenViewModel(
 
     fun deleteProject(project: ProjectEntity) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 db.projectDao().deleteProjectById(project.id)
             }
             refreshAllFiles()
@@ -271,7 +354,7 @@ class MainScreenViewModel(
             val dir = node.relativePath.substringBeforeLast('/', "")
             val newRelativePath = if (dir.isEmpty()) newName else "$dir/$newName"
             storageManager.renameFile(project, node.relativePath, newRelativePath)
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 db.fileDao().deleteFile(project.id, node.relativePath)
                 db.fileDao().insertFile(
                     com.attachdesign.kern.data.local.FileEntity(
@@ -292,14 +375,14 @@ class MainScreenViewModel(
 
     fun renameProject(project: ProjectEntity, newName: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            withContext(ioDispatcher) {
                 db.projectDao().updateProject(project.copy(name = newName))
             }
             refreshAllFiles()
         }
     }
 
-    private suspend fun seedQuotes() = withContext(Dispatchers.IO) {
+    private suspend fun seedQuotes() = withContext(ioDispatcher) {
         if (db.quoteDao().getCount() == 0) {
             val quotes = listOf(
                 QuoteEntity(text = "There is nothing to writing. All you do is sit down at a typewriter and bleed.", author = "Ernest Hemingway", year = 1949),
@@ -333,7 +416,7 @@ class MainScreenViewModel(
     }
 
     private suspend fun selectRandomQuote() {
-        val quotes = withContext(Dispatchers.IO) { db.quoteDao().getAllQuotes() }
+        val quotes = withContext(ioDispatcher) { db.quoteDao().getAllQuotes() }
         if (quotes.isNotEmpty()) {
             _activeQuote.value = quotes.random()
         }
