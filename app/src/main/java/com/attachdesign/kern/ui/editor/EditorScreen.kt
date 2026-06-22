@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -276,16 +277,17 @@ fun EditorHeader(
                 .weight(1f)
                 .horizontalScroll(rememberScrollState())
         ) {
-            Text(
-                text = "←",
-                color = theme.accent,
-                fontSize = theme.typography.h2,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clickable { onBackClick() }
-                    .padding(horizontal = theme.dimensions.elevationMedium, vertical = theme.dimensions.spacingMedium)
-            )
+            IconButton(
+                onClick = onBackClick,
+                modifier = Modifier.padding(end = theme.dimensions.spacingSmall)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = theme.accent,
+                    modifier = Modifier.size(theme.dimensions.iconMedium)
+                )
+            }
 
             Spacer(Modifier.width(theme.dimensions.spacingMedium))
 
