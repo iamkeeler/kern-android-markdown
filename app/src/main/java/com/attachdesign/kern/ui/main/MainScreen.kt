@@ -60,6 +60,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.geometry.Rect
@@ -152,6 +158,38 @@ fun MainScreen(
         }
     }
 
+    var showSplash by remember { mutableStateOf(true) }
+    val typedText = remember { mutableStateOf("K") }
+    val splashAlpha = remember { Animatable(1f) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "blinkingK")
+    val blinkingAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "blinkingAlpha"
+    )
+
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading) {
+            delay(300)
+            val word = "ern"
+            for (i in 1..word.length) {
+                typedText.value = "K" + word.take(i)
+                delay(150)
+            }
+            delay(500)
+            splashAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 300)
+            )
+            showSplash = false
+        }
+    }
+
     val appFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
         "sans-serif", "sansserif" -> FontFamily.SansSerif
@@ -159,13 +197,14 @@ fun MainScreen(
         else -> FontFamily.Default
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(theme.background)
-            .safeDrawingPadding()
-            .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(theme.background)
+                .safeDrawingPadding()
+                .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
+        ) {
         TopAppBar(
             title = {
                 Text(
@@ -698,6 +737,29 @@ fun MainScreen(
             containerColor = theme.surface
         )
     }
+
+    if (showSplash) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(theme.background)
+                .graphicsLayer { alpha = splashAlpha.value }
+                .clickable(enabled = false) {},
+            contentAlignment = Alignment.Center
+        ) {
+            val textAlpha = if (state.isLoading) blinkingAlpha else 1f
+            Text(
+                text = typedText.value,
+                fontSize = 80.sp,
+                fontFamily = appFont,
+                fontWeight = FontWeight.Light,
+                color = theme.textPrimary,
+                modifier = Modifier.graphicsLayer { alpha = textAlpha },
+                letterSpacing = (80 * -0.02f).sp
+            )
+        }
+    }
+}
 }
 
 // ── Sub-composables ────────────────────────────────────────────────────────────
