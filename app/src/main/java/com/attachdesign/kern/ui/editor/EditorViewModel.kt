@@ -571,6 +571,71 @@ viewModelScope.launch(Dispatchers.IO) {
         saveActiveFileAsync()
     }
 
+    fun indentParagraph(index: Int) {
+        val currentState = _uiState.value
+        val items = currentState.paragraphs.items.toMutableList()
+        if (index < 0 || index >= items.size) return
+
+        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
+        val text = originalValue.text
+
+        val newText = "    " + text
+        val newSelection = androidx.compose.ui.text.TextRange(
+            (originalValue.selection.start + 4).coerceIn(0, newText.length),
+            (originalValue.selection.end + 4).coerceIn(0, newText.length)
+        )
+
+        val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+        items[index] = ImmutableParagraphBlock(updatedBlock)
+
+        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
+            put(index, TextFieldValue(newText, newSelection))
+        }
+
+        _uiState.value = currentState.copy(
+            paragraphs = ImmutableParagraphList(items.toImmutableList())
+        )
+        saveActiveFileAsync()
+    }
+
+    fun outdentParagraph(index: Int) {
+        val currentState = _uiState.value
+        val items = currentState.paragraphs.items.toMutableList()
+        if (index < 0 || index >= items.size) return
+
+        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
+        val text = originalValue.text
+
+        var spacesToRemove = 0
+        if (text.startsWith("\t")) {
+            spacesToRemove = 1
+        } else {
+            while (spacesToRemove < 4 && spacesToRemove < text.length && text[spacesToRemove] == ' ') {
+                spacesToRemove++
+            }
+        }
+
+        if (spacesToRemove > 0) {
+            val newText = text.substring(spacesToRemove)
+            val newSelection = androidx.compose.ui.text.TextRange(
+                (originalValue.selection.start - spacesToRemove).coerceIn(0, newText.length),
+                (originalValue.selection.end - spacesToRemove).coerceIn(0, newText.length)
+            )
+
+            val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+            items[index] = ImmutableParagraphBlock(updatedBlock)
+
+            _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
+                put(index, TextFieldValue(newText, newSelection))
+            }
+
+            _uiState.value = currentState.copy(
+                paragraphs = ImmutableParagraphList(items.toImmutableList())
+            )
+            saveActiveFileAsync()
+        }
+    }
+
     fun insertParagraphAfter(index: Int, content: String) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
