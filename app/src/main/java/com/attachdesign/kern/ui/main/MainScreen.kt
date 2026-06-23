@@ -198,24 +198,30 @@ fun MainScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(theme.background)
-                .safeDrawingPadding()
-                .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
-        ) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = "Kern",
-                    fontSize = theme.typography.h1,
-                    fontFamily = appFont,
-                    fontWeight = FontWeight.Light,
-                    color = theme.textPrimary,
-                    letterSpacing = (theme.typography.h1.value * -0.02f).sp
-                )
-            },
+        if (!showSplash || splashAlpha.value < 1f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = 1f - splashAlpha.value }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(theme.background)
+                        .safeDrawingPadding()
+                        .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
+                ) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Kern",
+                            fontSize = theme.typography.h1,
+                            fontFamily = appFont,
+                            fontWeight = FontWeight.Light,
+                            color = theme.textPrimary,
+                            letterSpacing = (theme.typography.h1.value * -0.02f).sp
+                        )
+                    },
             actions = {
                 IconButton(onClick = {
                     isSearchActive = !isSearchActive
@@ -574,7 +580,7 @@ fun MainScreen(
                 }
             }
 
-            // Docked Bottom Toolbar
+            // Docked Bottom Toolbar (Material 3 Expressive style: shorter height, compact floating pill layout)
             val targetProj = state.activeProject ?: state.projects.find { it.isSelected } ?: state.projects.firstOrNull()
             Box(
                 modifier = Modifier
@@ -586,18 +592,18 @@ fun MainScreen(
             ) {
                 Surface(
                     tonalElevation = theme.dimensions.elevationMedium,
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(22.dp),
                     color = if (!theme.isDark) Color(0xFF1C1C1A) else theme.surface,
                     border = BorderStroke(1.dp, if (!theme.isDark) Color(0xFF1C1C1A) else theme.textMuted.copy(alpha = 0.15f)),
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .height(56.dp)
+                        .wrapContentWidth()
+                        .height(44.dp)
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = theme.dimensions.spacingExtraLarge),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .fillMaxHeight()
+                            .padding(horizontal = theme.dimensions.spacingLarge),
+                        horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val contentColor = if (!theme.isDark) Color(0xFFF7F3EB) else theme.textPrimary
@@ -606,11 +612,12 @@ fun MainScreen(
                         // Back Arrow
                         IconButton(
                             onClick = { vm.navigateBack() },
-                            enabled = state.canNavigateBack
+                            enabled = state.canNavigateBack,
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Text(
                                 text = "←",
-                                fontSize = theme.typography.title,
+                                fontSize = theme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = if (state.canNavigateBack) contentColor else disabledColor
                             )
@@ -619,11 +626,12 @@ fun MainScreen(
                         // Forward Arrow
                         IconButton(
                             onClick = { vm.navigateForward() },
-                            enabled = state.canNavigateForward
+                            enabled = state.canNavigateForward,
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Text(
                                 text = "→",
-                                fontSize = theme.typography.title,
+                                fontSize = theme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = if (state.canNavigateForward) contentColor else disabledColor
                             )
@@ -632,11 +640,12 @@ fun MainScreen(
                         // New Folder Button
                         IconButton(
                             onClick = { targetProj?.let { createFolderDialogTargetProject = it } },
-                            enabled = targetProj != null
+                            enabled = targetProj != null,
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Text(
                                 text = "📁+",
-                                fontSize = theme.typography.title,
+                                fontSize = theme.typography.bodyLarge,
                                 color = if (targetProj != null) contentColor else disabledColor
                             )
                         }
@@ -644,11 +653,12 @@ fun MainScreen(
                         // New Document Button (Highlighted in dull red accent color)
                         IconButton(
                             onClick = { targetProj?.let { createFileDialogTargetProject = it } },
-                            enabled = targetProj != null
+                            enabled = targetProj != null,
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Text(
                                 text = "📄+",
-                                fontSize = theme.typography.title,
+                                fontSize = theme.typography.bodyLarge,
                                 color = if (targetProj != null) theme.accent else disabledColor
                             )
                         }
@@ -658,11 +668,12 @@ fun MainScreen(
                             onClick = {
                                 isSearchActive = !isSearchActive
                                 if (!isSearchActive) searchQuery = ""
-                            }
+                            },
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Text(
                                 text = "🔍",
-                                fontSize = theme.typography.subtitle,
+                                fontSize = theme.typography.body,
                                 color = contentColor
                             )
                         }
@@ -694,6 +705,7 @@ fun MainScreen(
             }
         }
     }
+}
 
     // ── Dialogs ────────────────────────────────────────────────────────────────
     if (state.isCreateProjectDialogOpen) {
