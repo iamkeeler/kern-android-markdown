@@ -16,6 +16,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -198,7 +199,17 @@ class MainScreenViewModelTest {
 
     @Test
     fun `isLoading starts true and becomes false after initialization`() = runTest {
+        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
+        coEvery { projectDao.getAllProjects() } returns listOf(proj)
+        coEvery { projectDao.getAllProjectsFlow() } returns kotlinx.coroutines.flow.flowOf(emptyList())
+        coEvery { projectDao.getSelectedProjectFlow() } returns kotlinx.coroutines.flow.flowOf(null)
+        coEvery { projectDao.getSelectedProject() } returns proj
+
         viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        val job = backgroundScope.launch {
+            viewModel.explorerState.collect {}
+        }
         assertEquals(false, viewModel.explorerState.value.isLoading)
+        job.cancel()
     }
 }

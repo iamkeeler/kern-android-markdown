@@ -109,12 +109,59 @@ class MainScreenViewModel(
             val sandboxProj = db.projectDao().getSelectedProject()!!
 
             storageManager.writeFile(sandboxProj, "Welcome.md", """
-                # Welcome to Kern!
-                A typography-first Markdown editor for mobile and foldables.
-                ## Features
-                1. **Inline-Reveal WYSIWYG**: Tap to edit.
-                2. **Cloud Sync**: Cloud sync features are coming soon!
-                3. **Hemingway Analyzer**: Check Metrics for readability.
+                # Welcome to Kern
+
+                Kern is a typography-first, high-performance Markdown editor designed for mobile and foldable devices. It gives you absolute control over your writing with local-first file sovereignty and a beautiful reading experience.
+
+                ## Key Features
+
+                ### 1. Inline-Reveal Live Preview (WYSIWYG)
+                Kern features an **inline-reveal layout engine**. By default, your text displays fully rendered with high-fidelity typography. The moment you tap on a paragraph to edit, the raw Markdown formatting syntax (such as `#`, `**`, `*`, `>`) reveals itself inline, allowing zero-friction editing.
+
+                Try it yourself:
+                * This is a **bold** statement.
+                * This is an *italic* emphasis.
+                * You can write `inline code` or block formatting.
+
+                > "Simplicity is the ultimate sophistication." — Leonardo da Vinci
+
+                ---
+
+                ### 2. Three-State View Configurations
+                Toggle between three view modes via settings to suit your writing style:
+                1. **Rendered (Live Preview):** Clean, bookish reading layout with inline-reveal editing.
+                2. **Syntax-Highlighted:** Keeps formatting symbols visible while retaining typography size, colors, and structural spacing.
+                3. **Raw Plain-Text:** A completely clean monospace writing environment with zero styling or decorations.
+
+                ---
+
+                ### 3. Sharing & Editing
+                * **Context Formatting Toolbar:** Select any word or sentence to reveal the context toolbar.
+                * **Sticky Selection:** Keep text selected when applying formatting to stack styles seamlessly.
+                * **Sharing:** Easily export or share your Markdown documents.
+
+                ---
+
+                ### 4. Linking Local Folders (Scoped Storage)
+                Own your files completely.
+                * **App-Sandbox Storage:** Fast, local-first internal storage.
+                * **External Scoped Storage (SAF):** Link arbitrary local folders on your device or SD card using Android's Storage Access Framework. Keep your files local, private, and compatible with other text editors.
+
+                ---
+
+                ### 5. Hemingway Readability Analyzer
+                Polish your prose on demand. Open the **Metrics** sidebar to run asynchronous readability analysis:
+                * Evaluates reading grade levels.
+                * Detects complex words, passive voice, and redundant adverbs.
+                * Highlights hard-to-read sentences inline so you can refine them.
+
+                ---
+
+                ### 6. Dynamic Theme & Typography
+                Designed like a well-lit architecture studio, Kern prioritizes reading endurance:
+                * Locked 1.6x line-height for optimal reading scan lines.
+                * Support for premium Monospace system fonts (`JetBrains Mono` / `Roboto Mono`) and elegant Serifs.
+                * Seamless split-screen support on tablets and foldables (35% directory rail, 65% central workspace).
             """.trimIndent())
             db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
                 relativePath = "Welcome.md", isDirectory = false,
