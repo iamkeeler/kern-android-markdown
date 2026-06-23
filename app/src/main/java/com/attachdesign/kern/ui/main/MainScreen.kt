@@ -324,12 +324,6 @@ fun MainScreen(
                         )
                     },
             actions = {
-                IconButton(onClick = {
-                    isSearchActive = !isSearchActive
-                    if (!isSearchActive) searchQuery = ""
-                }) {
-                    Text(if (isSearchActive) "✕" else "🔍", fontSize = theme.typography.title)
-                }
                 IconButton(onClick = { onItemClick(SettingsKey) }) {
                     Icon(
                         imageVector = Icons.Outlined.Settings,
