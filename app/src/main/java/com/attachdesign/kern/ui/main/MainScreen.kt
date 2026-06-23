@@ -437,35 +437,42 @@ fun MainScreen(
                         )
                     }
 
+                    val activeProjectLocal = state.activeProject
+                    val isAtFilesRoot = activeProjectLocal == null ||
+                        (!activeProjectLocal.isExternal && activeProjectLocal.path == "root" && state.currentPath.isEmpty())
+
                     Text(
                         text = "files",
-                        color = if (state.activeProject == null) theme.textPrimary else theme.accent,
+                        color = if (isAtFilesRoot) theme.textPrimary else theme.accent,
                         fontSize = theme.typography.small,
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
+                        fontWeight = if (isAtFilesRoot) FontWeight.Bold else FontWeight.Normal,
                         modifier = Modifier.clickable {
-                            if (state.activeProject != null) {
+                            if (activeProjectLocal != null) {
                                 vm.navigateUpToRoot()
                             }
                         }
                     )
 
                     state.activeProject?.let { proj ->
-                        Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
+                        val isSandboxRoot = !proj.isExternal && proj.path == "root"
+                        if (!isSandboxRoot) {
+                            Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
 
-                        val isProjRoot = state.currentPath.isEmpty()
-                        Text(
-                            text = proj.name.lowercase(),
-                            color = if (isProjRoot) theme.textPrimary else theme.accent,
-                            fontSize = theme.typography.small,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.clickable {
-                                if (!isProjRoot) {
-                                    vm.navigateToFolderRoot(proj)
+                            val isProjRoot = state.currentPath.isEmpty()
+                            Text(
+                                text = proj.name.lowercase(),
+                                color = if (isProjRoot) theme.textPrimary else theme.accent,
+                                fontSize = theme.typography.small,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.clickable {
+                                    if (!isProjRoot) {
+                                        vm.navigateToFolderRoot(proj)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
 
                         if (state.currentPath.isNotEmpty()) {
                             val segments = state.currentPath.split('/')
