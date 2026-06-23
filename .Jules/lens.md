@@ -22,3 +22,6 @@ This journal tracks unique visual hierarchy and information architecture insight
 **Learning:** Tapping workspace settings and create dialogs shouldn't distract from the core editor layout. Button layout inside alert confirmations should keep a low visual profile (using standard `TextButton` borders/tint) to maintain page-flatness, relying on button color alignment only for the main confirm CTA (`theme.accent`).
 **Action:** Retain simple flat `TextButton` boundaries for overlay dialogs to prevent elevation collisions with floating main buttons.
 
+## 2026-06-23 - Swipe Row Content Gutter
+**Learning:** Under the cardless layout system, sliding list items horizontally (e.g. to reveal actions like Delete, Edit, Share) can cause information elements placed on the extreme edges (such as file sizes or metadata) to collide directly with the action strip buttons. Establishing a minimum end-gutter of `theme.dimensions.spacingMedium` on the sliding content wrapper maintains proper typography boundaries even under full horizontal offsets.
+**Action:** For swipeable or sliding lists, always enforce end-padding on the sliding item content Row to keep meta details separated from background actions.
