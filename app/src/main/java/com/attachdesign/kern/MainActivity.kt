@@ -60,6 +60,9 @@ class MainActivity : ComponentActivity() {
       if (db.settingDao().getSetting("editor_font_family") == null) {
         db.settingDao().insertSetting(SettingEntity("editor_font_family", "serif"))
       }
+      if (db.settingDao().getSetting("view_mode") == null) {
+        db.settingDao().insertSetting(SettingEntity("view_mode", "RENDERED"))
+      }
     }
 
     storageManager = StorageManager(applicationContext)
