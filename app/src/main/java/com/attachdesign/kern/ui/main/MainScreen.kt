@@ -590,6 +590,9 @@ fun MainScreen(
                     .wrapContentHeight(),
                 contentAlignment = Alignment.Center
             ) {
+                // NOTE: FlexibleBottomAppBar is marked internal in the Compose Material 3 library binary
+                // included in this BOM version and cannot be compiled directly. We implement a custom
+                // Surface + Row component matching the exact specifications (shorter height, pill, centered, floating).
                 Surface(
                     tonalElevation = theme.dimensions.elevationMedium,
                     shape = RoundedCornerShape(22.dp),
