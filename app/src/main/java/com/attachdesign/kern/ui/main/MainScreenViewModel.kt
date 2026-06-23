@@ -143,42 +143,59 @@ class MainScreenViewModel(
             val sandboxId = db.projectDao().insertProject(
                 ProjectEntity(name = "Files", path = "root", isExternal = false, isSelected = true)
             )
-            val sandboxProj = db.projectDao().getSelectedProject()!!
+            val sandboxProj = ProjectEntity(id = sandboxId, name = "Files", path = "root", isExternal = false, isSelected = true)
 
-            storageManager.writeFile(sandboxProj, "Welcome.md", WELCOME_TEXT)
-            db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
-                relativePath = "Welcome.md", isDirectory = false,
-                lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+            try {
+                storageManager.writeFile(sandboxProj, "Welcome.md", WELCOME_TEXT)
+                db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
+                    relativePath = "Welcome.md", isDirectory = false,
+                    lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
 
-            storageManager.createDirectory(sandboxProj, "Notes")
-            db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes",
-                relativePath = "Notes", isDirectory = true,
-                lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+            try {
+                storageManager.createDirectory(sandboxProj, "Notes")
+                db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes",
+                    relativePath = "Notes", isDirectory = true,
+                    lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         } else {
             // Ensure Welcome.md and Notes exist in the default sandbox project (handles Auto Backup sync issues)
             val defaultProj = allProjects.find { !it.isExternal && it.path == "root" }
             if (defaultProj != null) {
-                val welcomeFile = db.fileDao().getFileByPath(defaultProj.id, "Welcome.md")
-                val diskFiles = storageManager.listDirectory(defaultProj, "")
-                val welcomeOnDisk = diskFiles.any { it.name == "Welcome.md" && !it.isDirectory }
-                if (welcomeFile == null || !welcomeOnDisk) {
-                    storageManager.writeFile(defaultProj, "Welcome.md", WELCOME_TEXT)
-                    if (welcomeFile == null) {
-                        db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Welcome.md",
-                            relativePath = "Welcome.md", isDirectory = false,
-                            lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+                try {
+                    val welcomeFile = db.fileDao().getFileByPath(defaultProj.id, "Welcome.md")
+                    val diskFiles = storageManager.listDirectory(defaultProj, "")
+                    val welcomeOnDisk = diskFiles.any { it.name == "Welcome.md" && !it.isDirectory }
+                    if (welcomeFile == null || !welcomeOnDisk) {
+                        storageManager.writeFile(defaultProj, "Welcome.md", WELCOME_TEXT)
+                        if (welcomeFile == null) {
+                            db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Welcome.md",
+                                relativePath = "Welcome.md", isDirectory = false,
+                                lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+                        }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
 
-                val notesFolder = db.fileDao().getFileByPath(defaultProj.id, "Notes")
-                val notesOnDisk = diskFiles.any { it.name == "Notes" && it.isDirectory }
-                if (notesFolder == null || !notesOnDisk) {
-                    storageManager.createDirectory(defaultProj, "Notes")
-                    if (notesFolder == null) {
-                        db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Notes",
-                            relativePath = "Notes", isDirectory = true,
-                            lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+                try {
+                    val notesFolder = db.fileDao().getFileByPath(defaultProj.id, "Notes")
+                    val diskFiles = storageManager.listDirectory(defaultProj, "")
+                    val notesOnDisk = diskFiles.any { it.name == "Notes" && it.isDirectory }
+                    if (notesFolder == null || !notesOnDisk) {
+                        storageManager.createDirectory(defaultProj, "Notes")
+                        if (notesFolder == null) {
+                            db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Notes",
+                                relativePath = "Notes", isDirectory = true,
+                                lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+                        }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
 
