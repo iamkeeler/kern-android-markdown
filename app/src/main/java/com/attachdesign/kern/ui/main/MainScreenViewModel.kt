@@ -32,7 +32,8 @@ data class ProjectExplorerUiState(
     val drillFiles: List<VfsNode> = emptyList(),
     val allItems: List<FileListItem> = emptyList(),
     val isCreateProjectDialogOpen: Boolean = false,
-    val activeQuote: QuoteEntity? = null
+    val activeQuote: QuoteEntity? = null,
+    val isLoading: Boolean = true
 )
 
 class MainScreenViewModel(
@@ -47,6 +48,7 @@ class MainScreenViewModel(
     private val _allItems      = MutableStateFlow<List<FileListItem>>(emptyList())
     private val _isCreateDialogOpen = MutableStateFlow(false)
     private val _activeQuote   = MutableStateFlow<QuoteEntity?>(null)
+    private val _isLoading     = MutableStateFlow(true)
 
     val explorerState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
@@ -55,7 +57,8 @@ class MainScreenViewModel(
         _drillFiles,
         _allItems,
         _isCreateDialogOpen,
-        _activeQuote
+        _activeQuote,
+        _isLoading
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         ProjectExplorerUiState(
@@ -65,7 +68,8 @@ class MainScreenViewModel(
             drillFiles      = args[3] as List<VfsNode>,
             allItems        = args[4] as List<FileListItem>,
             isCreateProjectDialogOpen = args[5] as Boolean,
-            activeQuote     = args[6] as QuoteEntity?
+            activeQuote     = args[6] as QuoteEntity?,
+            isLoading       = args[7] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState())
 
@@ -84,6 +88,7 @@ class MainScreenViewModel(
                     loadDrillFiles(selected, "")
                 }
             }
+            _isLoading.value = false
         }
     }
 

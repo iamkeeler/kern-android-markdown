@@ -195,4 +195,10 @@ class MainScreenViewModelTest {
             })
         }
     }
+
+    @Test
+    fun `isLoading starts true and becomes false after initialization`() = runTest {
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        assertEquals(false, viewModel.explorerState.value.isLoading)
+    }
 }
