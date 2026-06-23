@@ -77,25 +77,40 @@ class StorageManager(private val context: Context) {
         val newDocumentsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Kern")
         val newRootDir = File(newDocumentsDir, rootDirName)
 
+        var finalRootDir = newRootDir
         if (!newRootDir.exists()) {
-            newRootDir.mkdirs()
+            val created = newRootDir.mkdirs()
+            if (!created) {
+                finalRootDir = oldRootDir
+            }
+        }
+
+        // Test writability of the resolved directory (important for Android 10+ scoped storage restrictions)
+        try {
+            val testFile = File(finalRootDir, ".write_test")
+            testFile.createNewFile()
+            testFile.delete()
+        } catch (e: Exception) {
+            finalRootDir = oldRootDir
+        }
+
+        if (!finalRootDir.exists()) {
+            finalRootDir.mkdirs()
         }
 
         // If old root exists and new root is empty, copy everything over to preserve user data
-        if (oldRootDir.exists() && oldRootDir.isDirectory && newRootDir.exists()) {
+        if (oldRootDir.exists() && oldRootDir.isDirectory && finalRootDir.exists() && finalRootDir != oldRootDir) {
             val oldFiles = oldRootDir.listFiles()
-            if (oldFiles != null && oldFiles.isNotEmpty() && newRootDir.listFiles()?.isEmpty() == true) {
+            if (oldFiles != null && oldFiles.isNotEmpty() && finalRootDir.listFiles()?.isEmpty() == true) {
                 try {
-                    oldRootDir.copyRecursively(newRootDir, overwrite = true)
-                    // Optionally delete old files after successful copy:
-                    // oldRootDir.deleteRecursively()
+                    oldRootDir.copyRecursively(finalRootDir, overwrite = true)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
         }
 
-        val projectDir = getSafeFile(newRootDir, project.path)
+        val projectDir = getSafeFile(finalRootDir, project.path)
         if (!projectDir.exists()) {
             projectDir.mkdirs()
         }
