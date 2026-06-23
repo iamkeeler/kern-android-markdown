@@ -17,3 +17,8 @@ This journal tracks unique visual hierarchy and information architecture insight
 ## 2026-06-08 - Floating Actions and Core Task Hierarchy
 **Learning:** Multiple stacked floating action buttons of the same size and styling (e.g., "+ Folder" and "+ File") dilute the primary CTA. If the user's core task is to write a document, creating a file must hold the highest visual weight. The eye shouldn't have to read labels to know what to do next.
 **Action:** Extend `MinimalOutlinedButton` with an `isPrimary` prop to allow solid accent backgrounds for primary actions, leaving secondary actions as low-emphasis ghost buttons.
+
+## 2026-06-23 - Dialog Actions and Modal Hierarchy Audit
+**Learning:** Tapping workspace settings and create dialogs shouldn't distract from the core editor layout. Button layout inside alert confirmations should keep a low visual profile (using standard `TextButton` borders/tint) to maintain page-flatness, relying on button color alignment only for the main confirm CTA (`theme.accent`).
+**Action:** Retain simple flat `TextButton` boundaries for overlay dialogs to prevent elevation collisions with floating main buttons.
+
