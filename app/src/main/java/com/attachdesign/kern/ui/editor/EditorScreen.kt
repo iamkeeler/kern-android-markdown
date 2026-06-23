@@ -80,9 +80,32 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
 
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
     // Load file if changed
     LaunchedEffect(projectId, filePath) {
         viewModel.loadFile(projectId, filePath, focusOnStart)
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Delete File?", color = uiState.activeTheme.textPrimary, fontSize = uiState.activeTheme.typography.subtitle, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete '${uiState.fileName}'? This cannot be undone.", color = uiState.activeTheme.textPrimary, fontSize = uiState.activeTheme.typography.body) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirmDialog = false
+                    viewModel.deleteCurrentFile()
+                    onBackClick()
+                }) {
+                    Text("Delete", color = uiState.activeTheme.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) { Text("Cancel", color = uiState.activeTheme.textMuted) }
+            },
+            containerColor = uiState.activeTheme.surface
+        )
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize().background(uiState.activeTheme.background)) {
@@ -117,7 +140,7 @@ fun EditorScreen(
                                     "Rename" -> { /* TODO */ }
                                     "Cloud Sync" -> { /* TODO */ }
                                     "Duplicate" -> { /* TODO */ }
-                                    "Delete" -> { /* TODO */ }
+                                    "Delete" -> { showDeleteConfirmDialog = true }
                                 }
                             }
                         )

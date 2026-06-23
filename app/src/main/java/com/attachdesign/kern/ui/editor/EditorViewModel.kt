@@ -333,6 +333,17 @@ viewModelScope.launch(Dispatchers.IO) {
         }
     }
 
+    fun deleteCurrentFile() {
+        val project = _uiState.value.activeProject ?: return
+        val path = _uiState.value.activeFilePath
+        if (path.isEmpty()) return
+
+        viewModelScope.launch {
+            storageManager.deleteFile(project, path)
+            withContext(Dispatchers.IO) { db.fileDao().deleteFile(project.id, path) }
+        }
+    }
+
     fun loadExplorerFiles(path: String) {
         val project = _uiState.value.activeProject ?: return
         loadExplorerFiles(project, path)
