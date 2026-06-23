@@ -111,6 +111,12 @@ class MainScreenViewModel(
                 } else {
                     loadDrillFiles(selected, "")
                 }
+            } else {
+                val defaultProj = withContext(ioDispatcher) { db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" } }
+                if (defaultProj != null) {
+                    _activeProject.value = defaultProj
+                    loadDrillFiles(defaultProj, "")
+                }
             }
             _isLoading.value = false
         }
@@ -125,68 +131,21 @@ class MainScreenViewModel(
             db.fileDao().deleteFilesForProject(legacyProj.id)
         }
 
+        // Migration logic for old default workspace names
+        db.projectDao().getAllProjects().forEach { proj ->
+            if (!proj.isExternal && (proj.name == "Notes" || proj.name == "Root") && proj.path == "root") {
+                db.projectDao().updateProject(proj.copy(name = "Files"))
+            }
+        }
+
         val allProjects = db.projectDao().getAllProjects()
         if (allProjects.isEmpty()) {
             val sandboxId = db.projectDao().insertProject(
-                ProjectEntity(name = "Root", path = "root", isExternal = false, isSelected = true)
+                ProjectEntity(name = "Files", path = "root", isExternal = false, isSelected = true)
             )
             val sandboxProj = db.projectDao().getSelectedProject()!!
 
-            storageManager.writeFile(sandboxProj, "Welcome.md", """
-                # Welcome to Kern
-
-                Kern is a typography-first, high-performance Markdown editor designed for mobile and foldable devices. It gives you absolute control over your writing with local-first file sovereignty and a beautiful reading experience.
-
-                ## Key Features
-
-                ### 1. Inline-Reveal Live Preview (WYSIWYG)
-                Kern features an **inline-reveal layout engine**. By default, your text displays fully rendered with high-fidelity typography. The moment you tap on a paragraph to edit, the raw Markdown formatting syntax (such as `#`, `**`, `*`, `>`) reveals itself inline, allowing zero-friction editing.
-
-                Try it yourself:
-                * This is a **bold** statement.
-                * This is an *italic* emphasis.
-                * You can write `inline code` or block formatting.
-
-                > "Simplicity is the ultimate sophistication." — Leonardo da Vinci
-
-                ---
-
-                ### 2. Three-State View Configurations
-                Toggle between three view modes via settings to suit your writing style:
-                1. **Rendered (Live Preview):** Clean, bookish reading layout with inline-reveal editing.
-                2. **Syntax-Highlighted:** Keeps formatting symbols visible while retaining typography size, colors, and structural spacing.
-                3. **Raw Plain-Text:** A completely clean monospace writing environment with zero styling or decorations.
-
-                ---
-
-                ### 3. Sharing & Editing
-                * **Context Formatting Toolbar:** Select any word or sentence to reveal the context toolbar.
-                * **Sticky Selection:** Keep text selected when applying formatting to stack styles seamlessly.
-                * **Sharing:** Easily export or share your Markdown documents.
-
-                ---
-
-                ### 4. Linking Local Folders (Scoped Storage)
-                Own your files completely.
-                * **App-Sandbox Storage:** Fast, local-first internal storage.
-                * **External Scoped Storage (SAF):** Link arbitrary local folders on your device or SD card using Android's Storage Access Framework. Keep your files local, private, and compatible with other text editors.
-
-                ---
-
-                ### 5. Hemingway Readability Analyzer
-                Polish your prose on demand. Open the **Metrics** sidebar to run asynchronous readability analysis:
-                * Evaluates reading grade levels.
-                * Detects complex words, passive voice, and redundant adverbs.
-                * Highlights hard-to-read sentences inline so you can refine them.
-
-                ---
-
-                ### 6. Dynamic Theme & Typography
-                Designed like a well-lit architecture studio, Kern prioritizes reading endurance:
-                * Locked 1.6x line-height for optimal reading scan lines.
-                * Support for premium Monospace system fonts (`JetBrains Mono` / `Roboto Mono`) and elegant Serifs.
-                * Seamless split-screen support on tablets and foldables (35% directory rail, 65% central workspace).
-            """.trimIndent())
+            storageManager.writeFile(sandboxProj, "Welcome.md", WELCOME_TEXT)
             db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
                 relativePath = "Welcome.md", isDirectory = false,
                 lastModified = System.currentTimeMillis(), syncState = "PENDING"))
@@ -196,6 +155,33 @@ class MainScreenViewModel(
                 relativePath = "Notes", isDirectory = true,
                 lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
         } else {
+            // Ensure Welcome.md and Notes exist in the default sandbox project (handles Auto Backup sync issues)
+            val defaultProj = allProjects.find { !it.isExternal && it.path == "root" }
+            if (defaultProj != null) {
+                val welcomeFile = db.fileDao().getFileByPath(defaultProj.id, "Welcome.md")
+                val diskFiles = storageManager.listDirectory(defaultProj, "")
+                val welcomeOnDisk = diskFiles.any { it.name == "Welcome.md" && !it.isDirectory }
+                if (welcomeFile == null || !welcomeOnDisk) {
+                    storageManager.writeFile(defaultProj, "Welcome.md", WELCOME_TEXT)
+                    if (welcomeFile == null) {
+                        db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Welcome.md",
+                            relativePath = "Welcome.md", isDirectory = false,
+                            lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+                    }
+                }
+
+                val notesFolder = db.fileDao().getFileByPath(defaultProj.id, "Notes")
+                val notesOnDisk = diskFiles.any { it.name == "Notes" && it.isDirectory }
+                if (notesFolder == null || !notesOnDisk) {
+                    storageManager.createDirectory(defaultProj, "Notes")
+                    if (notesFolder == null) {
+                        db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Notes",
+                            relativePath = "Notes", isDirectory = true,
+                            lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+                    }
+                }
+            }
+
             // If there's no selected project now, select the first available one
             if (db.projectDao().getSelectedProject() == null) {
                 db.projectDao().updateProject(allProjects.first().copy(isSelected = true))
@@ -282,17 +268,21 @@ class MainScreenViewModel(
 
     fun navigateUp() {
         val current = _currentPath.value
-        if (current.isEmpty() || !current.contains('/')) {
-            changeDestination(null, "")
+        val proj = _activeProject.value
+        if (proj == null || (proj.isExternal && current.isEmpty())) {
+            val defaultProj = db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" }
+            changeDestination(defaultProj, "")
+        } else if (current.isEmpty() || !current.contains('/')) {
+            changeDestination(proj, "")
         } else {
             val parent = current.substringBeforeLast('/', "")
-            val proj = _activeProject.value
             changeDestination(proj, parent)
         }
     }
 
     fun navigateUpToRoot() {
-        changeDestination(null, "")
+        val defaultProj = db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" }
+        changeDestination(defaultProj, "")
     }
 
     fun navigateToFolderRoot(project: ProjectEntity) {
@@ -315,9 +305,20 @@ class MainScreenViewModel(
 
     private suspend fun loadDrillFiles(project: ProjectEntity, path: String) {
         val diskFiles = storageManager.listDirectory(project, path)
-        _drillFiles.value = withContext(ioDispatcher) {
+        var enriched = withContext(ioDispatcher) {
             VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(project.id))
         }
+
+        // If we are at the root level of the default sandbox project, append external projects as directories
+        if (!project.isExternal && project.path == "root" && path.isEmpty()) {
+            val allProjects = withContext(ioDispatcher) { db.projectDao().getAllProjects() }
+            val externalDirs = allProjects.filter { it.isExternal }.map { extProj ->
+                VfsNode.Directory(name = extProj.name, relativePath = "external:${extProj.id}")
+            }
+            enriched = externalDirs + enriched
+        }
+
+        _drillFiles.value = enriched
     }
 
     fun scanProject(project: ProjectEntity) {
@@ -390,8 +391,10 @@ class MainScreenViewModel(
             }
             if (insertedProject != null && isExternal) {
                 scanProject(insertedProject)
-            } else {
-                refreshAllFiles()
+            }
+            val defaultProj = withContext(ioDispatcher) { db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" } }
+            if (defaultProj != null) {
+                loadDrillFiles(defaultProj, "")
             }
         }
     }
@@ -451,8 +454,12 @@ class MainScreenViewModel(
         viewModelScope.launch {
             withContext(ioDispatcher) {
                 db.projectDao().deleteProjectById(project.id)
+                db.fileDao().deleteFilesForProject(project.id)
             }
-            refreshAllFiles()
+            val defaultProj = withContext(ioDispatcher) { db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" } }
+            if (defaultProj != null) {
+                loadDrillFiles(defaultProj, "")
+            }
         }
     }
 
@@ -485,7 +492,10 @@ class MainScreenViewModel(
             withContext(ioDispatcher) {
                 db.projectDao().updateProject(project.copy(name = newName))
             }
-            refreshAllFiles()
+            val defaultProj = withContext(ioDispatcher) { db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" } }
+            if (defaultProj != null) {
+                loadDrillFiles(defaultProj, "")
+            }
         }
     }
 
@@ -588,3 +598,58 @@ class MainScreenViewModel(
         }
     }
 }
+
+private const val WELCOME_TEXT = """# Welcome to Kern
+
+Kern is a typography-first, high-performance Markdown editor designed for mobile and foldable devices. It gives you absolute control over your writing with local-first file sovereignty and a beautiful reading experience.
+
+## Key Features
+
+### 1. Inline-Reveal Live Preview (WYSIWYG)
+Kern features an **inline-reveal layout engine**. By default, your text displays fully rendered with high-fidelity typography. The moment you tap on a paragraph to edit, the raw Markdown formatting syntax (such as `#`, `**`, `*`, `>`) reveals itself inline, allowing zero-friction editing.
+
+Try it yourself:
+* This is a **bold** statement.
+* This is an *italic* emphasis.
+* You can write `inline code` or block formatting.
+
+> "Simplicity is the ultimate sophistication." — Leonardo da Vinci
+
+---
+
+### 2. Three-State View Configurations
+Toggle between three view modes via settings to suit your writing style:
+1. **Rendered (Live Preview):** Clean, bookish reading layout with inline-reveal editing.
+2. **Syntax-Highlighted:** Keeps formatting symbols visible while retaining typography size, colors, and structural spacing.
+3. **Raw Plain-Text:** A completely clean monospace writing environment with zero styling or decorations.
+
+---
+
+### 3. Sharing & Editing
+* **Context Formatting Toolbar:** Select any word or sentence to reveal the context toolbar.
+* **Sticky Selection:** Keep text selected when applying formatting to stack styles seamlessly.
+* **Sharing:** Easily export or share your Markdown documents.
+
+---
+
+### 4. Linking Local Folders (Scoped Storage)
+Own your files completely.
+* **App-Sandbox Storage:** Fast, local-first internal storage.
+* **External Scoped Storage (SAF):** Link arbitrary local folders on your device or SD card using Android's Storage Access Framework. Keep your files local, private, and compatible with other text editors.
+
+---
+
+### 5. Hemingway Readability Analyzer
+Polish your prose on demand. Open the **Metrics** sidebar to run asynchronous readability analysis:
+* Evaluates reading grade levels.
+* Detects complex words, passive voice, and redundant adverbs.
+* Highlights hard-to-read sentences inline so you can refine them.
+
+---
+
+### 6. Dynamic Theme & Typography
+Designed like a well-lit architecture studio, Kern prioritizes reading endurance:
+* Locked 1.6x line-height for optimal reading scan lines.
+* Support for premium Monospace system fonts (`JetBrains Mono` / `Roboto Mono`) and elegant Serifs.
+* Seamless split-screen support on tablets and foldables (35% directory rail, 65% central workspace).
+"""

@@ -425,7 +425,11 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
                 ) {
-                    if (state.activeProject != null) {
+                    val activeProjectLocal = state.activeProject
+                    val showBackArrow = activeProjectLocal != null &&
+                        (activeProjectLocal.isExternal || state.currentPath.isNotEmpty())
+
+                    if (showBackArrow) {
                         Text(
                             text = "←",
                             color = theme.accent,
@@ -437,7 +441,6 @@ fun MainScreen(
                         )
                     }
 
-                    val activeProjectLocal = state.activeProject
                     val isAtFilesRoot = activeProjectLocal == null ||
                         (!activeProjectLocal.isExternal && activeProjectLocal.path == "root" && state.currentPath.isEmpty())
 
@@ -454,7 +457,7 @@ fun MainScreen(
                         }
                     )
 
-                    state.activeProject?.let { proj ->
+                    activeProjectLocal?.let { proj ->
                         val isSandboxRoot = !proj.isExternal && proj.path == "root"
                         if (!isSandboxRoot) {
                             Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
@@ -498,7 +501,8 @@ fun MainScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium), verticalAlignment = Alignment.CenterVertically) {
-                    if (state.activeProject == null) {
+                    val isAtRoot = state.activeProject?.let { !it.isExternal && it.path == "root" && state.currentPath.isEmpty() } ?: false
+                    if (isAtRoot) {
                         Text(
                             text = "[+ workspace]",
                             color = theme.accent,
@@ -661,15 +665,50 @@ fun MainScreen(
                                         appFont = appFont,
                                         isExternalProject = activeProj.isExternal,
                                         onClick = {
-                                            if (node.isDirectory) vm.navigateToFolder(node, activeProj)
-                                            else onItemClick(EditorKey(activeProj.id, node.relativePath))
+                                            if (node.relativePath.startsWith("external:")) {
+                                                val extId = node.relativePath.substringAfter("external:").toLong()
+                                                val extProj = state.projects.find { it.id == extId }
+                                                if (extProj != null) {
+                                                    vm.selectProject(extProj)
+                                                }
+                                            } else if (node.isDirectory) {
+                                                vm.navigateToFolder(node, activeProj)
+                                            } else {
+                                                onItemClick(EditorKey(activeProj.id, node.relativePath))
+                                            }
                                         },
-                                        onShare = { shareNode(context, node, activeProj, storageManager) },
-                                        onEdit = { nodeToRename = Pair(node, activeProj) },
-                                        onDelete = { nodeToDelete = Pair(node, activeProj) },
+                                        onShare = {
+                                            if (!node.relativePath.startsWith("external:")) {
+                                                shareNode(context, node, activeProj, storageManager)
+                                            }
+                                        },
+                                        onEdit = {
+                                            if (node.relativePath.startsWith("external:")) {
+                                                val extId = node.relativePath.substringAfter("external:").toLong()
+                                                val extProj = state.projects.find { it.id == extId }
+                                                if (extProj != null) {
+                                                    projectToRename = extProj
+                                                }
+                                            } else {
+                                                nodeToRename = Pair(node, activeProj)
+                                            }
+                                        },
+                                        onDelete = {
+                                            if (node.relativePath.startsWith("external:")) {
+                                                val extId = node.relativePath.substringAfter("external:").toLong()
+                                                val extProj = state.projects.find { it.id == extId }
+                                                if (extProj != null) {
+                                                    projectToDelete = extProj
+                                                }
+                                            } else {
+                                                nodeToDelete = Pair(node, activeProj)
+                                            }
+                                        },
                                         onDragStart = { offset ->
-                                            draggedNode = node
-                                            dragOffset = Offset.Zero
+                                            if (!node.relativePath.startsWith("external:")) {
+                                                draggedNode = node
+                                                dragOffset = Offset.Zero
+                                            }
                                         },
                                         onDrag = { dragAmount ->
                                             dragOffset += dragAmount
@@ -682,7 +721,7 @@ fun MainScreen(
                                                     entry.key != node.relativePath && !entry.key.startsWith(node.relativePath + "/") && entry.value.contains(dropPoint)
                                                 }?.key
                                                 
-                                                if (targetFolderKey != null) {
+                                                if (targetFolderKey != null && !targetFolderKey.startsWith("external:")) {
                                                     if (targetFolderKey == "..parent..") {
                                                         vm.moveNodeUp(node, activeProj)
                                                     } else {
@@ -1075,7 +1114,8 @@ fun SwipeableFileRow(
                 verticalAlignment = Alignment.Bottom
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                    val icon = if (node.isDirectory) "📁" else "📄"
+                    val isExternal = node.relativePath.startsWith("external:")
+                    val icon = if (isExternal || node.isDirectory) "📁" else "📄"
                     Text(icon, fontSize = theme.typography.bodyLarge, modifier = Modifier.padding(bottom = theme.dimensions.borderWidth))
                     Spacer(Modifier.width(theme.dimensions.spacingMedium))
                     Text(
@@ -1083,13 +1123,13 @@ fun SwipeableFileRow(
                         color      = theme.textPrimary,
                         fontSize   = theme.typography.bodyLarge,
                         fontFamily = appFont,
-                        fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal,
+                        fontWeight = if (isExternal || node.isDirectory) FontWeight.Bold else FontWeight.Normal,
                         maxLines   = 1,
                         overflow   = TextOverflow.Ellipsis,
                         modifier   = Modifier.alignByBaseline()
                     )
                     val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
-                    if (isSynced) {
+                    if (isSynced || isExternal) {
                         Spacer(Modifier.width(theme.dimensions.spacingSmall))
                         Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
                     }
