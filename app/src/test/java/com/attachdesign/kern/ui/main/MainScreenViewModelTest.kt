@@ -3,7 +3,6 @@ package com.attachdesign.kern.ui.main
 import app.cash.turbine.test
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileDao
-import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectDao
 import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.local.QuoteDao
