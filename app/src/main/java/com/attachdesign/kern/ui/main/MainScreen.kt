@@ -165,7 +165,6 @@ fun MainScreen(
         }
     }
 
-    var showSplash by remember { mutableStateOf(true) }
     val typedText = remember { mutableStateOf("K") }
     val splashAlpha = remember { Animatable(1f) }
 
@@ -180,8 +179,8 @@ fun MainScreen(
         label = "blinkingAlpha"
     )
 
-    LaunchedEffect(state.isLoading) {
-        if (!state.isLoading) {
+    LaunchedEffect(state.isLoading, state.showSplash) {
+        if (state.showSplash && !state.isLoading) {
             delay(300)
             val word = "ern"
             for (i in 1..word.length) {
@@ -193,7 +192,7 @@ fun MainScreen(
                 targetValue = 0f,
                 animationSpec = tween(durationMillis = 300)
             )
-            showSplash = false
+            vm.dismissSplash()
         }
     }
 
@@ -205,12 +204,12 @@ fun MainScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (!showSplash || splashAlpha.value < 1f) {
+        if (!state.showSplash || splashAlpha.value < 1f) {
             val targetProj = state.activeProject ?: state.projects.find { it.isSelected } ?: state.projects.firstOrNull()
             Scaffold(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = 1f - splashAlpha.value },
+                    .graphicsLayer { alpha = if (state.showSplash) (1f - splashAlpha.value) else 1f },
                 containerColor = theme.background,
                 bottomBar = {
                     FlexibleBottomAppBar(
@@ -838,7 +837,7 @@ fun MainScreen(
         )
     }
 
-    if (showSplash) {
+    if (state.showSplash) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

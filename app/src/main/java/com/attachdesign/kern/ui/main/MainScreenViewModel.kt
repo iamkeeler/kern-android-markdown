@@ -35,7 +35,8 @@ data class ProjectExplorerUiState(
     val activeQuote: QuoteEntity? = null,
     val isLoading: Boolean = true,
     val canNavigateBack: Boolean = false,
-    val canNavigateForward: Boolean = false
+    val canNavigateForward: Boolean = false,
+    val showSplash: Boolean = true
 )
 
 class MainScreenViewModel(
@@ -43,6 +44,10 @@ class MainScreenViewModel(
     private val storageManager: StorageManager,
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 ) : ViewModel() {
+
+    companion object {
+        private var hasSplashRun = false
+    }
 
     private val _activeProject = MutableStateFlow<ProjectEntity?>(null)
     private val _currentPath   = MutableStateFlow("")
@@ -53,6 +58,7 @@ class MainScreenViewModel(
     private val _isLoading     = MutableStateFlow(true)
     private val _canNavigateBack = MutableStateFlow(false)
     private val _canNavigateForward = MutableStateFlow(false)
+    private val _showSplash     = MutableStateFlow(!hasSplashRun)
 
     private val backStack = mutableListOf<Pair<ProjectEntity?, String>>()
     private val forwardStack = mutableListOf<Pair<ProjectEntity?, String>>()
@@ -67,7 +73,8 @@ class MainScreenViewModel(
         _activeQuote,
         _isLoading,
         _canNavigateBack,
-        _canNavigateForward
+        _canNavigateForward,
+        _showSplash
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         ProjectExplorerUiState(
@@ -80,9 +87,15 @@ class MainScreenViewModel(
             activeQuote     = args[6] as QuoteEntity?,
             isLoading       = args[7] as Boolean,
             canNavigateBack = args[8] as Boolean,
-            canNavigateForward = args[9] as Boolean
+            canNavigateForward = args[9] as Boolean,
+            showSplash      = args[10] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState())
+
+    fun dismissSplash() {
+        hasSplashRun = true
+        _showSplash.value = false
+    }
 
     init {
         viewModelScope.launch {
