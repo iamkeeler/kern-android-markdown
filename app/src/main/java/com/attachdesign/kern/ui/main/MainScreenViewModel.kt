@@ -90,7 +90,7 @@ class MainScreenViewModel(
             canNavigateForward = args[9] as Boolean,
             showSplash      = args[10] as Boolean
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState(showSplash = !hasSplashRun))
 
     fun dismissSplash() {
         hasSplashRun = true
