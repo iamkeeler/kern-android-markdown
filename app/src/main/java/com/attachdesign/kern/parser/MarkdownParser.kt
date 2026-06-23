@@ -4,11 +4,37 @@ import java.util.UUID
 
 object MarkdownParser {
 
-    private val unorderedListMarkerRegex = "^(\\s*)[-*+](\\s+|$)".toRegex()
-    private val orderedListMarkerRegex = "^(\\s*)\\d+\\.(\\s+|$)".toRegex()
-
+    /**
+     * Determines if a line starts a list block.
+     * Performance optimization: A manual character-by-character scan is used here instead of
+     * regular expressions to avoid Regex object creation overhead and match evaluation latency.
+     * This method is called frequently during document parsing.
+     */
     fun isListLine(line: String): Boolean {
-        return unorderedListMarkerRegex.containsMatchIn(line) || orderedListMarkerRegex.containsMatchIn(line)
+        var i = 0
+        val len = line.length
+        while (i < len && line[i].isWhitespace()) {
+            i++
+        }
+        if (i >= len) return false
+
+        val c = line[i]
+        if (c == '-' || c == '*' || c == '+') {
+            i++
+            if (i == len) return true
+            return line[i].isWhitespace()
+        } else if (c in '0'..'9') {
+            i++
+            while (i < len && line[i] in '0'..'9') {
+                i++
+            }
+            if (i < len && line[i] == '.') {
+                i++
+                if (i == len) return true
+                return line[i].isWhitespace()
+            }
+        }
+        return false
     }
 
     /**
