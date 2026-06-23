@@ -304,7 +304,8 @@ fun MainScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Top
+                        verticalArrangement = Arrangement.Top,
+                        contentPadding = PaddingValues(bottom = 90.dp)
                     ) {
                         items(filteredItems) { item ->
                             SearchVfsNodeRow(
@@ -466,7 +467,8 @@ fun MainScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.Top
+                            verticalArrangement = Arrangement.Top,
+                            contentPadding = PaddingValues(bottom = 90.dp)
                         ) {
                             items(sortedProjects, key = { it.id }) { proj ->
                                 SwipeableProjectRow(
@@ -497,7 +499,8 @@ fun MainScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.Top
+                            verticalArrangement = Arrangement.Top,
+                            contentPadding = PaddingValues(bottom = 90.dp)
                         ) {
                             if (currentPath.isNotEmpty()) {
                                 item {
@@ -571,27 +574,99 @@ fun MainScreen(
                 }
             }
 
-            // Floating action buttons: always shown if a project is active or selected
+            // Docked Bottom Toolbar
             val targetProj = state.activeProject ?: state.projects.find { it.isSelected } ?: state.projects.firstOrNull()
-            if (targetProj != null) {
-                Column(
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = theme.dimensions.spacingExtraLarge)
+                    .fillMaxWidth()
+                    .wrapContentHeight(),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    tonalElevation = theme.dimensions.elevationMedium,
+                    shape = RoundedCornerShape(24.dp),
+                    color = if (!theme.isDark) Color(0xFF1C1C1A) else theme.surface,
+                    border = BorderStroke(1.dp, if (!theme.isDark) Color(0xFF1C1C1A) else theme.textMuted.copy(alpha = 0.15f)),
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = theme.dimensions.spacingExtraLarge, end = theme.dimensions.spacingExtraLarge),
-                    verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge),
-                    horizontalAlignment = Alignment.End
+                        .fillMaxWidth(0.9f)
+                        .height(56.dp)
                 ) {
-                    MinimalOutlinedButton(
-                        text = "+ Folder",
-                        onClick = { createFolderDialogTargetProject = targetProj },
-                        theme = theme
-                    )
-                    MinimalOutlinedButton(
-                        text = "+ File",
-                        onClick = { createFileDialogTargetProject = targetProj },
-                        theme = theme,
-                        isPrimary = true
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = theme.dimensions.spacingExtraLarge),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val contentColor = if (!theme.isDark) Color(0xFFF7F3EB) else theme.textPrimary
+                        val disabledColor = if (!theme.isDark) Color(0xFF7A7060) else theme.textMuted.copy(alpha = 0.4f)
+
+                        // Back Arrow
+                        IconButton(
+                            onClick = { vm.navigateBack() },
+                            enabled = state.canNavigateBack
+                        ) {
+                            Text(
+                                text = "←",
+                                fontSize = theme.typography.title,
+                                fontWeight = FontWeight.Bold,
+                                color = if (state.canNavigateBack) contentColor else disabledColor
+                            )
+                        }
+
+                        // Forward Arrow
+                        IconButton(
+                            onClick = { vm.navigateForward() },
+                            enabled = state.canNavigateForward
+                        ) {
+                            Text(
+                                text = "→",
+                                fontSize = theme.typography.title,
+                                fontWeight = FontWeight.Bold,
+                                color = if (state.canNavigateForward) contentColor else disabledColor
+                            )
+                        }
+
+                        // New Folder Button
+                        IconButton(
+                            onClick = { targetProj?.let { createFolderDialogTargetProject = it } },
+                            enabled = targetProj != null
+                        ) {
+                            Text(
+                                text = "📁+",
+                                fontSize = theme.typography.title,
+                                color = if (targetProj != null) contentColor else disabledColor
+                            )
+                        }
+
+                        // New Document Button (Highlighted in dull red accent color)
+                        IconButton(
+                            onClick = { targetProj?.let { createFileDialogTargetProject = it } },
+                            enabled = targetProj != null
+                        ) {
+                            Text(
+                                text = "📄+",
+                                fontSize = theme.typography.title,
+                                color = if (targetProj != null) theme.accent else disabledColor
+                            )
+                        }
+
+                        // Search Button
+                        IconButton(
+                            onClick = {
+                                isSearchActive = !isSearchActive
+                                if (!isSearchActive) searchQuery = ""
+                            }
+                        ) {
+                            Text(
+                                text = "🔍",
+                                fontSize = theme.typography.subtitle,
+                                color = contentColor
+                            )
+                        }
+                    }
                 }
             }
 
