@@ -209,6 +209,7 @@ class MainScreenViewModelTest {
         val job = backgroundScope.launch {
             viewModel.explorerState.collect {}
         }
+        advanceUntilIdle()
         assertEquals(false, viewModel.explorerState.value.isLoading)
         job.cancel()
     }
