@@ -893,7 +893,9 @@ fun SwipeableFileRow(
                 .padding(vertical = theme.dimensions.spacingMedium)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = theme.dimensions.spacingMedium),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -1030,7 +1032,9 @@ fun SwipeableProjectRow(
                 .padding(vertical = theme.dimensions.spacingMedium)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = theme.dimensions.spacingMedium),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -1287,7 +1291,9 @@ fun SearchVfsNodeRow(
                 .padding(vertical = theme.dimensions.spacingMedium)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = theme.dimensions.spacingMedium),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
