@@ -57,6 +57,9 @@ import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -609,19 +612,27 @@ fun MainScreen(
                         ) {
                             if (currentPath.isNotEmpty()) {
                                 item {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = theme.dimensions.spacingMedium)
-                                            .height(54.dp)
-                                            .background(theme.surface.copy(alpha = 0.5f))
-                                            .border(BorderStroke(1.dp, theme.textMuted.copy(alpha = 0.2f)), RoundedCornerShape(8.dp))
-                                            .onGloballyPositioned { coordinates ->
-                                                folderBounds["..parent.."] = coordinates.boundsInRoot()
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("📁 Drag & Drop here to Move Up a Level", color = theme.textMuted, fontSize = theme.typography.body)
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        AnimatedVisibility(
+                                            visible = draggedNode != null,
+                                            enter = fadeIn(animationSpec = tween(150)) + slideInVertically(animationSpec = tween(150), initialOffsetY = { -it / 2 }),
+                                            exit = fadeOut(animationSpec = tween(150)) + slideOutVertically(animationSpec = tween(150), targetOffsetY = { -it / 2 })
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(bottom = theme.dimensions.spacingMedium)
+                                                    .height(54.dp)
+                                                    .background(theme.surface.copy(alpha = 0.5f))
+                                                    .border(BorderStroke(1.dp, theme.textMuted.copy(alpha = 0.2f)), RoundedCornerShape(8.dp))
+                                                    .onGloballyPositioned { coordinates ->
+                                                        folderBounds["..parent.."] = coordinates.boundsInRoot()
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text("📁 Drop here to move up one level", color = theme.textMuted, fontSize = theme.typography.body)
+                                            }
+                                        }
                                     }
                                 }
                             }
