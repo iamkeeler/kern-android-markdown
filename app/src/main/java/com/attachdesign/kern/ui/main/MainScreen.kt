@@ -74,7 +74,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
@@ -199,17 +199,104 @@ fun MainScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         if (!showSplash || splashAlpha.value < 1f) {
-            Box(
+            val targetProj = state.activeProject ?: state.projects.find { it.isSelected } ?: state.projects.firstOrNull()
+            Scaffold(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = 1f - splashAlpha.value }
-            ) {
+                    .graphicsLayer { alpha = 1f - splashAlpha.value },
+                containerColor = theme.background,
+                bottomBar = {
+                    FlexibleBottomAppBar(
+                        containerColor = if (!theme.isDark) Color(0xFF1C1C1A) else theme.surface,
+                        contentPadding = PaddingValues(horizontal = theme.dimensions.spacingLarge),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val contentColor = if (!theme.isDark) Color(0xFFF7F3EB) else theme.textPrimary
+                        val disabledColor = if (!theme.isDark) Color(0xFF7A7060) else theme.textMuted.copy(alpha = 0.4f)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Back Arrow
+                            IconButton(
+                                onClick = { vm.navigateBack() },
+                                enabled = state.canNavigateBack,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Text(
+                                    text = "←",
+                                    fontSize = theme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (state.canNavigateBack) contentColor else disabledColor
+                                )
+                            }
+
+                            // Forward Arrow
+                            IconButton(
+                                onClick = { vm.navigateForward() },
+                                enabled = state.canNavigateForward,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Text(
+                                    text = "→",
+                                    fontSize = theme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (state.canNavigateForward) contentColor else disabledColor
+                                )
+                            }
+
+                            // New Folder Button
+                            IconButton(
+                                onClick = { targetProj?.let { createFolderDialogTargetProject = it } },
+                                enabled = targetProj != null,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Text(
+                                    text = "📁+",
+                                    fontSize = theme.typography.bodyLarge,
+                                    color = if (targetProj != null) contentColor else disabledColor
+                                )
+                            }
+
+                            // New Document Button (primary action: dull red accent)
+                            IconButton(
+                                onClick = { targetProj?.let { createFileDialogTargetProject = it } },
+                                enabled = targetProj != null,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Text(
+                                    text = "📄+",
+                                    fontSize = theme.typography.bodyLarge,
+                                    color = if (targetProj != null) theme.accent else disabledColor
+                                )
+                            }
+
+                            // Search Button
+                            IconButton(
+                                onClick = {
+                                    isSearchActive = !isSearchActive
+                                    if (!isSearchActive) searchQuery = ""
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Text(
+                                    text = "🔍",
+                                    fontSize = theme.typography.body,
+                                    color = contentColor
+                                )
+                            }
+                        }
+                    }
+                }
+            ) { innerPadding ->
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(theme.background)
-                        .safeDrawingPadding()
-                        .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
+                        .padding(innerPadding)
+                        .padding(horizontal = theme.dimensions.spacingHuge)
+                        .padding(top = theme.dimensions.spacingExtraLarge)
                 ) {
                 TopAppBar(
                     title = {
@@ -580,109 +667,7 @@ fun MainScreen(
                 }
             }
 
-            // Docked Bottom Toolbar (Material 3 Expressive style: shorter height, compact floating pill layout)
-            val targetProj = state.activeProject ?: state.projects.find { it.isSelected } ?: state.projects.firstOrNull()
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = theme.dimensions.spacingExtraLarge)
-                    .fillMaxWidth()
-                    .wrapContentHeight(),
-                contentAlignment = Alignment.Center
-            ) {
-                // NOTE: FlexibleBottomAppBar is marked internal in the Compose Material 3 library binary
-                // included in this BOM version and cannot be compiled directly. We implement a custom
-                // Surface + Row component matching the exact specifications (shorter height, pill, centered, floating).
-                Surface(
-                    tonalElevation = theme.dimensions.elevationMedium,
-                    shape = RoundedCornerShape(22.dp),
-                    color = if (!theme.isDark) Color(0xFF1C1C1A) else theme.surface,
-                    border = BorderStroke(1.dp, if (!theme.isDark) Color(0xFF1C1C1A) else theme.textMuted.copy(alpha = 0.15f)),
-                    modifier = Modifier
-                        .wrapContentWidth()
-                        .height(44.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .padding(horizontal = theme.dimensions.spacingLarge),
-                        horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val contentColor = if (!theme.isDark) Color(0xFFF7F3EB) else theme.textPrimary
-                        val disabledColor = if (!theme.isDark) Color(0xFF7A7060) else theme.textMuted.copy(alpha = 0.4f)
 
-                        // Back Arrow
-                        IconButton(
-                            onClick = { vm.navigateBack() },
-                            enabled = state.canNavigateBack,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Text(
-                                text = "←",
-                                fontSize = theme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = if (state.canNavigateBack) contentColor else disabledColor
-                            )
-                        }
-
-                        // Forward Arrow
-                        IconButton(
-                            onClick = { vm.navigateForward() },
-                            enabled = state.canNavigateForward,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Text(
-                                text = "→",
-                                fontSize = theme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = if (state.canNavigateForward) contentColor else disabledColor
-                            )
-                        }
-
-                        // New Folder Button
-                        IconButton(
-                            onClick = { targetProj?.let { createFolderDialogTargetProject = it } },
-                            enabled = targetProj != null,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Text(
-                                text = "📁+",
-                                fontSize = theme.typography.bodyLarge,
-                                color = if (targetProj != null) contentColor else disabledColor
-                            )
-                        }
-
-                        // New Document Button (Highlighted in dull red accent color)
-                        IconButton(
-                            onClick = { targetProj?.let { createFileDialogTargetProject = it } },
-                            enabled = targetProj != null,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Text(
-                                text = "📄+",
-                                fontSize = theme.typography.bodyLarge,
-                                color = if (targetProj != null) theme.accent else disabledColor
-                            )
-                        }
-
-                        // Search Button
-                        IconButton(
-                            onClick = {
-                                isSearchActive = !isSearchActive
-                                if (!isSearchActive) searchQuery = ""
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Text(
-                                text = "🔍",
-                                fontSize = theme.typography.body,
-                                color = contentColor
-                            )
-                        }
-                    }
-                }
-            }
 
             // Drag preview overlay
             if (draggedNode != null) {
