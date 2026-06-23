@@ -16,6 +16,10 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.automirrored.outlined.NoteAdd
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -223,13 +227,12 @@ fun MainScreen(
                             IconButton(
                                 onClick = { vm.navigateBack() },
                                 enabled = state.canNavigateBack,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
-                                Text(
-                                    text = "←",
-                                    fontSize = theme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (state.canNavigateBack) contentColor else disabledColor
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = if (state.canNavigateBack) contentColor else disabledColor
                                 )
                             }
 
@@ -237,39 +240,48 @@ fun MainScreen(
                             IconButton(
                                 onClick = { vm.navigateForward() },
                                 enabled = state.canNavigateForward,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
-                                Text(
-                                    text = "→",
-                                    fontSize = theme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (state.canNavigateForward) contentColor else disabledColor
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                                    contentDescription = "Forward",
+                                    tint = if (state.canNavigateForward) contentColor else disabledColor
                                 )
+                            }
+
+                            // Centered highlighted New Document Button
+                            val docBgColor = if (targetProj != null) theme.accent else disabledColor.copy(alpha = 0.12f)
+                            val docIconColor = if (targetProj != null) Color.White else disabledColor
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(docBgColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = { targetProj?.let { createFileDialogTargetProject = it } },
+                                    enabled = targetProj != null,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Outlined.NoteAdd,
+                                        contentDescription = "New Document",
+                                        tint = docIconColor
+                                    )
+                                }
                             }
 
                             // New Folder Button
                             IconButton(
                                 onClick = { targetProj?.let { createFolderDialogTargetProject = it } },
                                 enabled = targetProj != null,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
-                                Text(
-                                    text = "📁+",
-                                    fontSize = theme.typography.bodyLarge,
-                                    color = if (targetProj != null) contentColor else disabledColor
-                                )
-                            }
-
-                            // New Document Button (primary action: dull red accent)
-                            IconButton(
-                                onClick = { targetProj?.let { createFileDialogTargetProject = it } },
-                                enabled = targetProj != null,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Text(
-                                    text = "📄+",
-                                    fontSize = theme.typography.bodyLarge,
-                                    color = if (targetProj != null) theme.accent else disabledColor
+                                Icon(
+                                    imageVector = Icons.Outlined.CreateNewFolder,
+                                    contentDescription = "New Folder",
+                                    tint = if (targetProj != null) contentColor else disabledColor
                                 )
                             }
 
@@ -279,12 +291,12 @@ fun MainScreen(
                                     isSearchActive = !isSearchActive
                                     if (!isSearchActive) searchQuery = ""
                                 },
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
-                                Text(
-                                    text = "🔍",
-                                    fontSize = theme.typography.body,
-                                    color = contentColor
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = "Search",
+                                    tint = contentColor
                                 )
                             }
                         }
