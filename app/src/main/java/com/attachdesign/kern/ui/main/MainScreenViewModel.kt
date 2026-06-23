@@ -128,7 +128,7 @@ class MainScreenViewModel(
         val allProjects = db.projectDao().getAllProjects()
         if (allProjects.isEmpty()) {
             val sandboxId = db.projectDao().insertProject(
-                ProjectEntity(name = "Notes", path = "notes", isExternal = false, isSelected = true)
+                ProjectEntity(name = "Root", path = "root", isExternal = false, isSelected = true)
             )
             val sandboxProj = db.projectDao().getSelectedProject()!!
 
@@ -190,6 +190,11 @@ class MainScreenViewModel(
             db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
                 relativePath = "Welcome.md", isDirectory = false,
                 lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+
+            storageManager.createDirectory(sandboxProj, "Notes")
+            db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes",
+                relativePath = "Notes", isDirectory = true,
+                lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
         } else {
             // If there's no selected project now, select the first available one
             if (db.projectDao().getSelectedProject() == null) {
