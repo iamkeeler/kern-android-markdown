@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -60,6 +61,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -355,24 +358,35 @@ fun MainScreen(
             )
         }
 
-        if (isSearchActive) {
-            SearchBar(
+        AnimatedVisibility(
+            visible = isSearchActive,
+            enter = fadeIn(animationSpec = tween(150)) + expandVertically(animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = tween(150))
+        ) {
+            DockedSearchBar(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
                 onSearch = {},
-                active = true,
-                onActiveChange = { active ->
-                    isSearchActive = active
-                    if (!active) searchQuery = ""
-                },
+                active = false,
+                onActiveChange = {},
                 placeholder = { Text("Search files...", color = theme.textMuted) },
-                leadingIcon = { Text("🔍", fontSize = theme.typography.title) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "Search",
+                        tint = theme.textMuted
+                    )
+                },
                 trailingIcon = {
                     IconButton(onClick = {
                         isSearchActive = false
                         searchQuery = ""
                     }) {
-                        Text("✕", fontSize = theme.typography.title)
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = theme.textMuted
+                        )
                     }
                 },
                 colors = SearchBarDefaults.colors(
@@ -386,159 +400,116 @@ fun MainScreen(
                     )
                 ),
                 modifier = Modifier.fillMaxWidth().padding(bottom = theme.dimensions.spacingMedium)
-            ) {
-                val filteredItems = remember(state.allItems, searchQuery, isSortAscending) {
-                    state.allItems.filterIsInstance<FileListItem.FileRow>().filter {
-                        it.node.name.contains(searchQuery, ignoreCase = true)
-                    }.let { list ->
-                        if (isSortAscending) list.sortedBy { it.node.name.lowercase() }
-                        else list.sortedByDescending { it.node.name.lowercase() }
-                    }
-                }
+            ) {}
+        }
 
-                if (filteredItems.isEmpty()) {
-                    EmptyStateHint(
-                        title = "No matches found",
-                        body = "Try searching for another filename.",
-                        theme = theme
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Top,
-                        contentPadding = PaddingValues(bottom = 90.dp)
-                    ) {
-                        items(filteredItems) { item ->
-                            SearchVfsNodeRow(
-                                node = item.node,
-                                project = item.project,
-                                theme = theme,
-                                onNodeClick = { clicked ->
-                                    if (clicked.isDirectory) {
-                                        vm.navigateToFolder(clicked, item.project)
-                                        isSearchActive = false
-                                        searchQuery = ""
-                                    } else {
-                                        onItemClick(EditorKey(item.project.id, clicked.relativePath))
-                                    }
-                                },
-                                onShareClick = { clicked -> shareNode(context, clicked, item.project, storageManager) },
-                                onEditClick = { clicked -> nodeToRename = Pair(clicked, item.project) },
-                                onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
-                            )
-                        }
-                    }
-                }
-            }
-        } else {
-            HorizontalDivider(
-                color = theme.textMuted.copy(alpha = 0.15f),
-                thickness = theme.dimensions.borderWidth,
-                modifier = Modifier.padding(top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingMedium)
-            )
+        HorizontalDivider(
+            color = theme.textMuted.copy(alpha = 0.15f),
+            thickness = theme.dimensions.borderWidth,
+            modifier = Modifier.padding(top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingMedium)
+        )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(theme.dimensions.iconHuge)
-                    .padding(bottom = theme.dimensions.spacingMedium),
-                contentAlignment = Alignment.CenterStart
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(theme.dimensions.iconHuge)
+                .padding(bottom = theme.dimensions.spacingMedium),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
-                    modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
-                    ) {
-                        if (state.activeProject != null) {
-                            Text(
-                                text = "←",
-                                color = theme.accent,
-                                fontSize = theme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clickable { vm.navigateUp() }
-                                    .padding(end = theme.dimensions.spacingMedium)
-                            )
-                        }
-
+                    if (state.activeProject != null) {
                         Text(
-                            text = "files",
-                            color = if (state.activeProject == null) theme.textPrimary else theme.accent,
+                            text = "←",
+                            color = theme.accent,
+                            fontSize = theme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { vm.navigateUp() }
+                                .padding(end = theme.dimensions.spacingMedium)
+                        )
+                    }
+
+                    Text(
+                        text = "files",
+                        color = if (state.activeProject == null) theme.textPrimary else theme.accent,
+                        fontSize = theme.typography.small,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.clickable {
+                            if (state.activeProject != null) {
+                                vm.navigateUpToRoot()
+                            }
+                        }
+                    )
+
+                    state.activeProject?.let { proj ->
+                        Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
+
+                        val isProjRoot = state.currentPath.isEmpty()
+                        Text(
+                            text = proj.name.lowercase(),
+                            color = if (isProjRoot) theme.textPrimary else theme.accent,
                             fontSize = theme.typography.small,
                             fontFamily = FontFamily.Monospace,
-                            fontWeight = if (state.activeProject == null) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.clickable {
-                                if (state.activeProject != null) {
-                                    vm.navigateUpToRoot()
+                                if (!isProjRoot) {
+                                    vm.navigateToFolderRoot(proj)
                                 }
                             }
                         )
 
-                        state.activeProject?.let { proj ->
-                            Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
-
-                            val isProjRoot = state.currentPath.isEmpty()
-                            Text(
-                                text = proj.name.lowercase(),
-                                color = if (isProjRoot) theme.textPrimary else theme.accent,
-                                fontSize = theme.typography.small,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.clickable {
-                                    if (!isProjRoot) {
-                                        vm.navigateToFolderRoot(proj)
-                                    }
-                                }
-                            )
-
-                            if (state.currentPath.isNotEmpty()) {
-                                val segments = state.currentPath.split('/')
-                                segments.forEachIndexed { index, segment ->
-                                    Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
-                                    val isLast = index == segments.lastIndex
-                                    val segmentPath = segments.take(index + 1).joinToString("/")
-                                    Text(
-                                        text = segment,
-                                        color = if (isLast) theme.textPrimary else theme.accent,
-                                        fontSize = theme.typography.small,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
-                                        modifier = Modifier.clickable {
-                                            if (!isLast) {
-                                                vm.navigateToSegment(proj, segmentPath)
-                                            }
+                        if (state.currentPath.isNotEmpty()) {
+                            val segments = state.currentPath.split('/')
+                            segments.forEachIndexed { index, segment ->
+                                Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
+                                val isLast = index == segments.lastIndex
+                                val segmentPath = segments.take(index + 1).joinToString("/")
+                                Text(
+                                    text = segment,
+                                    color = if (isLast) theme.textPrimary else theme.accent,
+                                    fontSize = theme.typography.small,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.clickable {
+                                        if (!isLast) {
+                                            vm.navigateToSegment(proj, segmentPath)
                                         }
-                                    )
-                                }
+                                    }
+                                )
                             }
                         }
                     }
+                }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium), verticalAlignment = Alignment.CenterVertically) {
-                        if (state.activeProject == null) {
-                            Text(
-                                text = "[+ workspace]",
-                                color = theme.accent,
-                                fontSize = theme.typography.tiny,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
-                            )
-                        }
-
+                Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium), verticalAlignment = Alignment.CenterVertically) {
+                    if (state.activeProject == null) {
                         Text(
-                            text = if (isSortAscending) "[A-Z]" else "[Z-A]",
+                            text = "[+ workspace]",
                             color = theme.accent,
                             fontSize = theme.typography.tiny,
                             fontFamily = FontFamily.Monospace,
-                            modifier = Modifier
-                                .clickable { isSortAscending = !isSortAscending }
-                                .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingMedium)
+                            modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
                         )
                     }
+
+                    Text(
+                        text = if (isSortAscending) "[A-Z]" else "[Z-A]",
+                        color = theme.accent,
+                        fontSize = theme.typography.tiny,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .clickable { isSortAscending = !isSortAscending }
+                            .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingMedium)
+                    )
                 }
             }
         }
@@ -546,13 +517,56 @@ fun MainScreen(
         // ── Single unified list and floating buttons container ─────────────────
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             AnimatedContent(
-                targetState = Pair(state.activeProject, state.currentPath),
+                targetState = Triple(state.activeProject, state.currentPath, isSearchActive && searchQuery.isNotEmpty()),
                 transitionSpec = {
                     fadeIn(animationSpec = tween(50)) togetherWith fadeOut(animationSpec = tween(50))
                 },
                 label = "FileExplorerTransition"
-            ) { (activeProj, currentPath) ->
-                if (activeProj == null) {
+            ) { (activeProj, currentPath, isSearching) ->
+                if (isSearching) {
+                    val filteredItems = remember(state.allItems, searchQuery, isSortAscending) {
+                        state.allItems.filterIsInstance<FileListItem.FileRow>().filter {
+                            it.node.name.contains(searchQuery, ignoreCase = true)
+                        }.let { list ->
+                            if (isSortAscending) list.sortedBy { it.node.name.lowercase() }
+                            else list.sortedByDescending { it.node.name.lowercase() }
+                        }
+                    }
+
+                    if (filteredItems.isEmpty()) {
+                        EmptyStateHint(
+                            title = "No matches found",
+                            body = "Try searching for another filename.",
+                            theme = theme
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Top,
+                            contentPadding = PaddingValues(bottom = 90.dp)
+                        ) {
+                            items(filteredItems) { item ->
+                                SearchVfsNodeRow(
+                                    node = item.node,
+                                    project = item.project,
+                                    theme = theme,
+                                    onNodeClick = { clicked ->
+                                        if (clicked.isDirectory) {
+                                            vm.navigateToFolder(clicked, item.project)
+                                            isSearchActive = false
+                                            searchQuery = ""
+                                        } else {
+                                            onItemClick(EditorKey(item.project.id, clicked.relativePath))
+                                        }
+                                    },
+                                    onShareClick = { clicked -> shareNode(context, clicked, item.project, storageManager) },
+                                    onEditClick = { clicked -> nodeToRename = Pair(clicked, item.project) },
+                                    onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
+                                )
+                            }
+                        }
+                    }
+                } else if (activeProj == null) {
                     // Root view: flat list of watched project folders
                     val sortedProjects = remember(state.projects, isSortAscending) {
                         if (isSortAscending) state.projects.sortedBy { it.name.lowercase() }
