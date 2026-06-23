@@ -33,7 +33,9 @@ data class ProjectExplorerUiState(
     val allItems: List<FileListItem> = emptyList(),
     val isCreateProjectDialogOpen: Boolean = false,
     val activeQuote: QuoteEntity? = null,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val canNavigateBack: Boolean = false,
+    val canNavigateForward: Boolean = false
 )
 
 class MainScreenViewModel(
@@ -49,6 +51,11 @@ class MainScreenViewModel(
     private val _isCreateDialogOpen = MutableStateFlow(false)
     private val _activeQuote   = MutableStateFlow<QuoteEntity?>(null)
     private val _isLoading     = MutableStateFlow(true)
+    private val _canNavigateBack = MutableStateFlow(false)
+    private val _canNavigateForward = MutableStateFlow(false)
+
+    private val backStack = mutableListOf<Pair<ProjectEntity?, String>>()
+    private val forwardStack = mutableListOf<Pair<ProjectEntity?, String>>()
 
     val explorerState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
@@ -58,7 +65,9 @@ class MainScreenViewModel(
         _allItems,
         _isCreateDialogOpen,
         _activeQuote,
-        _isLoading
+        _isLoading,
+        _canNavigateBack,
+        _canNavigateForward
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         ProjectExplorerUiState(
@@ -69,7 +78,9 @@ class MainScreenViewModel(
             allItems        = args[4] as List<FileListItem>,
             isCreateProjectDialogOpen = args[5] as Boolean,
             activeQuote     = args[6] as QuoteEntity?,
-            isLoading       = args[7] as Boolean
+            isLoading       = args[7] as Boolean,
+            canNavigateBack = args[8] as Boolean,
+            canNavigateForward = args[9] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState())
 
@@ -196,49 +207,82 @@ class MainScreenViewModel(
 
     // ── Folder drill-down ──────────────────────────────────────────────────────
 
-    fun navigateToFolder(node: VfsNode, project: ProjectEntity) {
+    private fun changeDestination(project: ProjectEntity?, path: String, saveToBackStack: Boolean = true, clearForward: Boolean = true) {
+        val prevProj = _activeProject.value
+        val prevPath = _currentPath.value
+
+        if (saveToBackStack) {
+            val prevDest = Pair(prevProj, prevPath)
+            if (backStack.isEmpty() || backStack.last() != prevDest) {
+                backStack.add(prevDest)
+            }
+        }
+        if (clearForward) {
+            forwardStack.clear()
+        }
+
         _activeProject.value = project
-        _currentPath.value   = node.relativePath
-        viewModelScope.launch { loadDrillFiles(project, node.relativePath) }
+        _currentPath.value = path
+
+        _canNavigateBack.value = backStack.isNotEmpty()
+        _canNavigateForward.value = forwardStack.isNotEmpty()
+
+        viewModelScope.launch {
+            if (project == null) {
+                refreshAllFiles()
+            } else {
+                if (path.isEmpty() && project.isExternal && saveToBackStack) {
+                    scanProject(project)
+                } else {
+                    loadDrillFiles(project, path)
+                }
+            }
+        }
+    }
+
+    fun navigateBack() {
+        if (backStack.isEmpty()) return
+        val currentDest = Pair(_activeProject.value, _currentPath.value)
+        forwardStack.add(currentDest)
+
+        val prevDest = backStack.removeAt(backStack.lastIndex)
+        changeDestination(prevDest.first, prevDest.second, saveToBackStack = false, clearForward = false)
+    }
+
+    fun navigateForward() {
+        if (forwardStack.isEmpty()) return
+        val currentDest = Pair(_activeProject.value, _currentPath.value)
+        backStack.add(currentDest)
+
+        val nextDest = forwardStack.removeAt(forwardStack.lastIndex)
+        changeDestination(nextDest.first, nextDest.second, saveToBackStack = false, clearForward = false)
+    }
+
+    fun navigateToFolder(node: VfsNode, project: ProjectEntity) {
+        changeDestination(project, node.relativePath)
     }
 
     fun navigateUp() {
         val current = _currentPath.value
         if (current.isEmpty() || !current.contains('/')) {
-            // Already at project root or a root-level folder → back to combined view
-            _activeProject.value = null
-            _currentPath.value = ""
-            viewModelScope.launch { refreshAllFiles() }
+            changeDestination(null, "")
         } else {
             val parent = current.substringBeforeLast('/', "")
-            _currentPath.value = parent
-            val proj = _activeProject.value ?: return
-            viewModelScope.launch { loadDrillFiles(proj, parent) }
+            val proj = _activeProject.value
+            changeDestination(proj, parent)
         }
     }
 
     fun navigateUpToRoot() {
-        _activeProject.value = null
-        _currentPath.value = ""
-        viewModelScope.launch { refreshAllFiles() }
+        changeDestination(null, "")
     }
 
     fun navigateToFolderRoot(project: ProjectEntity) {
-        _activeProject.value = project
-        _currentPath.value = ""
-        viewModelScope.launch {
-            if (project.isExternal) {
-                scanProject(project)
-            } else {
-                loadDrillFiles(project, "")
-            }
-        }
+        changeDestination(project, "")
     }
 
     fun navigateToSegment(project: ProjectEntity, path: String) {
-        _activeProject.value = project
-        _currentPath.value = path
-        viewModelScope.launch { loadDrillFiles(project, path) }
+        changeDestination(project, path)
     }
 
     fun selectProject(project: ProjectEntity) {
@@ -247,14 +291,7 @@ class MainScreenViewModel(
                 db.projectDao().deselectAllProjects()
                 db.projectDao().updateProject(project.copy(isSelected = true))
             }
-            _activeProject.value = project
-            _currentPath.value = ""
-            if (project.isExternal) {
-                scanProject(project)
-            } else {
-                loadDrillFiles(project, "")
-            }
-            refreshAllFiles()
+            changeDestination(project, "")
         }
     }
 

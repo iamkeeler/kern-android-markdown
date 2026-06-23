@@ -213,4 +213,53 @@ class MainScreenViewModelTest {
         assertEquals(false, viewModel.explorerState.value.isLoading)
         job.cancel()
     }
+
+    @Test
+    fun `navigation history tracks navigation back and forward states correctly`() = runTest {
+        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
+        coEvery { projectDao.getSelectedProject() } returns proj
+        coEvery { projectDao.getAllProjectsFlow() } returns kotlinx.coroutines.flow.flowOf(listOf(proj))
+        coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
+        coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
+
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        val job = backgroundScope.launch {
+            viewModel.explorerState.collect {}
+        }
+        advanceUntilIdle()
+
+        // Initially at root/selected project root (or wherever setup initializes, let's look at initial state)
+        assertEquals(false, viewModel.explorerState.value.canNavigateBack)
+        assertEquals(false, viewModel.explorerState.value.canNavigateForward)
+
+        // Navigate to folder
+        val folder = VfsNode.Directory("subfolder", "subfolder")
+        viewModel.navigateToFolder(folder, proj)
+        advanceUntilIdle()
+
+        // Should be able to go back, but not forward
+        assertEquals(true, viewModel.explorerState.value.canNavigateBack)
+        assertEquals(false, viewModel.explorerState.value.canNavigateForward)
+        assertEquals("subfolder", viewModel.explorerState.value.currentPath)
+
+        // Navigate back
+        viewModel.navigateBack()
+        advanceUntilIdle()
+
+        // Should not be able to go back, but should be able to go forward
+        assertEquals(false, viewModel.explorerState.value.canNavigateBack)
+        assertEquals(true, viewModel.explorerState.value.canNavigateForward)
+        assertEquals("", viewModel.explorerState.value.currentPath)
+
+        // Navigate forward
+        viewModel.navigateForward()
+        advanceUntilIdle()
+
+        // Should be back to subfolder
+        assertEquals(true, viewModel.explorerState.value.canNavigateBack)
+        assertEquals(false, viewModel.explorerState.value.canNavigateForward)
+        assertEquals("subfolder", viewModel.explorerState.value.currentPath)
+
+        job.cancel()
+    }
 }
