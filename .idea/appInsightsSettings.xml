@@ -22,10 +22,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.attachdesign.kern" />
+                  <option name="mobileSdkAppId" value="1:198746606666:android:0652e7d164ccb0fab66ab3" />
+                  <option name="projectId" value="androidmd-app" />
+                  <option name="projectNumber" value="198746606666" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
