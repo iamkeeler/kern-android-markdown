@@ -1,5 +1,12 @@
 package com.attachdesign.kern.ui.editor
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -185,13 +192,26 @@ fun EditorScreen(
                     val activeIndex = uiState.focusedParagraphIndex
                     val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
 
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = true,
-                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Bottom),
-                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Bottom),
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = theme.dimensions.spacingExtraLarge, bottom = theme.dimensions.spacingHuge, top = theme.dimensions.spacingExtraLarge, start = theme.dimensions.spacingExtraLarge)
-                    ) {
-                        if (isToolbarMinimized) {
+                    androidx.compose.animation.AnimatedContent(
+                        targetState = isToolbarMinimized,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)) +
+                             scaleIn(initialScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)))
+                                .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
+                                              scaleOut(targetScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(100)))
+                                .using(SizeTransform(clip = false) { _, _ ->
+                                    androidx.compose.animation.core.spring(
+                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                    )
+                                })
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = theme.dimensions.spacingExtraLarge, bottom = theme.dimensions.spacingHuge, top = theme.dimensions.spacingExtraLarge, start = theme.dimensions.spacingExtraLarge),
+                        label = "ToolbarMinimizeAnimation"
+                    ) { minimized ->
+                        if (minimized) {
                             Box(
                                 modifier = Modifier
                                     .shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
