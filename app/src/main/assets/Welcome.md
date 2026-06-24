@@ -1,6 +1,6 @@
 # Welcome to Kern
 
-Kern is a simple, beautiful markdown editor built for your phone.
+Kern is a simple, free, and beautiful markdown editor built for your phone.
 
 > "Simplicity is the ultimate sophistication." — Leonardo da Vinci
 
@@ -27,7 +27,7 @@ You have complete control over your work.
 
 ---
 
-### 4. Smart Writing Tools
+### 3. Smart Writing Tools
 
 - **Context Toolbar:** Highlight any text to quickly change its format.
 - **Hemingway Analyzer:** Open the Metrics panel to check your reading grade level and find hard-to-read sentences.

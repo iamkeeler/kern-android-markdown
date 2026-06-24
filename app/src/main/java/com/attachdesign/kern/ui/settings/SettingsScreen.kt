@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import android.app.Activity
@@ -47,6 +48,7 @@ fun SettingsTabsContent(
     val coroutineScope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
 
     // Observe global settings reactively
     val viewModeSetting     by db.settingDao().getSettingFlow("view_mode").collectAsState(initial = null)
@@ -696,15 +698,38 @@ fun SettingsTabsContent(
                           Text(appVersion, color = theme.textMuted, fontSize = theme.typography.tiny,
                               fontFamily = FontFamily.Monospace)
                      }
-                     Row(
-                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
-                         horizontalArrangement = Arrangement.SpaceBetween,
-                         verticalAlignment = Alignment.CenterVertically
-                     ) {
-                         Text("Design & Development", color = theme.textMuted, fontSize = theme.typography.small)
-                         Text("Attach.design", color = theme.textPrimary, fontSize = theme.typography.body,
-                             fontFamily = appFont, fontWeight = FontWeight.Medium)
-                     }
+                      Row(
+                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          Text("Design & Development", color = theme.textMuted, fontSize = theme.typography.small)
+                          Text("Attach.design", color = theme.accent, fontSize = theme.typography.body,
+                              fontFamily = appFont, fontWeight = FontWeight.Medium,
+                              modifier = Modifier.clickable {
+                                  try {
+                                      uriHandler.openUri("https://kern.attach.design")
+                                  } catch (e: Exception) {
+                                      e.printStackTrace()
+                                  }
+                              })
+                      }
+                      Row(
+                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          Text("Privacy Policy", color = theme.textMuted, fontSize = theme.typography.small)
+                          Text("Read Policy", color = theme.accent, fontSize = theme.typography.body,
+                              fontFamily = appFont, fontWeight = FontWeight.Medium,
+                              modifier = Modifier.clickable {
+                                  try {
+                                      uriHandler.openUri("https://kern.attach.design/privacy")
+                                  } catch (e: Exception) {
+                                      e.printStackTrace()
+                                  }
+                              })
+                      }
 
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
