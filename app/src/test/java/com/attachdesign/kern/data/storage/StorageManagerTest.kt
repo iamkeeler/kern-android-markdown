@@ -9,10 +9,12 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class StorageManagerTest {
 
     private lateinit var context: Context
@@ -137,5 +139,11 @@ class StorageManagerTest {
     @Test(expected = SecurityException::class)
     fun testPathTraversalVulnerability_createFile() = runTest {
         storageManager.createFile(project, "../outside.md")
+    }
+
+    @Test
+    fun testReadAssetFile() {
+        val content = storageManager.readAssetFile("Welcome.md")
+        assertTrue(content.contains("Welcome to Kern"))
     }
 }
