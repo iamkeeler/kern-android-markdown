@@ -21,7 +21,8 @@ enum class MarkdownBlockType {
     BLOCKQUOTE,
     UNORDERED_LIST,
     ORDERED_LIST,
-    CODE_BLOCK
+    CODE_BLOCK,
+    HORIZONTAL_RULE
 }
 
 data class MarkdownElement(
