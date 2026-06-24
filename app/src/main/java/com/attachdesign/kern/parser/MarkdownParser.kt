@@ -99,7 +99,11 @@ object MarkdownParser {
         val unorderedMatch = unorderedListMarkerRegex.find(rawText)
         val orderedMatch = orderedListMarkerRegex.find(rawText)
 
-        if (rawText.startsWith("###### ")) {
+        val trimmed = rawText.trim()
+        if (trimmed == "---" || trimmed == "***" || trimmed == "___") {
+            blockType = MarkdownBlockType.HORIZONTAL_RULE
+            contentStart = len
+        } else if (rawText.startsWith("###### ")) {
             blockType = MarkdownBlockType.HEADER_6
             contentStart = 7
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 7))

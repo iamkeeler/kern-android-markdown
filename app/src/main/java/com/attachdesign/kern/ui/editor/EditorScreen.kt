@@ -543,35 +543,51 @@ fun ParagraphField(
             )
         }
 
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            textStyle = textStyle,
-            visualTransformation = visualTransformation,
-            modifier = Modifier
-                .fillMaxWidth()
-                .bringIntoViewRequester(bringIntoViewRequester)
-                .focusRequester(focusRequester)
-                .onFocusChanged { onFocusChanged(it.isFocused) }
-                .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type == KeyEventType.KeyDown) {
-                        if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed) {
-                            onEnterPressed(value.selection.start)
-                            true
-                        } else if (keyEvent.key == Key.Backspace && value.selection.start == 0 && value.selection.end == 0) {
-                            onBackspacePressed()
-                            true
+        if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.HORIZONTAL_RULE) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp)
+                    .clickable { focusRequester.requestFocus() },
+                contentAlignment = Alignment.Center
+            ) {
+                HorizontalDivider(
+                    modifier = Modifier.fillMaxWidth(0.6f),
+                    thickness = 1.dp,
+                    color = theme.textMuted.copy(alpha = 0.3f)
+                )
+            }
+        } else {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                textStyle = textStyle,
+                visualTransformation = visualTransformation,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bringIntoViewRequester(bringIntoViewRequester)
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { onFocusChanged(it.isFocused) }
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown) {
+                            if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed) {
+                                onEnterPressed(value.selection.start)
+                                true
+                            } else if (keyEvent.key == Key.Backspace && value.selection.start == 0 && value.selection.end == 0) {
+                                onBackspacePressed()
+                                true
+                            } else {
+                                false
+                            }
                         } else {
                             false
                         }
-                    } else {
-                        false
-                    }
-                },
-            keyboardOptions = KeyboardOptions(
-                imeAction = ImeAction.Default
+                    },
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Default
+                )
             )
-        )
+        }
     }
 
     // Auto-request focus when this is the newly focused element
