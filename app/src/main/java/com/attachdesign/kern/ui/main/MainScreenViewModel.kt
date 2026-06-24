@@ -133,8 +133,24 @@ class MainScreenViewModel(
 
         // Migration logic for old default workspace names
         db.projectDao().getAllProjects().forEach { proj ->
-            if (!proj.isExternal && (proj.name == "Notes" || proj.name == "Root") && proj.path == "root") {
-                db.projectDao().updateProject(proj.copy(name = "Files"))
+            if (!proj.isExternal && (proj.path == "notes" || proj.path == "root")) {
+                if (proj.path == "notes") {
+                    try {
+                        val oldDir = storageManager.getAbsoluteFile(proj, "")
+                        val newDir = java.io.File(oldDir.parentFile, "root")
+                        if (oldDir.exists() && oldDir.isDirectory) {
+                            if (newDir.exists()) {
+                                oldDir.copyRecursively(newDir, overwrite = true)
+                                oldDir.deleteRecursively()
+                            } else {
+                                oldDir.renameTo(newDir)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                db.projectDao().updateProject(proj.copy(name = "Files", path = "root"))
             }
         }
 

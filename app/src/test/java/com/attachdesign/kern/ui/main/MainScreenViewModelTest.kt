@@ -262,4 +262,40 @@ class MainScreenViewModelTest {
 
         job.cancel()
     }
+
+    @Test
+    fun `migration renames legacy project from notes to root`() = runTest {
+        val legacyProj = ProjectEntity(id = 3L, name = "Notes", path = "notes", isExternal = false, isSelected = true)
+        
+        coEvery { projectDao.getAllProjects() } returns listOf(legacyProj)
+        coEvery { projectDao.getSelectedProject() } returns legacyProj
+        
+        // Mock storageManager.getAbsoluteFile to return a temporary folder
+        val tempDir = java.nio.file.Files.createTempDirectory("kern_test_migration").toFile()
+        val oldDir = java.io.File(tempDir, "notes")
+        oldDir.mkdirs()
+        java.io.File(oldDir, "test_file.txt").writeText("hello")
+        
+        every { storageManager.getAbsoluteFile(legacyProj, "") } returns oldDir
+        
+        // Act
+        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        advanceUntilIdle()
+        
+        // Assert projectDao.updateProject was called to rename path to root and name to Files
+        coVerify {
+            projectDao.updateProject(match {
+                it.name == "Files" && it.path == "root" && it.id == 3L
+            })
+        }
+        
+        // Assert directory on disk was renamed to root
+        val newDir = java.io.File(tempDir, "root")
+        assertEquals(true, newDir.exists())
+        assertEquals(false, oldDir.exists())
+        assertEquals("hello", java.io.File(newDir, "test_file.txt").readText())
+        
+        // Clean up
+        tempDir.deleteRecursively()
+    }
 }
