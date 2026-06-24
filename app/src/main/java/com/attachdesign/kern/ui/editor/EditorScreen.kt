@@ -582,13 +582,14 @@ fun ParagraphField(
 
     val paddingModifier = when {
         viewMode == ViewMode.RAW_PLAIN_TEXT -> Modifier.padding(vertical = theme.dimensions.spacingSmall)
-        blockType == MarkdownBlockType.BLOCKQUOTE -> Modifier.padding(start = theme.dimensions.spacingLarge, top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingSmall)
+        blockType == MarkdownBlockType.BLOCKQUOTE -> Modifier.padding(top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingSmall)
         else -> Modifier.padding(vertical = theme.dimensions.spacingSmall)
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .then(paddingModifier)
     ) {
         // Render left border for blockquotes
@@ -596,64 +597,76 @@ fun ParagraphField(
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .width(theme.dimensions.spacingSmall)
+                    .width(4.dp)
                     .fillMaxHeight()
                     .background(theme.accent)
             )
         }
 
-        if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.HORIZONTAL_RULE) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp)
-                    .clickable { focusRequester.requestFocus() },
-                contentAlignment = Alignment.Center
-            ) {
-                HorizontalDivider(
-                    modifier = Modifier.fillMaxWidth(0.6f),
-                    thickness = 1.dp,
-                    color = theme.textMuted.copy(alpha = 0.3f)
-                )
-            }
-        } else if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.TABLE) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { focusRequester.requestFocus() }
-            ) {
-                TableRender(rawText = value.text, theme = theme)
-            }
+        val contentModifier = if (viewMode != ViewMode.RAW_PLAIN_TEXT && blockType == MarkdownBlockType.BLOCKQUOTE) {
+            Modifier.padding(start = theme.dimensions.spacingLarge)
         } else {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = textStyle,
-                visualTransformation = visualTransformation,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .bringIntoViewRequester(bringIntoViewRequester)
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { onFocusChanged(it.isFocused) }
-                    .onPreviewKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown) {
-                            if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed) {
-                                onEnterPressed(value.selection.start)
-                                true
-                            } else if (keyEvent.key == Key.Backspace && value.selection.start == 0 && value.selection.end == 0) {
-                                onBackspacePressed()
-                                true
+            Modifier
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(contentModifier)
+        ) {
+            if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.HORIZONTAL_RULE) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .clickable { focusRequester.requestFocus() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    HorizontalDivider(
+                        modifier = Modifier.fillMaxWidth(0.6f),
+                        thickness = 1.dp,
+                        color = theme.textMuted.copy(alpha = 0.3f)
+                    )
+                }
+            } else if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.TABLE) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { focusRequester.requestFocus() }
+                ) {
+                    TableRender(rawText = value.text, theme = theme)
+                }
+            } else {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = textStyle,
+                    visualTransformation = visualTransformation,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .bringIntoViewRequester(bringIntoViewRequester)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { onFocusChanged(it.isFocused) }
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed) {
+                                    onEnterPressed(value.selection.start)
+                                    true
+                                } else if (keyEvent.key == Key.Backspace && value.selection.start == 0 && value.selection.end == 0) {
+                                    onBackspacePressed()
+                                    true
+                                } else {
+                                    false
+                                }
                             } else {
                                 false
                             }
-                        } else {
-                            false
-                        }
-                    },
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Default
+                        },
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Default
+                    )
                 )
-            )
+            }
         }
     }
 
