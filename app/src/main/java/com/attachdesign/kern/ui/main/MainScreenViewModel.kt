@@ -162,7 +162,12 @@ class MainScreenViewModel(
             val sandboxProj = ProjectEntity(id = sandboxId, name = "Files", path = "root", isExternal = false, isSelected = true)
 
             try {
-                storageManager.writeFile(sandboxProj, "Welcome.md", WELCOME_TEXT)
+                val welcomeContent = try {
+                    storageManager.readAssetFile("Welcome.md")
+                } catch (e: Exception) {
+                    ""
+                }
+                storageManager.writeFile(sandboxProj, "Welcome.md", welcomeContent)
                 db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
                     relativePath = "Welcome.md", isDirectory = false,
                     lastModified = System.currentTimeMillis(), syncState = "PENDING"))
@@ -187,7 +192,12 @@ class MainScreenViewModel(
                     val diskFiles = storageManager.listDirectory(defaultProj, "")
                     val welcomeOnDisk = diskFiles.any { it.name == "Welcome.md" && !it.isDirectory }
                     if (welcomeFile == null || !welcomeOnDisk) {
-                        storageManager.writeFile(defaultProj, "Welcome.md", WELCOME_TEXT)
+                        val welcomeContent = try {
+                            storageManager.readAssetFile("Welcome.md")
+                        } catch (e: Exception) {
+                            ""
+                        }
+                        storageManager.writeFile(defaultProj, "Welcome.md", welcomeContent)
                         if (welcomeFile == null) {
                             db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Welcome.md",
                                 relativePath = "Welcome.md", isDirectory = false,
@@ -639,39 +649,3 @@ class MainScreenViewModel(
         }
     }
 }
-
-private const val WELCOME_TEXT = """# Welcome to Kern
-
-Kern is a simple, beautiful text editor built for your phone. It keeps your writing clean and saves your files safely on your own device.
-
-## Key Features
-
-### 1. Watch Your Words Transform
-Kern shows your fully formatted text while you type. Want to change something? Just tap any line to see and edit the formatting symbols instantly.
-
-Try it right here:
-* This text is **bold**.
-* This text is *italic*.
-* This is `inline code`.
-
----
-
-### 2. Choose Your View
-Pick the setup that feels best for your writing style:
-* **Rendered:** A clean layout that hides formatting until you tap to edit.
-* **Syntax-Highlighted:** Keeps formatting symbols visible while showing colors and spacing.
-* **Raw Plain-Text:** A completely clean workspace with no extra styling.
-
----
-
-### 3. Your Files Belong to You
-You have complete control over your work.
-* **App Sandbox:** Fast internal storage built right into the app.
-* **Local Folders:** Link folders on your device or SD card. Your files stay private and work perfectly with other apps.
-
----
-
-### 4. Smart Writing Tools
-* **Context Toolbar:** Highlight any text to quickly change its format.
-* **Hemingway Analyzer:** Open the Metrics panel to check your reading grade level and find hard-to-read sentences.
-"""

@@ -318,4 +318,10 @@ class StorageManager(private val context: Context) {
             return@withContext false
         }
     }
+
+    fun readAssetFile(fileName: String): String {
+        return context.assets.open(fileName).use { inputStream ->
+            inputStream.bufferedReader().use { it.readText() }
+        }
+    }
 }
