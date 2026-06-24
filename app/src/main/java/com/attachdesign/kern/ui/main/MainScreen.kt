@@ -60,6 +60,7 @@ import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -546,7 +547,32 @@ fun MainScreen(
             AnimatedContent(
                 targetState = Triple(state.activeProject, state.currentPath, isSearchActive && searchQuery.isNotEmpty()),
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(50)) togetherWith fadeOut(animationSpec = tween(50))
+                    val (initProj, initPath, initSearching) = initialState
+                    val (targetProj, targetPath, targetSearching) = targetState
+
+                    if (initSearching != targetSearching) {
+                        fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
+                    } else {
+                        fun getDepth(proj: ProjectEntity?, path: String): Int {
+                            if (proj == null) return 0
+                            val projectDepth = 1
+                            val pathDepth = if (path.isEmpty()) 0 else path.count { it == '/' } + 1
+                            return projectDepth + pathDepth
+                        }
+
+                        val initDepth = getDepth(initProj, initPath)
+                        val targetDepth = getDepth(targetProj, targetPath)
+
+                        if (targetDepth > initDepth) {
+                            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)) togetherWith
+                                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+                        } else if (targetDepth < initDepth) {
+                            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)) togetherWith
+                                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+                        } else {
+                            fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
+                        }
+                    }
                 },
                 label = "FileExplorerTransition"
             ) { (activeProj, currentPath, isSearching) ->
