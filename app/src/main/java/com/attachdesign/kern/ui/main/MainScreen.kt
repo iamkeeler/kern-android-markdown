@@ -85,6 +85,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 
@@ -1174,18 +1175,24 @@ fun SwipeableFileRow(
         }
 
         // ── Content row (on top, slides left) ─────────────────────────────────
+        var rowPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
                 .background(theme.background)
+                .onGloballyPositioned { coordinates ->
+                    rowPositionInRoot = coordinates.positionInRoot()
+                }
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = { offset ->
                             if (offsetX.value != 0f) {
                                 scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                             } else {
-                                com.attachdesign.kern.TouchTracker.lastTouchPosition = offset
+                                val globalPos = rowPositionInRoot + offset
+                                com.attachdesign.kern.TouchTracker.lastTouchPosition = globalPos
                                 onClick()
                             }
                         }
@@ -1581,18 +1588,24 @@ fun SearchVfsNodeRow(
             SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = { onDeleteClick(node) })
         }
 
+        var rowPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
                 .background(theme.background)
+                .onGloballyPositioned { coordinates ->
+                    rowPositionInRoot = coordinates.positionInRoot()
+                }
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = { offset ->
                             if (offsetX.value != 0f) {
                                 scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                             } else {
-                                com.attachdesign.kern.TouchTracker.lastTouchPosition = offset
+                                val globalPos = rowPositionInRoot + offset
+                                com.attachdesign.kern.TouchTracker.lastTouchPosition = globalPos
                                 onNodeClick(node)
                             }
                         }
