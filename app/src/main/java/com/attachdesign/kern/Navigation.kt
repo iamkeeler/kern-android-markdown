@@ -38,27 +38,54 @@ fun MainNavigation(
         backStack = backStack,
         onBack = { backStack.removeLastOrNull() },
         transitionSpec = {
-            scaleIn(
-                initialScale = 0.92f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMediumLow
+            val toKey = targetState.key
+            if (toKey is EditorKey) {
+                scaleIn(
+                    initialScale = 0.3f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeIn(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) togetherWith fadeOut(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
                 )
-            ) + fadeIn(
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-            ) togetherWith fadeOut(
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-            )
+            } else {
+                scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeIn(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) togetherWith fadeOut(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                )
+            }
         },
         popTransitionSpec = {
-            fadeIn(
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-            ) togetherWith (scaleOut(
-                targetScale = 0.92f,
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-            ) + fadeOut(
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-            ))
+            val fromKey = initialState.key
+            if (fromKey is EditorKey) {
+                fadeIn(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) togetherWith (scaleOut(
+                    targetScale = 0.3f,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) + fadeOut(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ))
+            } else {
+                fadeIn(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) togetherWith (scaleOut(
+                    targetScale = 0.92f,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) + fadeOut(
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ))
+            }
         },
         entryProvider = entryProvider {
             entry<Main> {
