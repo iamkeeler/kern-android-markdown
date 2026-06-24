@@ -53,6 +53,8 @@ import com.attachdesign.kern.SettingsKey
 import com.attachdesign.kern.ui.settings.MinimalOutlinedButton
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.ProjectEntity
+import com.attachdesign.kern.data.local.SettingEntity
+import kotlinx.coroutines.Dispatchers
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.ui.theme.ThemeEngine
@@ -95,6 +97,12 @@ fun MainScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager) }
     val state by vm.explorerState.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+
+    var isIntroDialogOpen by remember { mutableStateOf(false) }
+    var dontShowAgainCheck by remember { mutableStateOf(false) }
+    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow("show_workspace_intro").collectAsState(initial = null)
+    val showWorkspaceIntro = showWorkspaceIntroSetting?.value?.toBoolean() ?: true
 
     var createFileDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
     var createFolderDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
@@ -111,7 +119,9 @@ fun MainScreen(
             try {
                 val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 context.contentResolver.takePersistableUriPermission(it, takeFlags)
-                selectedFolderUri = it.toString()
+                val doc = DocumentFile.fromTreeUri(context, it)
+                val folderName = doc?.name ?: "Local Folder"
+                vm.createProject(folderName, isExternal = true, path = it.toString())
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -508,7 +518,13 @@ fun MainScreen(
                             color = theme.accent,
                             fontSize = theme.typography.tiny,
                             fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.clickable { vm.setCreateDialogOpen(true) }
+                            modifier = Modifier.clickable {
+                                if (showWorkspaceIntro) {
+                                    isIntroDialogOpen = true
+                                } else {
+                                    openDocumentTreeLauncher.launch(null)
+                                }
+                            }
                         )
                     }
 
@@ -774,20 +790,59 @@ fun MainScreen(
 }
 
     // ── Dialogs ────────────────────────────────────────────────────────────────
-    if (state.isCreateProjectDialogOpen) {
-        CreateProjectDialog(
-            theme          = theme,
-            selectedUri    = selectedFolderUri,
-            onSelectFolder = { openDocumentTreeLauncher.launch(null) },
-            onDismiss      = {
-                selectedFolderUri = ""
-                vm.setCreateDialogOpen(false)
+    if (isIntroDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { isIntroDialogOpen = false },
+            title = { Text("Add Local Folder", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        text = "Add local folders on your device to the file structure.",
+                        fontSize = theme.typography.body,
+                        fontFamily = appFont,
+                        color = theme.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(theme.dimensions.spacingMedium))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { dontShowAgainCheck = !dontShowAgainCheck }
+                    ) {
+                        Checkbox(
+                            checked = dontShowAgainCheck,
+                            onCheckedChange = { dontShowAgainCheck = it },
+                            colors = CheckboxDefaults.colors(checkedColor = theme.accent)
+                        )
+                        Spacer(modifier = Modifier.width(theme.dimensions.spacingSmall))
+                        Text(
+                            text = "Don't show again",
+                            fontSize = theme.typography.small,
+                            fontFamily = appFont,
+                            color = theme.textPrimary
+                        )
+                    }
+                }
             },
-            onCreate       = { name, uri ->
-                vm.createProject(name, isExternal = uri.isNotEmpty(), path = uri.ifEmpty { null })
-                selectedFolderUri = ""
-                vm.setCreateDialogOpen(false)
-            }
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isIntroDialogOpen = false
+                        if (dontShowAgainCheck) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                db.settingDao().insertSetting(SettingEntity("show_workspace_intro", "false"))
+                            }
+                        }
+                        openDocumentTreeLauncher.launch(null)
+                    }
+                ) {
+                    Text("Select Folder", color = theme.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isIntroDialogOpen = false }) {
+                    Text("Cancel", color = theme.textMuted)
+                }
+            },
+            containerColor = theme.surface
         )
     }
 
@@ -1129,9 +1184,12 @@ fun SwipeableFileRow(
                         modifier   = Modifier.alignByBaseline()
                     )
                     val isSynced = node is VfsNode.File && node.syncState == "SYNCED" && !isExternalProject
-                    if (isSynced || isExternal) {
+                    if (isSynced) {
                         Spacer(Modifier.width(theme.dimensions.spacingSmall))
                         Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                    } else if (isExternal) {
+                        Spacer(Modifier.width(theme.dimensions.spacingSmall))
+                        Text("🔗", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
                     }
                     Spacer(Modifier.width(theme.dimensions.spacingSmall))
                     Text(
@@ -1268,7 +1326,7 @@ fun SwipeableProjectRow(
                     )
                     if (project.isExternal) {
                         Spacer(Modifier.width(theme.dimensions.spacingSmall))
-                        Text("☁️", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
+                        Text("🔗", fontSize = theme.typography.small, modifier = Modifier.alignByBaseline())
                     }
                     Spacer(Modifier.width(theme.dimensions.spacingSmall))
                     Text(
