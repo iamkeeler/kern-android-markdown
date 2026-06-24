@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1178,12 +1179,17 @@ fun SwipeableFileRow(
                 .fillMaxWidth()
                 .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
                 .background(theme.background)
-                .clickable {
-                    if (offsetX.value != 0f) {
-                        scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
-                    } else {
-                        onClick()
-                    }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            if (offsetX.value != 0f) {
+                                scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                            } else {
+                                com.attachdesign.kern.TouchTracker.lastTouchPosition = offset
+                                onClick()
+                            }
+                        }
+                    )
                 }
                 .padding(vertical = theme.dimensions.spacingMedium)
         ) {
@@ -1580,12 +1586,17 @@ fun SearchVfsNodeRow(
                 .fillMaxWidth()
                 .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
                 .background(theme.background)
-                .clickable {
-                    if (offsetX.value != 0f) {
-                        kotlinx.coroutines.GlobalScope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
-                    } else {
-                        onNodeClick(node)
-                    }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            if (offsetX.value != 0f) {
+                                scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                            } else {
+                                com.attachdesign.kern.TouchTracker.lastTouchPosition = offset
+                                onNodeClick(node)
+                            }
+                        }
+                    )
                 }
                 .padding(vertical = theme.dimensions.spacingMedium)
         ) {
