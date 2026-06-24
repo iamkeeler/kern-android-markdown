@@ -55,6 +55,7 @@ fun SettingsTabsContent(
     val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsState(initial = null)
     val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
     val sentenceCapitalizationSetting by db.settingDao().getSettingFlow("sentence_capitalization").collectAsState(initial = null)
+    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow("show_workspace_intro").collectAsState(initial = null)
 
     val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
     val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsState(initial = null)
@@ -70,6 +71,7 @@ fun SettingsTabsContent(
     val currentSticky              = stickySetting?.value?.toBoolean() ?: true
     val currentLaunchNewFile       = launchNewFileSetting?.value?.toBoolean() ?: true
     val currentSentenceCapitalization = sentenceCapitalizationSetting?.value?.toBoolean() ?: true
+    val currentShowWorkspaceIntro  = showWorkspaceIntroSetting?.value?.toBoolean() ?: true
 
     val currentAutoHeader          = autoHeaderSetting?.value?.toBoolean() ?: true
     val currentAutoComplete        = autoCompleteSetting?.value?.toBoolean() ?: true
@@ -543,6 +545,51 @@ fun SettingsTabsContent(
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
                                       db.settingDao().insertSetting(SettingEntity("sentence_capitalization", value.toString()))
+                                  }
+                              },
+                              colors = SwitchDefaults.colors(
+                                  checkedThumbColor = theme.accent,
+                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                              )
+                          )
+                      }
+
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
+                      HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
+
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clickable {
+                                  coroutineScope.launch(Dispatchers.IO) {
+                                      db.settingDao().insertSetting(SettingEntity("show_workspace_intro", (!currentShowWorkspaceIntro).toString()))
+                                  }
+                              }
+                              .padding(vertical = theme.dimensions.spacingMedium),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.SpaceBetween
+                      ) {
+                          Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
+                               Text(
+                                  text = "Workspace Intro Dialog",
+                                  color = theme.textPrimary,
+                                  fontSize = theme.typography.body,
+                                  fontFamily = appFont,
+                                  fontWeight = FontWeight.Medium
+                              )
+                              Text(
+                                  text = "Show confirmation dialog before adding watched folders.",
+                                  color = theme.textMuted,
+                                  fontSize = theme.typography.tiny,
+                                  lineHeight = theme.typography.bodyLarge
+                              )
+                          }
+                          Switch(
+                              checked = currentShowWorkspaceIntro,
+                              onCheckedChange = { value ->
+                                  coroutineScope.launch(Dispatchers.IO) {
+                                      db.settingDao().insertSetting(SettingEntity("show_workspace_intro", value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
