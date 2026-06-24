@@ -6,9 +6,10 @@ object MarkdownParser {
 
     private val unorderedListMarkerRegex = "^(\\s*)[-*+](\\s+|$)".toRegex()
     private val orderedListMarkerRegex = "^(\\s*)\\d+\\.(\\s+|$)".toRegex()
+    private val checklistRegex = "^(\\s*)[-*+]\\s+\\[([ xX])\\](?:\\s+|$)".toRegex()
 
     fun isListLine(line: String): Boolean {
-        return unorderedListMarkerRegex.containsMatchIn(line) || orderedListMarkerRegex.containsMatchIn(line)
+        return checklistRegex.containsMatchIn(line) || unorderedListMarkerRegex.containsMatchIn(line) || orderedListMarkerRegex.containsMatchIn(line)
     }
 
     /**
@@ -98,9 +99,16 @@ object MarkdownParser {
 
         val unorderedMatch = unorderedListMarkerRegex.find(rawText)
         val orderedMatch = orderedListMarkerRegex.find(rawText)
+        val checklistMatch = checklistRegex.find(rawText)
+
+        val lines = rawText.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        val isTable = lines.isNotEmpty() && lines.all { it.startsWith("|") && it.endsWith("|") }
 
         val trimmed = rawText.trim()
-        if (trimmed == "---" || trimmed == "***" || trimmed == "___") {
+        if (isTable) {
+            blockType = MarkdownBlockType.TABLE
+            contentStart = len
+        } else if (trimmed == "---" || trimmed == "***" || trimmed == "___") {
             blockType = MarkdownBlockType.HORIZONTAL_RULE
             contentStart = len
         } else if (rawText.startsWith("###### ")) {
@@ -131,6 +139,12 @@ object MarkdownParser {
             blockType = MarkdownBlockType.BLOCKQUOTE
             contentStart = if (rawText.startsWith("> ")) 2 else 1
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, 0, contentStart))
+        } else if (checklistMatch != null && checklistMatch.range.start == 0) {
+            blockType = MarkdownBlockType.TASK_LIST
+            contentStart = checklistMatch.value.length
+            val leadingSpaces = checklistMatch.groupValues[1].length
+            val isChecked = checklistMatch.groupValues[2].lowercase() == "x"
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, extra = if (isChecked) "checked" else "unchecked"))
         } else if (unorderedMatch != null && unorderedMatch.range.start == 0) {
             blockType = MarkdownBlockType.UNORDERED_LIST
             contentStart = unorderedMatch.value.length
@@ -172,6 +186,13 @@ object MarkdownParser {
         val n = text.length
 
         while (i < n) {
+            // Escape Character
+            if (text[i] == '\\' && i + 1 < n && (text[i + 1] == '*' || text[i + 1] == '_' || text[i + 1] == '~' || text[i + 1] == '`' || text[i + 1] == '[' || text[i + 1] == ']' || text[i + 1] == '!' || text[i + 1] == '\\')) {
+                result.add(MarkdownElement(MarkdownElementType.TOKEN_ESCAPE_CHAR, offset + i, offset + i + 1))
+                i += 2
+                continue
+            }
+
             // Bold (**text**)
             if (i + 1 < n && text[i] == '*' && text[i + 1] == '*') {
                 val closeIdx = text.indexOf("**", i + 2)
@@ -227,6 +248,29 @@ object MarkdownParser {
                     continue
                 }
             }
+            // Image (![text](url))
+            if (text[i] == '!' && i + 1 < n && text[i + 1] == '[') {
+                val closeBrackIdx = text.indexOf(']', i + 2)
+                if (closeBrackIdx != -1 && closeBrackIdx + 1 < n && text[closeBrackIdx + 1] == '(') {
+                    val closeParenIdx = text.indexOf(')', closeBrackIdx + 2)
+                    if (closeParenIdx != -1) {
+                        val textStart = i + 2
+                        val textEnd = closeBrackIdx
+                        val urlStart = closeBrackIdx + 2
+                        val urlEnd = closeParenIdx
+                        val url = text.substring(urlStart, urlEnd)
+
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + i, offset + textStart))
+                        result.add(MarkdownElement(MarkdownElementType.IMAGE, offset + textStart, offset + textEnd, url))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + textEnd, offset + urlStart))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_URL, offset + urlStart, offset + urlEnd + 1))
+                        result.addAll(parseInline(text.substring(textStart, textEnd), offset + textStart))
+                        i = closeParenIdx + 1
+                        continue
+                    }
+                }
+            }
+
             // Link ([text](url))
             if (text[i] == '[') {
                 val closeBrackIdx = text.indexOf(']', i + 1)

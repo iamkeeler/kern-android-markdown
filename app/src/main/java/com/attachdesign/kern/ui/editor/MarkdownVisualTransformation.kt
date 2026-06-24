@@ -99,6 +99,9 @@ class MarkdownVisualTransformation(
                 MarkdownElementType.LINK -> {
                     builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = tokenColor), start, end)
                 }
+                MarkdownElementType.IMAGE -> {
+                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = tokenColor, fontStyle = FontStyle.Italic), start, end)
+                }
                 MarkdownElementType.TOKEN_HEADER,
                 MarkdownElementType.TOKEN_BOLD,
                 MarkdownElementType.TOKEN_ITALIC,
@@ -107,7 +110,8 @@ class MarkdownVisualTransformation(
                 MarkdownElementType.TOKEN_LINK_TEXT,
                 MarkdownElementType.TOKEN_LINK_URL,
                 MarkdownElementType.TOKEN_BLOCKQUOTE,
-                MarkdownElementType.TOKEN_LIST_BULLET -> {
+                MarkdownElementType.TOKEN_LIST_BULLET,
+                MarkdownElementType.TOKEN_ESCAPE_CHAR -> {
                     builder.addStyle(SpanStyle(color = tokenColor, fontWeight = FontWeight.Normal), start, end)
                 }
                 else -> {}
@@ -129,7 +133,8 @@ class MarkdownVisualTransformation(
                 MarkdownElementType.TOKEN_LINK_TEXT,
                 MarkdownElementType.TOKEN_LINK_URL,
                 MarkdownElementType.TOKEN_BLOCKQUOTE,
-                MarkdownElementType.TOKEN_LIST_BULLET -> true
+                MarkdownElementType.TOKEN_LIST_BULLET,
+                MarkdownElementType.TOKEN_ESCAPE_CHAR -> true
                 else -> false
             }
         }.sortedBy { it.start }
@@ -141,7 +146,12 @@ class MarkdownVisualTransformation(
             if (token.start >= lastIdx) {
                 sb.append(raw.substring(lastIdx, token.start))
                 if (token.type == MarkdownElementType.TOKEN_LIST_BULLET) {
-                    if (paragraph.blockType == MarkdownBlockType.UNORDERED_LIST) {
+                    if (paragraph.blockType == MarkdownBlockType.TASK_LIST) {
+                        val isChecked = token.extra == "checked"
+                        val checkboxChar = if (isChecked) "☑" else "☐"
+                        sb.append("$checkboxChar ")
+                        strippedRanges.add(IndexRange(token.start + 2, token.end))
+                    } else if (paragraph.blockType == MarkdownBlockType.UNORDERED_LIST) {
                         val originalMarker = raw.substring(token.start, token.end)
                         val bulletChar = "•"
                         val replaced = if (originalMarker.endsWith(" ")) "$bulletChar " else bulletChar
@@ -169,6 +179,13 @@ class MarkdownVisualTransformation(
         if (paragraph.blockType == MarkdownBlockType.CODE_BLOCK) {
             builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackgroundColor), 0, builder.length)
             return
+        }
+
+        if (paragraph.blockType == MarkdownBlockType.TASK_LIST) {
+            val isChecked = paragraph.elements.any { it.type == MarkdownElementType.TOKEN_LIST_BULLET && it.extra == "checked" }
+            if (isChecked && builder.length > 2) {
+                builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = tokenColor.copy(alpha = 0.6f)), 2, builder.length)
+            }
         }
 
         for (element in paragraph.elements) {
@@ -210,6 +227,13 @@ class MarkdownVisualTransformation(
                     val tEnd = matrix.originalToTransformed(end)
                     if (tStart < tEnd) {
                         builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = tokenColor), tStart, tEnd)
+                    }
+                }
+                MarkdownElementType.IMAGE -> {
+                    val tStart = matrix.originalToTransformed(start)
+                    val tEnd = matrix.originalToTransformed(end)
+                    if (tStart < tEnd) {
+                        builder.addStyle(SpanStyle(color = tokenColor, fontStyle = FontStyle.Italic, textDecoration = TextDecoration.Underline), tStart, tEnd)
                     }
                 }
                 MarkdownElementType.TOKEN_LIST_BULLET -> {
