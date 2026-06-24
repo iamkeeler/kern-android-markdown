@@ -300,22 +300,30 @@ class MainScreenViewModel(
     }
 
     fun navigateUp() {
-        val current = _currentPath.value
-        val proj = _activeProject.value
-        if (proj == null || (proj.isExternal && current.isEmpty())) {
-            val defaultProj = db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" }
-            changeDestination(defaultProj, "")
-        } else if (current.isEmpty() || !current.contains('/')) {
-            changeDestination(proj, "")
-        } else {
-            val parent = current.substringBeforeLast('/', "")
-            changeDestination(proj, parent)
+        viewModelScope.launch {
+            val current = _currentPath.value
+            val proj = _activeProject.value
+            if (proj == null || (proj.isExternal && current.isEmpty())) {
+                val defaultProj = withContext(ioDispatcher) {
+                    db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" }
+                }
+                changeDestination(defaultProj, "")
+            } else if (current.isEmpty() || !current.contains('/')) {
+                changeDestination(proj, "")
+            } else {
+                val parent = current.substringBeforeLast('/', "")
+                changeDestination(proj, parent)
+            }
         }
     }
 
     fun navigateUpToRoot() {
-        val defaultProj = db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" }
-        changeDestination(defaultProj, "")
+        viewModelScope.launch {
+            val defaultProj = withContext(ioDispatcher) {
+                db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" }
+            }
+            changeDestination(defaultProj, "")
+        }
     }
 
     fun navigateToFolderRoot(project: ProjectEntity) {
