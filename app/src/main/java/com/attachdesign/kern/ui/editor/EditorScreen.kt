@@ -89,12 +89,30 @@ fun EditorScreen(
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
 
+    val revealProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(projectId, filePath) {
+        revealProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = androidx.compose.animation.core.tween(
+                durationMillis = 500,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        )
+    }
+
     // Load file if changed
     LaunchedEffect(projectId, filePath) {
         viewModel.loadFile(projectId, filePath, focusOnStart)
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize().background(uiState.activeTheme.background)) {
+    val touchPos = remember(projectId, filePath) { com.attachdesign.kern.TouchTracker.lastTouchPosition }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(CircularRevealShape(revealProgress.value, touchPos.x, touchPos.y))
+            .background(uiState.activeTheme.background)
+    ) {
         val widthDp = maxWidth
         val isDualPane = widthDp >= theme.dimensions.dualPaneBreakpoint
 
@@ -876,6 +894,27 @@ fun HemingwayStatRow(label: String, count: Int, color: Color, theme: com.attachd
             fontSize = theme.typography.small,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+class CircularRevealShape(
+    private val progress: Float,
+    private val centerX: Float? = null,
+    private val centerY: Float? = null
+) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density
+    ): androidx.compose.ui.graphics.Outline {
+        val cx = centerX ?: (size.width / 2f)
+        val cy = centerY ?: (size.height / 2f)
+        val maxRadius = java.lang.Math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat()
+        val radius = progress * maxRadius
+        val path = androidx.compose.ui.graphics.Path().apply {
+            addOval(androidx.compose.ui.geometry.Rect(cx - radius, cy - radius, cx + radius, cy + radius))
+        }
+        return androidx.compose.ui.graphics.Outline.Generic(path)
     }
 }
 
