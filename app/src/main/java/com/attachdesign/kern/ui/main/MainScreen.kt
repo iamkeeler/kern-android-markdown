@@ -555,9 +555,9 @@ fun MainScreen(
                     } else {
                         fun getDepth(proj: ProjectEntity?, path: String): Int {
                             if (proj == null) return 0
-                            val projectDepth = 1
+                            val projectBaseDepth = if (proj.isExternal) 1 else 0
                             val pathDepth = if (path.isEmpty()) 0 else path.count { it == '/' } + 1
-                            return projectDepth + pathDepth
+                            return projectBaseDepth + pathDepth
                         }
 
                         val initDepth = getDepth(initProj, initPath)
