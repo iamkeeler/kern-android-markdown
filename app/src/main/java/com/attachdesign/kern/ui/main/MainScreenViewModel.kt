@@ -642,55 +642,36 @@ class MainScreenViewModel(
 
 private const val WELCOME_TEXT = """# Welcome to Kern
 
-Kern is a typography-first, high-performance Markdown editor designed for mobile and foldable devices. It gives you absolute control over your writing with local-first file sovereignty and a beautiful reading experience.
+Kern is a simple, beautiful text editor built for your phone. It keeps your writing clean and saves your files safely on your own device.
 
 ## Key Features
 
-### 1. Inline-Reveal Live Preview (WYSIWYG)
-Kern features an **inline-reveal layout engine**. By default, your text displays fully rendered with high-fidelity typography. The moment you tap on a paragraph to edit, the raw Markdown formatting syntax (such as `#`, `**`, `*`, `>`) reveals itself inline, allowing zero-friction editing.
+### 1. Watch Your Words Transform
+Kern shows your fully formatted text while you type. Want to change something? Just tap any line to see and edit the formatting symbols instantly.
 
-Try it yourself:
-* This is a **bold** statement.
-* This is an *italic* emphasis.
-* You can write `inline code` or block formatting.
-
-> "Simplicity is the ultimate sophistication." — Leonardo da Vinci
+Try it right here:
+* This text is **bold**.
+* This text is *italic*.
+* This is `inline code`.
 
 ---
 
-### 2. Three-State View Configurations
-Toggle between three view modes via settings to suit your writing style:
-1. **Rendered (Live Preview):** Clean, bookish reading layout with inline-reveal editing.
-2. **Syntax-Highlighted:** Keeps formatting symbols visible while retaining typography size, colors, and structural spacing.
-3. **Raw Plain-Text:** A completely clean monospace writing environment with zero styling or decorations.
+### 2. Choose Your View
+Pick the setup that feels best for your writing style:
+* **Rendered:** A clean layout that hides formatting until you tap to edit.
+* **Syntax-Highlighted:** Keeps formatting symbols visible while showing colors and spacing.
+* **Raw Plain-Text:** A completely clean workspace with no extra styling.
 
 ---
 
-### 3. Sharing & Editing
-* **Context Formatting Toolbar:** Select any word or sentence to reveal the context toolbar.
-* **Sticky Selection:** Keep text selected when applying formatting to stack styles seamlessly.
-* **Sharing:** Easily export or share your Markdown documents.
+### 3. Your Files Belong to You
+You have complete control over your work.
+* **App Sandbox:** Fast internal storage built right into the app.
+* **Local Folders:** Link folders on your device or SD card. Your files stay private and work perfectly with other apps.
 
 ---
 
-### 4. Linking Local Folders (Scoped Storage)
-Own your files completely.
-* **App-Sandbox Storage:** Fast, local-first internal storage.
-* **External Scoped Storage (SAF):** Link arbitrary local folders on your device or SD card using Android's Storage Access Framework. Keep your files local, private, and compatible with other text editors.
-
----
-
-### 5. Hemingway Readability Analyzer
-Polish your prose on demand. Open the **Metrics** sidebar to run asynchronous readability analysis:
-* Evaluates reading grade levels.
-* Detects complex words, passive voice, and redundant adverbs.
-* Highlights hard-to-read sentences inline so you can refine them.
-
----
-
-### 6. Dynamic Theme & Typography
-Designed like a well-lit architecture studio, Kern prioritizes reading endurance:
-* Locked 1.6x line-height for optimal reading scan lines.
-* Support for premium Monospace system fonts (`JetBrains Mono` / `Roboto Mono`) and elegant Serifs.
-* Seamless split-screen support on tablets and foldables (35% directory rail, 65% central workspace).
+### 4. Smart Writing Tools
+* **Context Toolbar:** Highlight any text to quickly change its format.
+* **Hemingway Analyzer:** Open the Metrics panel to check your reading grade level and find hard-to-read sentences.
 """
