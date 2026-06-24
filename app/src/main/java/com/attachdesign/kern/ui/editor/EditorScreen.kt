@@ -445,7 +445,7 @@ fun EditorCanvas(
             val value = textFieldValues[index] ?: TextFieldValue(paragraph.rawText)
             val isFocused = state.focusedParagraphIndex == index
 
-            val visualTransformation = remember(isFocused, state.viewMode, state.activeTheme) {
+            val visualTransformation = remember(paragraph.rawText, isFocused, state.viewMode, state.activeTheme) {
                 MarkdownVisualTransformation(
                     isFocused = isFocused,
                     viewMode = state.viewMode,
