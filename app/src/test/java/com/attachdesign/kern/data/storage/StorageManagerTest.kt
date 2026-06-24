@@ -145,5 +145,8 @@ class StorageManagerTest {
     fun testReadAssetFile() {
         val content = storageManager.readAssetFile("Welcome.md")
         assertTrue(content.contains("Welcome to Kern"))
+
+        val examplesContent = storageManager.readAssetFile("Formatting Examples.md")
+        assertTrue(examplesContent.contains("Formatting Examples"))
     }
 }

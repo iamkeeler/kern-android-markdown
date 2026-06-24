@@ -176,6 +176,20 @@ class MainScreenViewModel(
             }
 
             try {
+                val examplesContent = try {
+                    storageManager.readAssetFile("Formatting Examples.md")
+                } catch (e: Exception) {
+                    ""
+                }
+                storageManager.writeFile(sandboxProj, "Formatting Examples.md", examplesContent)
+                db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Formatting Examples.md",
+                    relativePath = "Formatting Examples.md", isDirectory = false,
+                    lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            try {
                 storageManager.createDirectory(sandboxProj, "Notes")
                 db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes",
                     relativePath = "Notes", isDirectory = true,
@@ -201,6 +215,27 @@ class MainScreenViewModel(
                         if (welcomeFile == null) {
                             db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Welcome.md",
                                 relativePath = "Welcome.md", isDirectory = false,
+                                lastModified = System.currentTimeMillis(), syncState = "PENDING"))
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                try {
+                    val examplesFile = db.fileDao().getFileByPath(defaultProj.id, "Formatting Examples.md")
+                    val diskFiles = storageManager.listDirectory(defaultProj, "")
+                    val examplesOnDisk = diskFiles.any { it.name == "Formatting Examples.md" && !it.isDirectory }
+                    if (examplesFile == null || !examplesOnDisk) {
+                        val examplesContent = try {
+                            storageManager.readAssetFile("Formatting Examples.md")
+                        } catch (e: Exception) {
+                            ""
+                        }
+                        storageManager.writeFile(defaultProj, "Formatting Examples.md", examplesContent)
+                        if (examplesFile == null) {
+                            db.fileDao().insertFile(FileEntity(projectId = defaultProj.id, name = "Formatting Examples.md",
+                                relativePath = "Formatting Examples.md", isDirectory = false,
                                 lastModified = System.currentTimeMillis(), syncState = "PENDING"))
                         }
                     }
