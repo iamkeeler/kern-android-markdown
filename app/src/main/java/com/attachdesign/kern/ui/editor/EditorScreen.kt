@@ -449,8 +449,11 @@ fun EditorCanvas(
                     val text = value.text
                     val first = text.substring(0, cursor)
                     val second = text.substring(cursor)
-                    viewModel.updateParagraph(index, TextFieldValue(first))
-                    viewModel.insertParagraphAfter(index, second)
+                    val newValue = TextFieldValue(
+                        text = first + "\n" + second,
+                        selection = androidx.compose.ui.text.TextRange(cursor + 1)
+                    )
+                    viewModel.updateParagraph(index, newValue)
                 },
                 onBackspacePressed = {
                     viewModel.mergeParagraphWithPrevious(index)
