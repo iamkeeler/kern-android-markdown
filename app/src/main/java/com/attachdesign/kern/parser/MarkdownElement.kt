@@ -3,6 +3,7 @@ package com.attachdesign.kern.parser
 enum class MarkdownElementType {
     HEADER_1, HEADER_2, HEADER_3, HEADER_4, HEADER_5, HEADER_6,
     BOLD, ITALIC, STRIKETHROUGH, INLINE_CODE, LINK, BLOCKQUOTE, LIST_BULLET,
+    IMAGE,
     // Syntax tokens (characters to be stripped or styled differently)
     TOKEN_HEADER,
     TOKEN_BOLD,
@@ -12,7 +13,8 @@ enum class MarkdownElementType {
     TOKEN_LINK_TEXT,
     TOKEN_LINK_URL,
     TOKEN_BLOCKQUOTE,
-    TOKEN_LIST_BULLET
+    TOKEN_LIST_BULLET,
+    TOKEN_ESCAPE_CHAR
 }
 
 enum class MarkdownBlockType {
@@ -22,7 +24,9 @@ enum class MarkdownBlockType {
     UNORDERED_LIST,
     ORDERED_LIST,
     CODE_BLOCK,
-    HORIZONTAL_RULE
+    HORIZONTAL_RULE,
+    TASK_LIST,
+    TABLE
 }
 
 data class MarkdownElement(

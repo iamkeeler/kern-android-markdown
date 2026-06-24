@@ -61,6 +61,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.window.PopupProperties
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.ImmutableList
 
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -251,6 +253,7 @@ fun EditorScreen(
                                 onHeaderSet = { level -> if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level) },
                                 onIndentClick = { if (activeIndex != -1) viewModel.indentParagraph(activeIndex) },
                                 onOutdentClick = { if (activeIndex != -1) viewModel.outdentParagraph(activeIndex) },
+                                onChecklistClick = { if (activeIndex != -1) viewModel.toggleChecklist(activeIndex) },
                                 onMinimizeClick = { isToolbarMinimized = true },
                                 onFormat = { p, s ->
                                     if (activeIndex == -1) return@FloatingFormattingToolbar
@@ -482,6 +485,62 @@ fun EditorCanvas(
 }
 
 @Composable
+fun TableRender(
+    rawText: String,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme
+) {
+    val immutableRows = remember(rawText) {
+        val lines = rawText.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        lines.filter { line ->
+            !line.replace(" ", "").matches("^\\|[-:|]+\\|$".toRegex())
+        }.map { line ->
+            line.split('|').map { it.trim() }.filterIndexed { index, _ ->
+                index > 0 && index < line.split('|').lastIndex
+            }.toImmutableList()
+        }.toImmutableList()
+    }
+
+    if (immutableRows.isEmpty()) return
+
+    val columnCount = remember(immutableRows) {
+        immutableRows.maxOfOrNull { it.size } ?: 0
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = theme.dimensions.spacingMedium)
+    ) {
+        HorizontalDivider(thickness = 2.dp, color = theme.textPrimary)
+
+        immutableRows.forEachIndexed { rowIndex, cells ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = theme.dimensions.spacingSmall),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                for (colIndex in 0 until columnCount) {
+                    val cellText = cells.getOrNull(colIndex) ?: ""
+                    Text(
+                        text = cellText,
+                        color = theme.textPrimary,
+                        fontSize = theme.typography.body,
+                        fontWeight = if (rowIndex == 0) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            if (rowIndex == 0) {
+                HorizontalDivider(thickness = 1.dp, color = theme.textPrimary.copy(alpha = 0.5f))
+            }
+        }
+
+        HorizontalDivider(thickness = 2.dp, color = theme.textPrimary)
+    }
+}
+
+@Composable
 fun ParagraphField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
@@ -557,6 +616,14 @@ fun ParagraphField(
                     color = theme.textMuted.copy(alpha = 0.3f)
                 )
             }
+        } else if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.TABLE) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { focusRequester.requestFocus() }
+            ) {
+                TableRender(rawText = value.text, theme = theme)
+            }
         } else {
             BasicTextField(
                 value = value,
@@ -612,6 +679,7 @@ fun FloatingFormattingToolbar(
     onHeaderSet: (Int) -> Unit = {},
     onIndentClick: () -> Unit = {},
     onOutdentClick: () -> Unit = {},
+    onChecklistClick: () -> Unit = {},
     onFormat: (prefix: String, suffix: String) -> Unit,
     onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -700,6 +768,12 @@ fun FloatingFormattingToolbar(
                         modifier = Modifier.semantics { contentDescription = "Format selection as link" }
                     ) {
                         Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = theme.typography.subtitle)
+                    }
+                    IconButton(
+                        onClick = onChecklistClick,
+                        modifier = Modifier.semantics { contentDescription = "Toggle checklist item" }
+                    ) {
+                        Text("☑", color = theme.textPrimary, fontSize = theme.typography.subtitle)
                     }
                     IconButton(
                         onClick = onOutdentClick,

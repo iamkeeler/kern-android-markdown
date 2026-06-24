@@ -571,6 +571,59 @@ viewModelScope.launch(Dispatchers.IO) {
         saveActiveFileAsync()
     }
 
+    fun toggleChecklist(index: Int) {
+        val currentState = _uiState.value
+        val items = currentState.paragraphs.items.toMutableList()
+        if (index < 0 || index >= items.size) return
+
+        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
+        val text = originalValue.text
+
+        val isTaskUnchecked = text.startsWith("- [ ] ") || text.startsWith("* [ ] ") || text.startsWith("+ [ ] ")
+        val isTaskChecked = text.startsWith("- [x] ") || text.startsWith("* [x] ") || text.startsWith("+ [x] ") ||
+                            text.startsWith("- [X] ") || text.startsWith("* [X] ") || text.startsWith("+ [X] ")
+
+        val newText: String
+        val diff: Int
+        if (isTaskUnchecked) {
+            val prefix = if (text.startsWith("- [ ] ")) "- [ ] " else if (text.startsWith("* [ ] ")) "* [ ] " else "+ [ ] "
+            val newPrefix = prefix.replace("[ ]", "[x]")
+            newText = newPrefix + text.substring(prefix.length)
+            diff = 0
+        } else if (isTaskChecked) {
+            val prefix = if (text.startsWith("- [x] ") || text.startsWith("- [X] ")) {
+                if (text.startsWith("- [x] ")) "- [x] " else "- [X] "
+            } else if (text.startsWith("* [x] ") || text.startsWith("* [X] ")) {
+                if (text.startsWith("* [x] ")) "* [x] " else "* [X] "
+            } else {
+                if (text.startsWith("+ [x] ")) "+ [x] " else "+ [X] "
+            }
+            val newPrefix = if (prefix.contains("x")) prefix.replace("[x]", "[ ]") else prefix.replace("[X]", "[ ]")
+            newText = newPrefix + text.substring(prefix.length)
+            diff = 0
+        } else {
+            newText = "- [ ] " + text
+            diff = 6
+        }
+
+        val newSelection = androidx.compose.ui.text.TextRange(
+            (originalValue.selection.start + diff).coerceIn(0, newText.length),
+            (originalValue.selection.end + diff).coerceIn(0, newText.length)
+        )
+
+        val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+        items[index] = ImmutableParagraphBlock(updatedBlock)
+
+        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
+            put(index, TextFieldValue(newText, newSelection))
+        }
+
+        _uiState.value = currentState.copy(
+            paragraphs = ImmutableParagraphList(items.toImmutableList())
+        )
+        saveActiveFileAsync()
+    }
+
     fun indentParagraph(index: Int) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
