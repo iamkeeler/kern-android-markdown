@@ -685,8 +685,16 @@ fun SettingsTabsContent(
                      ) {
                          Text("Kern", color = theme.textPrimary, fontSize = theme.typography.bodyLarge,
                              fontFamily = appFont, fontWeight = FontWeight.Medium)
-                         Text("Version 1.0", color = theme.textMuted, fontSize = theme.typography.tiny,
-                             fontFamily = FontFamily.Monospace)
+                          val appVersion = remember {
+                              try {
+                                  val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                                  "Version ${packageInfo.versionName ?: "1.0"}"
+                              } catch (e: Exception) {
+                                  "Version 1.0"
+                              }
+                          }
+                          Text(appVersion, color = theme.textMuted, fontSize = theme.typography.tiny,
+                              fontFamily = FontFamily.Monospace)
                      }
                      Row(
                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
