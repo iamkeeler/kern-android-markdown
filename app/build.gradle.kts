@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -9,12 +11,18 @@ plugins {
 android {
     namespace = "com.attachdesign.kern"
     compileSdk = 36
+    
+    val vMajor = project.property("version.major").toString().toInt()
+    val vMinor = project.property("version.minor").toString().toInt()
+    val vPatch = project.property("version.patch").toString().toInt()
+    val vCode = project.property("version.code").toString().toInt()
+
     defaultConfig {
         applicationId = "com.attachdesign.kern"
         minSdk = 26
-        targetSdk = 36
-        versionCode = 1
-        versionName = (project.findProperty("VERSION_NAME") as? String) ?: "00.01.000"
+        targetSdk = 35
+        versionCode = vCode
+        versionName = "$vMajor.$vMinor.$vPatch"
     }
 
     buildTypes {
@@ -127,3 +135,38 @@ dependencies {
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.androidx.test.runner)
 }
+
+tasks.register("incrementVersionPatch") {
+    group = "versioning"
+    description = "Increments the patch version and versionCode in gradle.properties"
+    doLast {
+        val propertiesFile = project.rootProject.file("gradle.properties")
+        if (propertiesFile.exists()) {
+            val properties = Properties()
+            propertiesFile.inputStream().use { inputStream ->
+                properties.load(inputStream)
+            }
+
+            val major = properties.getProperty("version.major")?.toInt() ?: 0
+            val minor = properties.getProperty("version.minor")?.toInt() ?: 0
+            val patch = properties.getProperty("version.patch")?.toInt() ?: 0
+            val code = properties.getProperty("version.code")?.toInt() ?: 1
+
+            val newPatch = patch + 1
+            val newCode = code + 1
+
+            val lines = propertiesFile.readLines().map { line ->
+                when {
+                    line.startsWith("version.patch=") -> "version.patch=$newPatch"
+                    line.startsWith("version.code=") -> "version.code=$newCode"
+                    else -> line
+                }
+            }
+            propertiesFile.writeText(lines.joinToString("\n") + "\n")
+            println("Version updated to $major.$minor.$newPatch (Version Code: $newCode)")
+        } else {
+            throw GradleException("gradle.properties file not found")
+        }
+    }
+}
+
