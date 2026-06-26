@@ -140,14 +140,20 @@ object MarkdownEditorEngine {
         var cursorState = newSelStart
 
         // 1. Auto Header Spacing: "#Text" -> "# Text"
+        // PERF: Optimized out Regex creation here because it's called on every keystroke
         if (autoHeaderSpacing) {
-            val headerMatch = Regex("^(#+)([^#\\s])").find(textState)
-            if (headerMatch != null) {
-                val hashes = headerMatch.groupValues[1]
-                val headerLen = hashes.length
-                textState = hashes + " " + textState.substring(headerLen)
-                if (cursorState > headerLen) {
-                    cursorState += 1
+            var hashCount = 0
+            while (hashCount < textState.length && textState[hashCount] == '#') {
+                hashCount++
+            }
+            if (hashCount > 0 && hashCount < textState.length) {
+                val nextChar = textState[hashCount]
+                if (!nextChar.isWhitespace()) {
+                    val hashes = textState.substring(0, hashCount)
+                    textState = hashes + " " + textState.substring(hashCount)
+                    if (cursorState > hashCount) {
+                        cursorState += 1
+                    }
                 }
             }
         }

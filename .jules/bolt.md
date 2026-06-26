@@ -1,0 +1,3 @@
+## 2025-10-24 - [Remove Regex in high-frequency text changes]
+**Learning:** In Jetpack Compose / Markdown Editor context, creating a `Regex` instance on every keystroke (`MarkdownEditorEngine.handleTextChange`) incurs unnecessary memory allocation and GC overhead for very simple prefix checks.
+**Action:** Replace `Regex` allocations with manual string slicing and index scanning loops on paths that execute on a per-keystroke or per-recomposition basis.
