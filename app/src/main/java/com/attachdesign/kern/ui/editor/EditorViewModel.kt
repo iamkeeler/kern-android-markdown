@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import android.content.Intent
 
 enum class SidebarMode {
     CLOSED,
@@ -1033,6 +1034,132 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
     }
+
+    fun shareCurrentFile() {
+        val currentState = _uiState.value
+        val rawBlocks = currentState.paragraphs.items.map { it.block.rawText }
+        val content = MarkdownParser.joinDocument(rawBlocks)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, currentState.activeFilePath.substringAfterLast('/'))
+            putExtra(Intent.EXTRA_TEXT, content)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share Markdown").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+    }
+
+    fun deleteCurrentFile(onDeleted: () -> Unit) {
+        val currentState = _uiState.value
+        val project = currentState.activeProject ?: return
+        val filePath = currentState.activeFilePath
+        if (filePath.isEmpty()) return
+
+        saveJob?.cancel()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                storageManager.deleteFile(project, filePath)
+                db.fileDao().deleteFile(project.id, filePath)
+            }
+            _uiState.value = _uiState.value.copy(
+                activeFilePath = "",
+                paragraphs = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
+                hemingwayMetrics = null
+            )
+            withContext(Dispatchers.Main) {
+                onDeleted()
+            }
+        }
+    }
+
+    fun duplicateCurrentFile(onDuplicated: (String) -> Unit) {
+        val currentState = _uiState.value
+        val project = currentState.activeProject ?: return
+        val filePath = currentState.activeFilePath
+        if (filePath.isEmpty()) return
+
+        val extension = if (filePath.contains('.')) filePath.substringAfterLast('.') else "md"
+        val baseName = if (filePath.contains('.')) filePath.substringBeforeLast('.') else filePath
+
+        var newPath = "${baseName}_copy"
+        if (extension.isNotEmpty()) {
+            newPath += ".$extension"
+        }
+
+        viewModelScope.launch {
+            saveActiveFile() // save active changes first
+            val rawBlocks = currentState.paragraphs.items.map { it.block.rawText }
+            val content = MarkdownParser.joinDocument(rawBlocks)
+            withContext(Dispatchers.IO) {
+                storageManager.writeFile(project, newPath, content)
+                val currentFile = db.fileDao().getFileByPath(project.id, filePath)
+                if (currentFile != null) {
+                    val dupFile = currentFile.copy(
+                        id = 0,
+                        name = newPath.substringAfterLast('/'),
+                        relativePath = newPath,
+                        lastModified = System.currentTimeMillis(),
+                        syncState = "PENDING"
+                    )
+                    db.fileDao().insertFile(dupFile)
+                }
+            }
+            withContext(Dispatchers.Main) {
+                onDuplicated(newPath)
+            }
+        }
+    }
+
+    fun renameCurrentFile(newName: String, onRenamed: (String) -> Unit) {
+        val currentState = _uiState.value
+        val project = currentState.activeProject ?: return
+        val filePath = currentState.activeFilePath
+        if (filePath.isEmpty()) return
+
+        var cleanName = newName.trim()
+        if (cleanName.isEmpty()) return
+        if (!cleanName.endsWith(".md") && !filePath.contains('.')) {
+            // Keep original extension or fallback
+        } else if (!cleanName.endsWith(".md") && filePath.contains('.')) {
+            val ext = filePath.substringAfterLast('.')
+            if (!cleanName.endsWith(".$ext")) {
+                cleanName += ".$ext"
+            }
+        }
+
+        val parentDir = if (filePath.contains('/')) filePath.substringBeforeLast('/') + "/" else ""
+        val newPath = "$parentDir$cleanName"
+
+        viewModelScope.launch {
+            saveActiveFile()
+            val success = withContext(Dispatchers.IO) {
+                val moved = storageManager.moveNode(project, filePath, project, newPath)
+                if (moved) {
+                    val currentFile = db.fileDao().getFileByPath(project.id, filePath)
+                    if (currentFile != null) {
+                        val renamedFile = currentFile.copy(
+                            id = currentFile.id,
+                            name = cleanName,
+                            relativePath = newPath,
+                            lastModified = System.currentTimeMillis(),
+                            syncState = "PENDING"
+                        )
+                        db.fileDao().updateFile(renamedFile)
+                    }
+                }
+                moved
+            }
+
+            if (success) {
+                _uiState.value = _uiState.value.copy(activeFilePath = newPath)
+                withContext(Dispatchers.Main) {
+                    onRenamed(newPath)
+                }
+            }
+        }
+    }
+
 
 
 

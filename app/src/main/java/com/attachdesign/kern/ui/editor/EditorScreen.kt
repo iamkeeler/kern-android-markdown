@@ -76,6 +76,7 @@ import com.attachdesign.kern.ui.theme.AppColorTheme
 import com.attachdesign.kern.ui.theme.AppThemeJson
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.settings.SettingsTabsContent
+import com.attachdesign.kern.ui.main.InputDialog
 
 @Composable
 fun EditorScreen(
@@ -90,6 +91,47 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
+
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showRenameDialog) {
+        InputDialog(
+            title = "Rename File",
+            label = "New name",
+            confirmText = "Rename",
+            theme = theme,
+            onDismiss = { showRenameDialog = false },
+            onConfirm = { newName ->
+                viewModel.renameCurrentFile(newName) { newPath ->
+                    Toast.makeText(context, "Renamed successfully", Toast.LENGTH_SHORT).show()
+                }
+                showRenameDialog = false
+            }
+        )
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete File?", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete this file? This cannot be undone.", color = theme.textPrimary, fontSize = theme.typography.body) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.deleteCurrentFile {
+                        onBackClick()
+                    }
+                }) {
+                    Text("Delete", color = theme.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel", color = theme.textMuted) }
+            },
+            containerColor = theme.surface
+        )
+    }
 
     val revealProgress = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(projectId, filePath) {
@@ -149,13 +191,25 @@ fun EditorScreen(
                                 viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
                             },
                             onMoreOptionsAction = { action ->
-                                // Stub hooks for Share, Rename, Cloud Sync, Duplicate, Delete
                                 when(action) {
-                                    "Share" -> { /* TODO */ }
-                                    "Rename" -> { /* TODO */ }
-                                    "Cloud Sync" -> { /* TODO */ }
-                                    "Duplicate" -> { /* TODO */ }
-                                    "Delete" -> { /* TODO */ }
+                                    "Share" -> {
+                                        viewModel.shareCurrentFile()
+                                    }
+                                    "Rename" -> {
+                                        showRenameDialog = true
+                                    }
+                                    "Cloud Sync" -> {
+                                        viewModel.triggerCloudSyncSweep()
+                                        Toast.makeText(context, "Cloud sync triggered", Toast.LENGTH_SHORT).show()
+                                    }
+                                    "Duplicate" -> {
+                                        viewModel.duplicateCurrentFile { newPath ->
+                                            Toast.makeText(context, "Duplicated to $newPath", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                    "Delete" -> {
+                                        showDeleteDialog = true
+                                    }
                                 }
                             }
                         )

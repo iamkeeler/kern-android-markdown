@@ -30,8 +30,7 @@ class MainActivity : ComponentActivity() {
       applicationContext,
       AppDatabase::class.java,
       "kern.db"
-    ).fallbackToDestructiveMigration()
-      .build()
+    ).build()
 
     lifecycleScope.launch(Dispatchers.IO) {
       if (db.settingDao().getSetting("editor_font_family") == null) {
