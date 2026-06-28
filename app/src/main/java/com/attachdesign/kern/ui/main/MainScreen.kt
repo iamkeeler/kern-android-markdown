@@ -1458,8 +1458,13 @@ fun InputDialog(
                 onValueChange = { value = it },
                 label         = { Text(label) },
                 colors        = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = theme.accent,
-                    focusedLabelColor  = theme.accent
+                    focusedTextColor   = theme.textPrimary,
+                    unfocusedTextColor = theme.textPrimary,
+                    focusedBorderColor   = theme.accent,
+                    unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
+                    focusedLabelColor   = theme.accent,
+                    unfocusedLabelColor = theme.textMuted,
+                    cursorColor = theme.accent
                 )
             )
         },
@@ -1499,8 +1504,13 @@ fun CreateProjectDialog(
                     onValueChange = { name = it },
                     label         = { Text("Project Name") },
                     colors        = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = theme.accent,
-                        focusedLabelColor  = theme.accent
+                        focusedTextColor   = theme.textPrimary,
+                        unfocusedTextColor = theme.textPrimary,
+                        focusedBorderColor   = theme.accent,
+                        unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
+                        focusedLabelColor   = theme.accent,
+                        unfocusedLabelColor = theme.textMuted,
+                        cursorColor = theme.accent
                     )
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)) {
