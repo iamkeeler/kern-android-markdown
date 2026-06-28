@@ -252,6 +252,11 @@ class StorageManager(private val context: Context) {
      * Renames a file or directory on Dispatchers.IO.
      */
     suspend fun renameFile(project: ProjectEntity, oldPath: String, newPath: String): Boolean = withContext(Dispatchers.IO) {
+        if (project.path.startsWith("content://")) {
+            val doc = getDocumentFile(project, oldPath) ?: return@withContext false
+            val newName = newPath.substringAfterLast('/')
+            return@withContext doc.renameTo(newName)
+        }
         val projectRoot = getProjectRootFile(project)
         val oldFile = getSafeFile(projectRoot, oldPath)
         val newFile = getSafeFile(projectRoot, newPath)

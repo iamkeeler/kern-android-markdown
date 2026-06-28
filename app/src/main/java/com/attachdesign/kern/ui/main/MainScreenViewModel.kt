@@ -8,6 +8,7 @@ import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.data.storage.VfsNodeMapper
+import com.attachdesign.kern.data.storage.FileOperationsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,6 +43,7 @@ data class ProjectExplorerUiState(
 class MainScreenViewModel(
     private val db: AppDatabase,
     private val storageManager: StorageManager,
+    private val fileOpsManager: FileOperationsManager,
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 ) : ViewModel() {
 
@@ -528,8 +530,7 @@ class MainScreenViewModel(
 
     fun deleteNode(node: VfsNode, project: ProjectEntity) {
         viewModelScope.launch {
-            storageManager.deleteFile(project, node.relativePath)
-            withContext(ioDispatcher) { db.fileDao().deleteFile(project.id, node.relativePath) }
+            fileOpsManager.deleteNode(project, node)
             val active = _activeProject.value
             if (active != null) loadDrillFiles(active, _currentPath.value)
             else refreshAllFiles()
@@ -551,22 +552,16 @@ class MainScreenViewModel(
 
     fun renameNode(node: VfsNode, newName: String, project: ProjectEntity) {
         viewModelScope.launch {
-            val dir = node.relativePath.substringBeforeLast('/', "")
-            val newRelativePath = if (dir.isEmpty()) newName else "$dir/$newName"
-            storageManager.renameFile(project, node.relativePath, newRelativePath)
-            withContext(ioDispatcher) {
-                db.fileDao().deleteFile(project.id, node.relativePath)
-                db.fileDao().insertFile(
-                    com.attachdesign.kern.data.local.FileEntity(
-                        projectId = project.id,
-                        name = newName,
-                        relativePath = newRelativePath,
-                        isDirectory = node.isDirectory,
-                        lastModified = System.currentTimeMillis(),
-                        syncState = "PENDING"
-                    )
-                )
-            }
+            fileOpsManager.renameNode(project, node, newName)
+            val active = _activeProject.value
+            if (active != null) loadDrillFiles(active, _currentPath.value)
+            else refreshAllFiles()
+        }
+    }
+
+    fun duplicateNode(node: VfsNode, project: ProjectEntity) {
+        viewModelScope.launch {
+            fileOpsManager.duplicateNode(project, node)
             val active = _activeProject.value
             if (active != null) loadDrillFiles(active, _currentPath.value)
             else refreshAllFiles()

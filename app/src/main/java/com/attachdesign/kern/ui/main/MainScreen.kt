@@ -92,10 +92,11 @@ fun MainScreen(
     onItemClick: (NavKey) -> Unit,
     db: AppDatabase,
     storageManager: StorageManager,
+    fileOpsManager: com.attachdesign.kern.data.storage.FileOperationsManager,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager) }
+    val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager, fileOpsManager) }
     val state by vm.explorerState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
@@ -110,6 +111,7 @@ fun MainScreen(
     var projectToDelete        by remember { mutableStateOf<ProjectEntity?>(null) }
     var nodeToRename           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
     var projectToRename        by remember { mutableStateOf<ProjectEntity?>(null) }
+    var activeNodeActionsTarget by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
 
     var selectedFolderUri by remember { mutableStateOf("") }
     val openDocumentTreeLauncher = rememberLauncherForActivityResult(
@@ -611,7 +613,7 @@ fun MainScreen(
                                             onItemClick(EditorKey(item.project.id, clicked.relativePath))
                                         }
                                     },
-                                    onShareClick = { clicked -> shareNode(context, clicked, item.project, storageManager) },
+                                    onShareClick = { clicked -> coroutineScope.launch { fileOpsManager.shareNode(item.project, clicked) } },
                                     onEditClick = { clicked -> nodeToRename = Pair(clicked, item.project) },
                                     onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
                                 )
@@ -643,7 +645,7 @@ fun MainScreen(
                                     theme = theme,
                                     appFont = appFont,
                                     onClick = { vm.navigateToFolderRoot(proj) },
-                                    onShare = { shareNode(context, VfsNode.Directory(name = proj.name, relativePath = ""), proj, storageManager) },
+                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(proj, VfsNode.Directory(name = proj.name, relativePath = "")) } },
                                     onEdit = { projectToRename = proj },
                                     onDelete = { projectToDelete = proj }
                                 )
@@ -720,7 +722,7 @@ fun MainScreen(
                                         },
                                         onShare = {
                                             if (!node.relativePath.startsWith("external:")) {
-                                                shareNode(context, node, activeProj, storageManager)
+                                                coroutineScope.launch { fileOpsManager.shareNode(activeProj, node) }
                                             }
                                         },
                                         onEdit = {
@@ -743,6 +745,11 @@ fun MainScreen(
                                                 }
                                             } else {
                                                 nodeToDelete = Pair(node, activeProj)
+                                            }
+                                        },
+                                        onLongClick = {
+                                            if (!node.relativePath.startsWith("external:")) {
+                                                activeNodeActionsTarget = Pair(node, activeProj)
                                             }
                                         },
                                         onDragStart = { offset ->
@@ -971,6 +978,23 @@ fun MainScreen(
         )
     }
 
+    activeNodeActionsTarget?.let { (node, project) ->
+        NodeActionsDialog(
+            node = node,
+            theme = theme,
+            onAction = { action ->
+                activeNodeActionsTarget = null
+                when (action) {
+                    "duplicate" -> vm.duplicateNode(node, project)
+                    "rename" -> nodeToRename = Pair(node, project)
+                    "share" -> coroutineScope.launch { fileOpsManager.shareNode(project, node) }
+                    "delete" -> nodeToDelete = Pair(node, project)
+                }
+            },
+            onDismiss = { activeNodeActionsTarget = null }
+        )
+    }
+
     if (state.showSplash) {
         Box(
             modifier = Modifier
@@ -1102,6 +1126,7 @@ fun SwipeableFileRow(
     onShare: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onDragStart: (Offset) -> Unit = {},
     onDrag: (Offset) -> Unit = {},
     onDragEnd: () -> Unit = {}
@@ -1192,6 +1217,9 @@ fun SwipeableFileRow(
                                 com.attachdesign.kern.TouchTracker.lastTouchPosition = globalPos
                                 onClick()
                             }
+                        },
+                        onLongPress = {
+                            onLongClick?.invoke()
                         }
                     )
                 }
@@ -1466,6 +1494,65 @@ fun InputDialog(
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = theme.textMuted) } },
+    )
+}
+
+@Composable
+fun NodeActionsDialog(
+    node: VfsNode,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    onAction: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = node.name,
+                color = theme.textPrimary,
+                fontSize = theme.typography.subtitle,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
+            ) {
+                TextButton(
+                    onClick = { onAction("duplicate") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Duplicate", color = theme.textPrimary, modifier = Modifier.fillMaxWidth())
+                }
+                TextButton(
+                    onClick = { onAction("rename") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Rename", color = theme.textPrimary, modifier = Modifier.fillMaxWidth())
+                }
+                TextButton(
+                    onClick = { onAction("share") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Share", color = theme.textPrimary, modifier = Modifier.fillMaxWidth())
+                }
+                TextButton(
+                    onClick = { onAction("delete") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Delete", color = theme.danger, modifier = Modifier.fillMaxWidth())
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = theme.textMuted)
+            }
+        },
         containerColor = theme.surface
     )
 }

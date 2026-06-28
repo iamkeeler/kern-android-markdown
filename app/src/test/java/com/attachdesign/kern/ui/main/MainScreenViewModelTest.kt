@@ -9,6 +9,7 @@ import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.local.QuoteDao
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
+import com.attachdesign.kern.data.storage.FileOperationsManager
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -38,6 +39,7 @@ class MainScreenViewModelTest {
     private lateinit var fileDao: FileDao
     private lateinit var quoteDao: QuoteDao
     private lateinit var storageManager: StorageManager
+    private lateinit var fileOpsManager: FileOperationsManager
 
     private lateinit var viewModel: MainScreenViewModel
 
@@ -50,6 +52,7 @@ class MainScreenViewModelTest {
         fileDao = mockk()
         quoteDao = mockk()
         storageManager = mockk(relaxed = true)
+        fileOpsManager = mockk(relaxed = true)
 
         every { db.projectDao() } returns projectDao
         every { db.fileDao() } returns fileDao
@@ -84,7 +87,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProject() } returns proj
         coEvery { fileDao.insertFile(any()) } returns 1L
 
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
 
         // Act
         viewModel.createFile("newfile", proj)
@@ -109,7 +112,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProject() } returns proj
         coEvery { fileDao.insertFile(any()) } returns 1L
 
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
 
         // Act
         viewModel.createFile("existing.md", proj)
@@ -134,7 +137,7 @@ class MainScreenViewModelTest {
         coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
         coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
 
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
 
         viewModel.navigateToSegment(proj, "subfolder")
 
@@ -160,7 +163,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProject() } returns proj
         coEvery { fileDao.insertFile(any()) } returns 1L
 
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
 
         // Act
         viewModel.createFile("test", proj)
@@ -182,7 +185,7 @@ class MainScreenViewModelTest {
         coEvery { fileDao.insertFile(any()) } returns 1L
         coEvery { projectDao.getAllProjects() } returns listOf(proj)
 
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
 
         // Act
         viewModel.createFile("fallback")
@@ -205,7 +208,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProjectFlow() } returns kotlinx.coroutines.flow.flowOf(null)
         coEvery { projectDao.getSelectedProject() } returns proj
 
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
         val job = backgroundScope.launch {
             viewModel.explorerState.collect {}
         }
@@ -222,7 +225,7 @@ class MainScreenViewModelTest {
         coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
         coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
 
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
         val job = backgroundScope.launch {
             viewModel.explorerState.collect {}
         }
@@ -279,7 +282,7 @@ class MainScreenViewModelTest {
         every { storageManager.getAbsoluteFile(legacyProj, "") } returns oldDir
         
         // Act
-        viewModel = MainScreenViewModel(db, storageManager, testDispatcher)
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
         advanceUntilIdle()
         
         // Assert projectDao.updateProject was called to rename path to root and name to Files

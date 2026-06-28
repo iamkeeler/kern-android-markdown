@@ -21,6 +21,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.storage.StorageManager
+import com.attachdesign.kern.data.storage.FileOperationsManager
 import com.attachdesign.kern.ui.editor.EditorScreen
 import com.attachdesign.kern.ui.editor.EditorViewModel
 import com.attachdesign.kern.ui.main.MainScreen
@@ -33,6 +34,9 @@ fun MainNavigation(
 ) {
     val backStack = rememberNavBackStack(Main)
     val context = LocalContext.current.applicationContext
+    val fileOpsManager = androidx.compose.runtime.remember {
+        FileOperationsManager(db, storageManager, context)
+    }
 
     NavDisplay(
         backStack = backStack,
@@ -93,12 +97,13 @@ fun MainNavigation(
                     onItemClick = { navKey -> backStack.add(navKey) },
                     db = db,
                     storageManager = storageManager,
+                    fileOpsManager = fileOpsManager,
                     modifier = Modifier.fillMaxSize()
                 )
             }
             entry<EditorKey> { key ->
                 val editorViewModel: EditorViewModel = viewModel {
-                    EditorViewModel(db, storageManager, context)
+                    EditorViewModel(db, storageManager, fileOpsManager, context)
                 }
                 EditorScreen(
                     projectId = key.projectId,
