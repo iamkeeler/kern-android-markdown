@@ -54,6 +54,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import kotlinx.collections.immutable.toImmutableList
@@ -209,21 +210,27 @@ fun EditorScreen(
                         )
                     }
 
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = uiState.isReadabilityPopupOpen,
-                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(expandFrom = Alignment.Top),
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = theme.dimensions.spacingTitan, end = theme.dimensions.spacingExtraLarge).zIndex(10f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(theme.dimensions.sidebarWidth)
-                                .heightIn(max = theme.dimensions.popupMaxHeight)
-                                .shadow(elevation = theme.dimensions.spacingMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
-                                .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
-                                .background(uiState.activeTheme.surface)
-                                .padding(theme.dimensions.spacingExtraLarge)
+                    if (uiState.isReadabilityPopupOpen) {
+                        androidx.compose.ui.window.Popup(
+                            alignment = Alignment.TopEnd,
+                            offset = androidx.compose.ui.unit.IntOffset(-80, 160), // adjusted to appear under the header
+                            onDismissRequest = { viewModel.toggleReadabilityPopup() },
+                            properties = androidx.compose.ui.window.PopupProperties(focusable = true, dismissOnClickOutside = true)
                         ) {
-                            MetricsTab(uiState)
+                            Box(
+                                modifier = Modifier
+                                    .width(260.dp) // Smaller width
+                                    .heightIn(max = theme.dimensions.popupMaxHeight)
+                                    .shadow(elevation = theme.dimensions.spacingMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
+                                    .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
+                                    .background(uiState.activeTheme.surface)
+                                    .padding(theme.dimensions.spacingLarge) // Slightly smaller padding
+                            ) {
+                                MetricsTab(
+                                    state = uiState,
+                                    onClose = { viewModel.toggleReadabilityPopup() }
+                                )
+                            }
                         }
                     }
                 }
@@ -934,7 +941,10 @@ fun SidebarPane(
 }
 
 @Composable
-fun MetricsTab(state: EditorUiState) {
+fun MetricsTab(
+    state: EditorUiState,
+    onClose: () -> Unit = {}
+) {
     val theme = state.activeTheme
     val metrics = state.hemingwayMetrics
 
@@ -952,8 +962,24 @@ fun MetricsTab(state: EditorUiState) {
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingExtraLarge)
+        verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
     ) {
+        // Top bar with close button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = theme.textMuted
+                )
+            }
+        }
         // Readability section (flat, bookish)
         Column(
             modifier = Modifier
