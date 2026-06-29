@@ -174,4 +174,35 @@ class EditorScreenTest {
     composeTestRule.onNodeWithText("Word Count").assertIsDisplayed()
     composeTestRule.onNodeWithText("Character Count").assertIsDisplayed()
   }
+
+  @Test
+  fun testDirectChecklistToggling() {
+    // Write checklist items to the file before setting Compose content
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", "- [ ] Buy groceries\n- [x] Read book")
+    }
+
+    // Reload the ViewModel to read the updated file contents
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+
+    // Verify task lists are rendered with correct checkmarks
+    composeTestRule.onNodeWithText("☐ Buy groceries").assertIsDisplayed()
+    composeTestRule.onNodeWithText("☑ Read book").assertIsDisplayed()
+
+    // Click on the toggle checkmark area
+    composeTestRule.onNodeWithContentDescription("Toggle task list checkmark").performClick()
+
+    // Verify that the first item visually transitions to checked state
+    composeTestRule.onNodeWithText("☑ Buy groceries").assertIsDisplayed()
+  }
 }

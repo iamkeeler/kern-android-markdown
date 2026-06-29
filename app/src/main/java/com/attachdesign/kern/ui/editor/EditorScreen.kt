@@ -853,6 +853,7 @@ fun ParagraphField(
                                     indication = null,
                                     onClick = onChecklistToggle
                                 )
+                                .semantics { contentDescription = "Toggle task list checkmark" }
                         )
                     }
                 }
