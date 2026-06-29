@@ -46,7 +46,11 @@ jobs:
           # Only commit if there are changes
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: bump version [skip ci]"
-            git push origin HEAD:${GITHUB_REF}
+            if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+              git push origin HEAD:refs/heads/main
+            else
+              git push origin HEAD:${GITHUB_REF}
+            fi
           else
             echo "No changes to commit"
           fi
