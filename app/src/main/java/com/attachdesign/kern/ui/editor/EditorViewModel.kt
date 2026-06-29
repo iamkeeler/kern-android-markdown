@@ -627,6 +627,45 @@ viewModelScope.launch(Dispatchers.IO) {
         saveActiveFileAsync()
     }
 
+    fun toggleBulletList(index: Int) {
+        val currentState = _uiState.value
+        val items = currentState.paragraphs.items.toMutableList()
+        if (index < 0 || index >= items.size) return
+
+        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
+        val text = originalValue.text
+
+        val isBullet = text.startsWith("- ") || text.startsWith("* ") || text.startsWith("+ ")
+
+        val newText: String
+        val diff: Int
+        if (isBullet) {
+            val prefix = if (text.startsWith("- ")) "- " else if (text.startsWith("* ")) "* " else "+ "
+            newText = text.substring(prefix.length)
+            diff = -prefix.length
+        } else {
+            newText = "- " + text
+            diff = 2
+        }
+
+        val newSelection = androidx.compose.ui.text.TextRange(
+            (originalValue.selection.start + diff).coerceIn(0, newText.length),
+            (originalValue.selection.end + diff).coerceIn(0, newText.length)
+        )
+
+        val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+        items[index] = ImmutableParagraphBlock(updatedBlock)
+
+        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
+            put(index, TextFieldValue(newText, newSelection))
+        }
+
+        _uiState.value = currentState.copy(
+            paragraphs = ImmutableParagraphList(items.toImmutableList())
+        )
+        saveActiveFileAsync()
+    }
+
     fun indentParagraph(index: Int) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
@@ -1158,5 +1197,16 @@ viewModelScope.launch(Dispatchers.IO) {
 
     private fun addLog(message: String) {
         // Simple internal logging
+    }
+
+    // Testing Helpers
+    internal fun setTestParagraphs(paragraphs: List<ImmutableParagraphBlock>) {
+        _uiState.value = _uiState.value.copy(paragraphs = ImmutableParagraphList(paragraphs.toImmutableList()))
+    }
+
+    internal fun setTestTextFieldValue(index: Int, value: TextFieldValue) {
+        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
+            put(index, value)
+        }
     }
 }
