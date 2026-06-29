@@ -114,6 +114,27 @@ class StorageManager(private val context: Context) {
         if (!projectDir.exists()) {
             projectDir.mkdirs()
         }
+
+        // Test writability of the final project directory to handle reinstall ownership conflicts
+        var isProjectDirWritable = false
+        try {
+            val testFile = File(projectDir, ".write_test")
+            testFile.createNewFile()
+            testFile.delete()
+            isProjectDirWritable = true
+        } catch (e: Exception) {
+            isProjectDirWritable = false
+        }
+
+        if (!isProjectDirWritable && finalRootDir != oldRootDir) {
+            val fallbackRootDir = oldRootDir
+            val fallbackProjectDir = getSafeFile(fallbackRootDir, project.path)
+            if (!fallbackProjectDir.exists()) {
+                fallbackProjectDir.mkdirs()
+            }
+            return fallbackProjectDir
+        }
+
         return projectDir
     }
 
