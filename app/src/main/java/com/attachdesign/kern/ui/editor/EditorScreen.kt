@@ -535,6 +535,9 @@ fun EditorCanvas(
                 },
                 onBackspacePressed = {
                     viewModel.mergeParagraphWithPrevious(index)
+                },
+                onChecklistToggle = {
+                    viewModel.toggleChecklist(index)
                 }
             )
         }
@@ -722,7 +725,8 @@ fun ParagraphField(
     viewMode: ViewMode,
     fontSizeScale: Float = 1.0f,
     onEnterPressed: (Int) -> Unit,
-    onBackspacePressed: () -> Unit
+    onBackspacePressed: () -> Unit,
+    onChecklistToggle: () -> Unit = {}
 ) {
     val focusRequester = remember { FocusRequester() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -807,35 +811,51 @@ fun ParagraphField(
                     TableRender(rawText = value.text, theme = theme)
                 }
             } else {
-                BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    textStyle = textStyle,
-                    visualTransformation = visualTransformation,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .bringIntoViewRequester(bringIntoViewRequester)
-                        .focusRequester(focusRequester)
-                        .onFocusChanged { onFocusChanged(it.isFocused) }
-                        .onPreviewKeyEvent { keyEvent ->
-                            if (keyEvent.type == KeyEventType.KeyDown) {
-                                if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed) {
-                                    onEnterPressed(value.selection.start)
-                                    true
-                                } else if (keyEvent.key == Key.Backspace && value.selection.start == 0 && value.selection.end == 0) {
-                                    onBackspacePressed()
-                                    true
+                Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    BasicTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        textStyle = textStyle,
+                        visualTransformation = visualTransformation,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .bringIntoViewRequester(bringIntoViewRequester)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { onFocusChanged(it.isFocused) }
+                            .onPreviewKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown) {
+                                    if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed) {
+                                        onEnterPressed(value.selection.start)
+                                        true
+                                    } else if (keyEvent.key == Key.Backspace && value.selection.start == 0 && value.selection.end == 0) {
+                                        onBackspacePressed()
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 } else {
                                     false
                                 }
-                            } else {
-                                false
-                            }
-                        },
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Default
+                            },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Default
+                        )
                     )
-                )
+
+                    if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.TASK_LIST) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .width(28.dp)
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onChecklistToggle
+                                )
+                        )
+                    }
+                }
             }
         }
     }
