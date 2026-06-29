@@ -172,6 +172,13 @@ fun EditorScreen(
                         EditorHeader(
                             filePath = filePath,
                             theme = uiState.activeTheme,
+                            isMetricsOpen = uiState.isReadabilityPopupOpen,
+                            metricsContent = {
+                                MetricsTab(
+                                    state = uiState,
+                                    onClose = { viewModel.toggleReadabilityPopup() }
+                                )
+                            },
                             onBackClick = onBackClick,
                             onMetricsToggle = {
                                 viewModel.toggleReadabilityPopup()
@@ -208,30 +215,6 @@ fun EditorScreen(
                             thickness = theme.dimensions.borderWidth,
                             color = uiState.activeTheme.textMuted.copy(alpha = 0.15f)
                         )
-                    }
-
-                    if (uiState.isReadabilityPopupOpen) {
-                        androidx.compose.ui.window.Popup(
-                            alignment = Alignment.TopEnd,
-                            offset = androidx.compose.ui.unit.IntOffset(-80, 160), // adjusted to appear under the header
-                            onDismissRequest = { viewModel.toggleReadabilityPopup() },
-                            properties = androidx.compose.ui.window.PopupProperties(focusable = true, dismissOnClickOutside = true)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(260.dp) // Smaller width
-                                    .heightIn(max = theme.dimensions.popupMaxHeight)
-                                    .shadow(elevation = theme.dimensions.spacingMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
-                                    .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
-                                    .background(uiState.activeTheme.surface)
-                                    .padding(theme.dimensions.spacingLarge) // Slightly smaller padding
-                            ) {
-                                MetricsTab(
-                                    state = uiState,
-                                    onClose = { viewModel.toggleReadabilityPopup() }
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -386,6 +369,8 @@ fun EditorScreen(
 fun EditorHeader(
     filePath: String,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    isMetricsOpen: Boolean,
+    metricsContent: @Composable () -> Unit,
     onBackClick: () -> Unit,
     onMetricsToggle: () -> Unit,
     onSettingsToggle: () -> Unit,
@@ -417,16 +402,28 @@ fun EditorHeader(
             }
         },
         actions = {
-            IconButton(
-                onClick = onMetricsToggle,
-                modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Analytics,
-                    contentDescription = "Readability metrics",
-                    tint = theme.textMuted,
-                    modifier = Modifier.size(theme.dimensions.iconMedium)
-                )
+            Box {
+                IconButton(
+                    onClick = onMetricsToggle,
+                    modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Analytics,
+                        contentDescription = "Readability metrics",
+                        tint = theme.textMuted,
+                        modifier = Modifier.size(theme.dimensions.iconMedium)
+                    )
+                }
+                DropdownMenu(
+                    expanded = isMetricsOpen,
+                    onDismissRequest = onMetricsToggle,
+                    modifier = Modifier
+                        .width(280.dp)
+                        .background(theme.surface)
+                        .padding(theme.dimensions.spacingLarge)
+                ) {
+                    metricsContent()
+                }
             }
             IconButton(
                 onClick = onSettingsToggle,
