@@ -606,6 +606,11 @@ fun SettingsTabsContent(
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
+                              .clickable {
+                                  coroutineScope.launch(Dispatchers.IO) {
+                                      db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", (!currentAutoComplete).toString()))
+                                  }
+                              }
                               .padding(vertical = theme.dimensions.spacingMedium),
                           verticalAlignment = Alignment.CenterVertically,
                           horizontalArrangement = Arrangement.SpaceBetween
@@ -625,18 +630,18 @@ fun SettingsTabsContent(
                                   lineHeight = theme.typography.bodyLarge
                               )
                           }
-                          Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)) {
-                              MinimalOutlinedButtonSmall(text = "Yes", selected = currentAutoComplete, onClick = {
+                          Switch(
+                              checked = currentAutoComplete,
+                              onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", "true"))
+                                      db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", value.toString()))
                                   }
-                              }, theme = theme)
-                              MinimalOutlinedButtonSmall(text = "No", selected = !currentAutoComplete, onClick = {
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", "false"))
-                                  }
-                              }, theme = theme)
-                          }
+                              },
+                              colors = SwitchDefaults.colors(
+                                  checkedThumbColor = theme.accent,
+                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                              )
+                          )
                       }
 
                       if (currentAutoComplete) {
