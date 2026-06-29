@@ -958,7 +958,7 @@ fun MetricsTab(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().heightIn(max = theme.dimensions.popupMaxHeight).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
     ) {
         // Top bar with close button
