@@ -29,6 +29,9 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
+import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -287,6 +290,7 @@ fun EditorScreen(
                                 onIndentClick = { if (activeIndex != -1) viewModel.indentParagraph(activeIndex) },
                                 onOutdentClick = { if (activeIndex != -1) viewModel.outdentParagraph(activeIndex) },
                                 onChecklistClick = { if (activeIndex != -1) viewModel.toggleChecklist(activeIndex) },
+                                onBulletClick = { if (activeIndex != -1) viewModel.toggleBulletList(activeIndex) },
                                 onMinimizeClick = { isToolbarMinimized = true },
                                 onFormat = { p, s ->
                                     if (activeIndex == -1) return@FloatingFormattingToolbar
@@ -740,6 +744,7 @@ fun FloatingFormattingToolbar(
     onIndentClick: () -> Unit = {},
     onOutdentClick: () -> Unit = {},
     onChecklistClick: () -> Unit = {},
+    onBulletClick: () -> Unit = {},
     onFormat: (prefix: String, suffix: String) -> Unit,
     onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -749,7 +754,7 @@ fun FloatingFormattingToolbar(
     ) {
         Row(
             modifier = Modifier
-                .widthIn(max = 360.dp)
+                .fillMaxWidth()
                 .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
                 .background(theme.surface)
                 .padding(vertical = theme.dimensions.elevationMedium),
@@ -836,16 +841,34 @@ fun FloatingFormattingToolbar(
                         Text("☑", color = theme.textPrimary, fontSize = theme.typography.subtitle)
                     }
                     IconButton(
+                        onClick = onBulletClick,
+                        modifier = Modifier.semantics { contentDescription = "Toggle bullet list" }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
+                            contentDescription = "Toggle bullet list",
+                            tint = theme.textPrimary
+                        )
+                    }
+                    IconButton(
                         onClick = onOutdentClick,
                         modifier = Modifier.semantics { contentDescription = "Outdent paragraph" }
                     ) {
-                        Text("⇤", color = theme.textPrimary, fontSize = theme.typography.subtitle)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.FormatIndentDecrease,
+                            contentDescription = "Outdent paragraph",
+                            tint = theme.textPrimary
+                        )
                     }
                     IconButton(
                         onClick = onIndentClick,
                         modifier = Modifier.semantics { contentDescription = "Indent paragraph" }
                     ) {
-                        Text("⇥", color = theme.textPrimary, fontSize = theme.typography.subtitle)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.FormatIndentIncrease,
+                            contentDescription = "Indent paragraph",
+                            tint = theme.textPrimary
+                        )
                     }
                 }
 
