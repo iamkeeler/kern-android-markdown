@@ -63,13 +63,19 @@ import androidx.compose.foundation.combinedClickable
 import kotlinx.collections.immutable.toImmutableList
 
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import com.attachdesign.kern.parser.MarkdownParser
+import com.attachdesign.kern.parser.MarkdownElementType
+import com.attachdesign.kern.parser.IndexRange
+import com.attachdesign.kern.parser.IndexTransformationMatrix
+import com.attachdesign.kern.ui.main.InputDialog
+import com.attachdesign.kern.ui.theme.AppColorTheme
+import com.attachdesign.kern.ui.settings.SettingsTabsContent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.attachdesign.kern.parser.MarkdownBlockType
-import com.attachdesign.kern.ui.theme.AppColorTheme
-import com.attachdesign.kern.ui.settings.SettingsTabsContent
-import com.attachdesign.kern.ui.main.InputDialog
 
 @Composable
 fun EditorScreen(
@@ -535,6 +541,118 @@ fun EditorCanvas(
     }
 }
 
+fun splitTableLine(line: String): List<String> {
+    val result = mutableListOf<String>()
+    val sb = StringBuilder()
+    var i = 0
+    val n = line.length
+    while (i < n) {
+        val c = line[i]
+        if (c == '\\' && i + 1 < n && line[i + 1] == '|') {
+            sb.append('|')
+            i += 2
+        } else if (c == '|') {
+            result.add(sb.toString())
+            sb.clear()
+            i++
+        } else {
+            sb.append(c)
+            i++
+        }
+    }
+    result.add(sb.toString())
+    return result
+}
+
+fun renderCellText(text: String, theme: com.attachdesign.kern.ui.theme.AppColorTheme): AnnotatedString {
+    val elements = MarkdownParser.parseInline(text, 0)
+    val tokensToProcess = elements.filter {
+        when (it.type) {
+            MarkdownElementType.TOKEN_HEADER,
+            MarkdownElementType.TOKEN_BOLD,
+            MarkdownElementType.TOKEN_ITALIC,
+            MarkdownElementType.TOKEN_STRIKETHROUGH,
+            MarkdownElementType.TOKEN_INLINE_CODE,
+            MarkdownElementType.TOKEN_LINK_TEXT,
+            MarkdownElementType.TOKEN_LINK_URL,
+            MarkdownElementType.TOKEN_BLOCKQUOTE,
+            MarkdownElementType.TOKEN_LIST_BULLET,
+            MarkdownElementType.TOKEN_ESCAPE_CHAR -> true
+            else -> false
+        }
+    }.sortedBy { it.start }
+
+    val strippedRanges = mutableListOf<IndexRange>()
+    val sb = StringBuilder()
+    var lastIdx = 0
+    for (token in tokensToProcess) {
+        if (token.start >= lastIdx) {
+            sb.append(text.substring(lastIdx, token.start))
+            strippedRanges.add(IndexRange(token.start, token.end))
+            lastIdx = token.end
+        }
+    }
+    if (lastIdx < text.length) {
+        sb.append(text.substring(lastIdx))
+    }
+    val strippedText = sb.toString()
+    val matrix = IndexTransformationMatrix(strippedRanges)
+
+    val builder = AnnotatedString.Builder(strippedText)
+    for (element in elements) {
+        val start = element.start
+        val end = element.end
+        if (start >= end) continue
+
+        when (element.type) {
+            MarkdownElementType.BOLD -> {
+                val tStart = matrix.originalToTransformed(start)
+                val tEnd = matrix.originalToTransformed(end)
+                if (tStart < tEnd) {
+                    builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), tStart, tEnd)
+                }
+            }
+            MarkdownElementType.ITALIC -> {
+                val tStart = matrix.originalToTransformed(start)
+                val tEnd = matrix.originalToTransformed(end)
+                if (tStart < tEnd) {
+                    builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), tStart, tEnd)
+                }
+            }
+            MarkdownElementType.STRIKETHROUGH -> {
+                val tStart = matrix.originalToTransformed(start)
+                val tEnd = matrix.originalToTransformed(end)
+                if (tStart < tEnd) {
+                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), tStart, tEnd)
+                }
+            }
+            MarkdownElementType.INLINE_CODE -> {
+                val tStart = matrix.originalToTransformed(start)
+                val tEnd = matrix.originalToTransformed(end)
+                if (tStart < tEnd) {
+                    builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = theme.codeBackground), tStart, tEnd)
+                }
+            }
+            MarkdownElementType.LINK -> {
+                val tStart = matrix.originalToTransformed(start)
+                val tEnd = matrix.originalToTransformed(end)
+                if (tStart < tEnd) {
+                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = theme.textMuted), tStart, tEnd)
+                }
+            }
+            MarkdownElementType.IMAGE -> {
+                val tStart = matrix.originalToTransformed(start)
+                val tEnd = matrix.originalToTransformed(end)
+                if (tStart < tEnd) {
+                    builder.addStyle(SpanStyle(color = theme.textMuted, fontStyle = FontStyle.Italic, textDecoration = TextDecoration.Underline), tStart, tEnd)
+                }
+            }
+            else -> {}
+        }
+    }
+    return builder.toAnnotatedString()
+}
+
 @Composable
 fun TableRender(
     rawText: String,
@@ -545,8 +663,9 @@ fun TableRender(
         lines.filter { line ->
             !line.replace(" ", "").matches("^\\|[-:|]+\\|$".toRegex())
         }.map { line ->
-            line.split('|').map { it.trim() }.filterIndexed { index, _ ->
-                index > 0 && index < line.split('|').lastIndex
+            val splitResult = splitTableLine(line)
+            splitResult.map { it.trim() }.filterIndexed { index, _ ->
+                index > 0 && index < splitResult.lastIndex
             }.toImmutableList()
         }.toImmutableList()
     }
@@ -574,7 +693,7 @@ fun TableRender(
                 for (colIndex in 0 until columnCount) {
                     val cellText = cells.getOrNull(colIndex) ?: ""
                     Text(
-                        text = cellText,
+                        text = remember(cellText, theme) { renderCellText(cellText, theme) },
                         color = theme.textPrimary,
                         fontSize = theme.typography.body,
                         fontWeight = if (rowIndex == 0) FontWeight.Bold else FontWeight.Normal,

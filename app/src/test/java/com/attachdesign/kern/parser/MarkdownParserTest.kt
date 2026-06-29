@@ -91,4 +91,68 @@ class MarkdownParserTest {
         val linkTextTokens = result.elements.filter { it.type == MarkdownElementType.TOKEN_LINK_TEXT }
         assertEquals(2, linkTextTokens.size)
     }
+
+    @Test
+    fun testParseSupportedMarkdownFormatting() {
+        // Test bold (**bold**) and (__bold__)
+        val boldAsterisk = MarkdownParser.parseParagraph("This is **bold** text")
+        val boldAsteriskElement = boldAsterisk.elements.find { it.type == MarkdownElementType.BOLD }
+        assertEquals("bold", boldAsterisk.rawText.substring(boldAsteriskElement!!.start, boldAsteriskElement.end))
+
+        val boldUnderscore = MarkdownParser.parseParagraph("This is __bold__ text")
+        val boldUnderscoreElement = boldUnderscore.elements.find { it.type == MarkdownElementType.BOLD }
+        assertEquals("bold", boldUnderscore.rawText.substring(boldUnderscoreElement!!.start, boldUnderscoreElement.end))
+
+        // Test italic (*italic*) and (_italic_)
+        val italicAsterisk = MarkdownParser.parseParagraph("This is *italic* text")
+        val italicAsteriskElement = italicAsterisk.elements.find { it.type == MarkdownElementType.ITALIC }
+        assertEquals("italic", italicAsterisk.rawText.substring(italicAsteriskElement!!.start, italicAsteriskElement.end))
+
+        val italicUnderscore = MarkdownParser.parseParagraph("This is _italic_ text")
+        val italicUnderscoreElement = italicUnderscore.elements.find { it.type == MarkdownElementType.ITALIC }
+        assertEquals("italic", italicUnderscore.rawText.substring(italicUnderscoreElement!!.start, italicUnderscoreElement.end))
+
+        // Test strikethrough (~~strikethrough~~)
+        val strikethrough = MarkdownParser.parseParagraph("This is ~~strike~~ text")
+        val strikethroughElement = strikethrough.elements.find { it.type == MarkdownElementType.STRIKETHROUGH }
+        assertEquals("strike", strikethrough.rawText.substring(strikethroughElement!!.start, strikethroughElement.end))
+
+        // Test inline code (`code`)
+        val inlineCode = MarkdownParser.parseParagraph("This is `code` text")
+        val inlineCodeElement = inlineCode.elements.find { it.type == MarkdownElementType.INLINE_CODE }
+        assertEquals("code", inlineCode.rawText.substring(inlineCodeElement!!.start, inlineCodeElement.end))
+
+        // Test links ([text](url))
+        val link = MarkdownParser.parseParagraph("This is [link](http://example.com) text")
+        val linkElement = link.elements.find { it.type == MarkdownElementType.LINK }
+        assertEquals("link", link.rawText.substring(linkElement!!.start, linkElement.end))
+        assertEquals("http://example.com", linkElement.extra)
+    }
+
+    @Test
+    fun testParseEscapedFormattingDelimiters() {
+        // Test escaped asterisk inside italic block: *italic \* escaped*
+        val escapedItalic = MarkdownParser.parseParagraph("This is *italic \\* escaped* text")
+        val italicElement = escapedItalic.elements.find { it.type == MarkdownElementType.ITALIC }
+        assertEquals("italic \\* escaped", escapedItalic.rawText.substring(italicElement!!.start, italicElement.end))
+
+        // Test escaped double-asterisk inside bold block: **bold \** escaped**
+        val escapedBold = MarkdownParser.parseParagraph("This is **bold \\** escaped** text")
+        val boldElement = escapedBold.elements.find { it.type == MarkdownElementType.BOLD }
+        assertEquals("bold \\** escaped", escapedBold.rawText.substring(boldElement!!.start, boldElement.end))
+        
+        // Test that backslash-escaped characters are marked as escape tokens
+        val escapeTokens = escapedBold.elements.filter { it.type == MarkdownElementType.TOKEN_ESCAPE_CHAR }
+        assertEquals(1, escapeTokens.size)
+    }
+
+    @Test
+    fun testParseNestedFormatting() {
+        val nested = MarkdownParser.parseParagraph("This is **bold and *italic* text**")
+        val boldElement = nested.elements.find { it.type == MarkdownElementType.BOLD }
+        assertEquals("bold and *italic* text", nested.rawText.substring(boldElement!!.start, boldElement.end))
+
+        val italicElement = nested.elements.find { it.type == MarkdownElementType.ITALIC }
+        assertEquals("italic", nested.rawText.substring(italicElement!!.start, italicElement.end))
+    }
 }

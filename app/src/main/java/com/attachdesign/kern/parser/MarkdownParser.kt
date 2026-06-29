@@ -232,7 +232,7 @@ object MarkdownParser {
 
             // Bold (**text**)
             if (i + 1 < n && text[i] == '*' && text[i + 1] == '*') {
-                val closeIdx = text.indexOf("**", i + 2)
+                val closeIdx = findNextUnescapedString(text, "**", i + 2)
                 if (closeIdx != -1) {
                     val innerStart = i + 2
                     val innerEnd = closeIdx
@@ -246,7 +246,7 @@ object MarkdownParser {
             }
             // Bold (__text__)
             if (i + 1 < n && text[i] == '_' && text[i + 1] == '_') {
-                val closeIdx = text.indexOf("__", i + 2)
+                val closeIdx = findNextUnescapedString(text, "__", i + 2)
                 if (closeIdx != -1) {
                     val innerStart = i + 2
                     val innerEnd = closeIdx
@@ -260,7 +260,7 @@ object MarkdownParser {
             }
             // Strikethrough (~~text~~)
             if (i + 1 < n && text[i] == '~' && text[i + 1] == '~') {
-                val closeIdx = text.indexOf("~~", i + 2)
+                val closeIdx = findNextUnescapedString(text, "~~", i + 2)
                 if (closeIdx != -1) {
                     val innerStart = i + 2
                     val innerEnd = closeIdx
@@ -274,7 +274,7 @@ object MarkdownParser {
             }
             // Inline Code (`code`)
             if (text[i] == '`') {
-                val closeIdx = text.indexOf('`', i + 1)
+                val closeIdx = findNextUnescapedChar(text, '`', i + 1)
                 if (closeIdx != -1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
@@ -287,9 +287,9 @@ object MarkdownParser {
             }
             // Image (![text](url))
             if (text[i] == '!' && i + 1 < n && text[i + 1] == '[') {
-                val closeBrackIdx = text.indexOf(']', i + 2)
+                val closeBrackIdx = findNextUnescapedChar(text, ']', i + 2)
                 if (closeBrackIdx != -1 && closeBrackIdx + 1 < n && text[closeBrackIdx + 1] == '(') {
-                    val closeParenIdx = text.indexOf(')', closeBrackIdx + 2)
+                    val closeParenIdx = findNextUnescapedChar(text, ')', closeBrackIdx + 2)
                     if (closeParenIdx != -1) {
                         val textStart = i + 2
                         val textEnd = closeBrackIdx
@@ -310,9 +310,9 @@ object MarkdownParser {
 
             // Link ([text](url))
             if (text[i] == '[') {
-                val closeBrackIdx = text.indexOf(']', i + 1)
+                val closeBrackIdx = findNextUnescapedChar(text, ']', i + 1)
                 if (closeBrackIdx != -1 && closeBrackIdx + 1 < n && text[closeBrackIdx + 1] == '(') {
-                    val closeParenIdx = text.indexOf(')', closeBrackIdx + 2)
+                    val closeParenIdx = findNextUnescapedChar(text, ')', closeBrackIdx + 2)
                     if (closeParenIdx != -1) {
                         val textStart = i + 1
                         val textEnd = closeBrackIdx
@@ -332,7 +332,7 @@ object MarkdownParser {
             }
             // Italic (*text*)
             if (text[i] == '*') {
-                val closeIdx = text.indexOf('*', i + 1)
+                val closeIdx = findNextUnescapedChar(text, '*', i + 1)
                 if (closeIdx != -1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
@@ -346,7 +346,7 @@ object MarkdownParser {
             }
             // Italic (_text_)
             if (text[i] == '_') {
-                val closeIdx = text.indexOf('_', i + 1)
+                val closeIdx = findNextUnescapedChar(text, '_', i + 1)
                 if (closeIdx != -1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
@@ -361,5 +361,45 @@ object MarkdownParser {
             i++
         }
         return result.sortedBy { it.start }
+    }
+
+    fun findNextUnescapedChar(text: String, target: Char, startIndex: Int): Int {
+        var i = startIndex
+        val n = text.length
+        while (i < n) {
+            val idx = text.indexOf(target, i)
+            if (idx == -1) return -1
+            var backslashCount = 0
+            var j = idx - 1
+            while (j >= 0 && text[j] == '\\') {
+                backslashCount++
+                j--
+            }
+            if (backslashCount % 2 == 0) {
+                return idx
+            }
+            i = idx + 1
+        }
+        return -1
+    }
+
+    fun findNextUnescapedString(text: String, target: String, startIndex: Int): Int {
+        var i = startIndex
+        val n = text.length
+        while (i < n) {
+            val idx = text.indexOf(target, i)
+            if (idx == -1) return -1
+            var backslashCount = 0
+            var j = idx - 1
+            while (j >= 0 && text[j] == '\\') {
+                backslashCount++
+                j--
+            }
+            if (backslashCount % 2 == 0) {
+                return idx
+            }
+            i = idx + 1
+        }
+        return -1
     }
 }

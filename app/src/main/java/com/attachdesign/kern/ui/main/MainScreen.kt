@@ -1510,11 +1510,22 @@ fun InputDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { if (value.isNotBlank()) onConfirm(value) }, enabled = value.isNotBlank()) {
-                Text(confirmText, color = theme.accent)
+            TextButton(
+                onClick = { if (value.isNotBlank()) onConfirm(value) },
+                enabled = value.isNotBlank()
+            ) {
+                Text(
+                    text = confirmText,
+                    color = if (value.isNotBlank()) theme.accent else theme.textMuted.copy(alpha = 0.5f)
+                )
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = theme.textMuted) } },
+        dismissButton = { 
+            TextButton(onClick = onDismiss) { 
+                Text("Cancel", color = theme.textMuted) 
+            } 
+        },
+        containerColor = theme.surface
     )
 }
 
