@@ -156,23 +156,74 @@ object HemingwayAnalyzer {
     private data class SentenceSpan(val text: String, val start: Int, val end: Int)
 
     private fun splitSentencesWithIndices(text: String): List<SentenceSpan> {
+        if (text.isBlank()) return emptyList()
+
+        val abbreviations = setOf(
+            "Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Sr.", "Jr.",
+            "e.g.", "i.e.", "etc.", "vs.", "St.", "Ltd.", "Co."
+        )
+
         val spans = mutableListOf<SentenceSpan>()
-        // Simple sentence boundary splitter: period, question mark, or exclamation followed by space or newline
-        val matcher = sentencePattern.matcher(text)
-        
-        while (matcher.find()) {
-            val sentenceText = matcher.group()
-            val start = matcher.start()
-            val end = matcher.end()
+        var start = 0
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '.' || c == '!' || c == '?') {
+                // 1) Don't split decimal numbers: digit . digit
+                val isDecimal = c == '.' &&
+                    i > 0 && i < text.lastIndex &&
+                    text[i - 1].isDigit() && text[i + 1].isDigit()
+                if (isDecimal) {
+                    i++
+                    continue
+                }
+
+                // 2) Don't split for common abbreviations: check the token ending at i
+                val tokenStart = (text.lastIndexOf(' ', i - 1) + 1).coerceAtLeast(0)
+                val token = text.substring(tokenStart, i + 1) // includes the dot
+                if (abbreviations.any { token.endsWith(it, ignoreCase = true) }) {
+                    i++
+                    continue
+                }
+
+                // 3) Determine if punctuation is followed by whitespace + uppercase letter (likely sentence boundary)
+                val nextIndex = (i + 1).let { if (it < text.length) it else -1 }
+                var followedBySentenceStart = false
+                if (nextIndex == -1) {
+                    followedBySentenceStart = true // punctuation at end of text
+                } else {
+                    // skip whitespace
+                    var j = nextIndex
+                    while (j < text.length && text[j].isWhitespace()) j++
+                    if (j < text.length) {
+                        followedBySentenceStart = text[j].isUpperCase() || text[j].isDigit()
+                    } else {
+                        followedBySentenceStart = true // trailing spaces after punctuation at end
+                    }
+                }
+
+                if (followedBySentenceStart) {
+                    val end = i + 1
+                    val sentenceText = text.substring(start, end)
+                    spans.add(SentenceSpan(sentenceText, start, end))
+                    // advance start to first non-space after i
+                    var k = end
+                    while (k < text.length && text[k].isWhitespace()) k++
+                    start = k
+                    i = start
+                    continue
+                }
+            }
+            i++
+        }
+
+        if (start < text.length) {
+            val sentenceText = text.substring(start)
             if (sentenceText.isNotBlank()) {
-                spans.add(SentenceSpan(sentenceText, start, end))
+                spans.add(SentenceSpan(sentenceText, start, text.length))
             }
         }
-        
-        if (spans.isEmpty() && text.isNotEmpty()) {
-            spans.add(SentenceSpan(text, 0, text.length))
-        }
-        
+
         return spans
     }
 }
