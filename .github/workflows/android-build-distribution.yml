@@ -74,12 +74,18 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
+      # Extract Firebase App ID dynamically from google-services.json to prevent secret missing errors
+      - name: Extract Firebase App ID
+        run: |
+          app_id=$(grep '"mobilesdk_app_id"' app/google-services.json | head -n 1 | cut -d'"' -f4)
+          echo "FIREBASE_APP_ID=$app_id" >> $GITHUB_ENV
+
       # Upload the generated APK to Firebase App Distribution
       # This step will automatically email the testers in the specified group.
       - name: Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          appId: ${{ secrets.FIREBASE_APP_ID }}
+          appId: ${{ env.FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           groups: main-testers
           file: app/build/outputs/apk/debug/app-debug.apk
