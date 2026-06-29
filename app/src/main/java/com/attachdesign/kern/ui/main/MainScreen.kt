@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -1207,6 +1209,13 @@ fun SwipeableFileRow(
                 .onGloballyPositioned { coordinates ->
                     rowPositionInRoot = coordinates.positionInRoot()
                 }
+                .semantics {
+                    customActions = listOf(
+                        androidx.compose.ui.semantics.CustomAccessibilityAction("Share") { onShare(); true },
+                        androidx.compose.ui.semantics.CustomAccessibilityAction("Rename") { onEdit(); true },
+                        androidx.compose.ui.semantics.CustomAccessibilityAction("Delete") { onDelete(); true }
+                    )
+                }
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = { offset ->
@@ -1359,6 +1368,13 @@ fun SwipeableProjectRow(
                 .fillMaxWidth()
                 .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
                 .background(theme.background)
+                .semantics {
+                    customActions = listOf(
+                        androidx.compose.ui.semantics.CustomAccessibilityAction("Share") { onShare(); true },
+                        androidx.compose.ui.semantics.CustomAccessibilityAction("Rename") { onEdit(); true },
+                        androidx.compose.ui.semantics.CustomAccessibilityAction("Delete") { onDelete(); true }
+                    )
+                }
                 .clickable {
                     if (offsetX.value != 0f) {
                         scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
