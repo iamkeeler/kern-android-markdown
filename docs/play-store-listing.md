@@ -52,22 +52,32 @@ Alternative category: Tools
 - document editor
 - plain text workflow
 
-## Screenshot plan
+## Store graphics
 
-Recommended screenshots:
+Draft store graphics are available in:
 
-1. Home / project file tree with markdown files visible.
-2. Editor showing a focused markdown document.
-3. Wider-screen split layout with file tree and document canvas.
-4. Formatting or markdown structure state, if visually distinct.
-5. Privacy/local-first reassurance screen or website-style brand panel.
+```text
+store-assets/google-play/
+```
 
-Recommended screenshot copy overlays, if used:
+Generated assets:
 
-- Local markdown, calm workspace
-- Write without cloud lock-in
-- Files and editor, side by side
-- Built for readable long-form writing
+1. `feature-graphic-1024x500.png` — Google Play feature graphic.
+2. `app-icon-512.png` — 512×512 Play icon candidate.
+3. `phone-01-local-markdown-1080x1920.png` — local markdown screenshot candidate.
+4. `phone-02-focused-editor-1080x1920.png` — focused editor screenshot candidate.
+5. `phone-03-file-tree-1080x1920.png` — file tree/workspace screenshot candidate.
+6. `phone-04-privacy-1080x1920.png` — local-first/privacy screenshot candidate.
+7. `social-preview-1200x630.png` — website/social preview image.
+
+The draft panels use designed UI compositions. Before final public submission, supplement them with real device screenshots from a release-equivalent build if Play review or launch marketing needs exact in-app capture.
+
+Recommended screenshot order:
+
+1. Local markdown / files live locally.
+2. Focused editor / clear writing structure.
+3. Files and editor / workspace navigation.
+4. Privacy posture / writing stays yours.
 
 ## Graphic asset notes
 
