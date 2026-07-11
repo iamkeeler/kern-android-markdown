@@ -23,8 +23,9 @@ Add these in GitHub → repository → Settings → Secrets and variables → Ac
 | `ANDROID_KEY_ALIAS` | Alias of the signing key inside the keystore. |
 | `ANDROID_KEY_PASSWORD` | Password for the signing key. |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Full JSON for a Google Play Console service account with release permissions. |
+| `GOOGLE_SERVICES_JSON_BASE64` | Base64-encoded Firebase `google-services.json`; kept out of git for open-source safety. |
 
-## Encoding the keystore
+## Encoding secrets
 
 From the machine that has the release keystore:
 
@@ -33,6 +34,16 @@ base64 -i path/to/release.keystore | pbcopy
 ```
 
 Paste that value into `ANDROID_KEYSTORE_BASE64`.
+
+For Firebase config, encode the local `app/google-services.json`:
+
+```bash
+base64 -i app/google-services.json | pbcopy
+```
+
+Paste that value into `GOOGLE_SERVICES_JSON_BASE64`.
+
+`app/google-services.json` is intentionally ignored by git. Use `app/google-services.json.example` as the public template.
 
 ## Google Play Console setup
 
@@ -62,4 +73,4 @@ git push origin v0.1.11
 
 - Android lint currently reports `0 errors`, `66 warnings`, and `1 hint`; the new release workflows include an explicit guard to fail if future lint errors appear.
 - The existing Firebase distribution workflow builds a debug APK. Google Play needs a signed `.aab`, which is what the new Play workflow builds.
-- `app/google-services.json` is tracked in git. That is common for Firebase app config, but it should be reviewed for policy/security comfort before public release.
+- `app/google-services.json` is intentionally ignored by git for open-source safety. Keep the real file local or store it as `GOOGLE_SERVICES_JSON_BASE64` in GitHub Actions secrets; `app/google-services.json.example` is the public template.

@@ -75,6 +75,16 @@ jobs:
         run: ./gradlew assembleDebug
 
       # Extract Firebase App ID dynamically from google-services.json to prevent secret missing errors
+      - name: Restore Firebase config
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "GOOGLE_SERVICES_JSON_BASE64 secret is required" >&2
+            exit 1
+          fi
+          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
+
       - name: Extract Firebase App ID
         run: |
           app_id=$(grep '"mobilesdk_app_id"' app/google-services.json | head -n 1 | cut -d'"' -f4)
