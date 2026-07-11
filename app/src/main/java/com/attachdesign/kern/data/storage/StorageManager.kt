@@ -175,6 +175,19 @@ class StorageManager(private val context: Context) {
     }
 
     /**
+     * Checks whether a file or folder exists at the relative path.
+     */
+    suspend fun fileExists(project: ProjectEntity, relativePath: String): Boolean = withContext(Dispatchers.IO) {
+        if (project.path.startsWith("content://")) {
+            return@withContext getDocumentFile(project, relativePath) != null
+        }
+
+        val projectRoot = getProjectRootFile(project)
+        val file = getSafeFile(projectRoot, relativePath)
+        file.exists()
+    }
+
+    /**
      * Reads file content as a UTF-8 string on Dispatchers.IO.
      */
     suspend fun readFile(project: ProjectEntity, relativePath: String): String = withContext(Dispatchers.IO) {

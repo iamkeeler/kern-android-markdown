@@ -5,8 +5,11 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.net.Uri
+import android.widget.Toast
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -21,6 +24,7 @@ import androidx.compose.animation.core.Spring
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.FileOperationsManager
+import com.attachdesign.kern.data.storage.IncomingFileImporter
 import com.attachdesign.kern.ui.editor.EditorScreen
 import com.attachdesign.kern.ui.editor.EditorViewModel
 import com.attachdesign.kern.ui.main.MainScreen
@@ -29,12 +33,29 @@ import com.attachdesign.kern.ui.settings.SettingsScreen
 @Composable
 fun MainNavigation(
     db: AppDatabase,
-    storageManager: StorageManager
+    storageManager: StorageManager,
+    externalOpenRequest: ExternalOpenRequest? = null,
+    onExternalOpenHandled: (ExternalOpenRequest) -> Unit = {}
 ) {
     val backStack = rememberNavBackStack(Main)
-    val context = LocalContext.current.applicationContext
+    val context = LocalContext.current
+    val appContext = context.applicationContext
     val fileOpsManager = androidx.compose.runtime.remember {
-        FileOperationsManager(db, storageManager, context)
+        FileOperationsManager(db, storageManager, appContext)
+    }
+
+    LaunchedEffect(externalOpenRequest?.id) {
+        val request = externalOpenRequest ?: return@LaunchedEffect
+        try {
+            val importer = IncomingFileImporter(appContext, db, storageManager)
+            val imported = importer.import(Uri.parse(request.uriString), request.mimeType)
+            backStack.add(EditorKey(imported.projectId, imported.filePath))
+            Toast.makeText(context, "Imported ${imported.fileName} to Kern", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(context, e.message ?: "Unable to open this file in Kern", Toast.LENGTH_LONG).show()
+        } finally {
+            onExternalOpenHandled(request)
+        }
     }
 
     NavDisplay(
@@ -102,7 +123,7 @@ fun MainNavigation(
             }
             entry<EditorKey> { key ->
                 val editorViewModel: EditorViewModel = viewModel {
-                    EditorViewModel(db, storageManager, fileOpsManager, context)
+                    EditorViewModel(db, storageManager, fileOpsManager, appContext)
                 }
                 EditorScreen(
                     projectId = key.projectId,

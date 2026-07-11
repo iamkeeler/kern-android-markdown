@@ -1,6 +1,24 @@
 # Android "Open with Kern" integration
 
+Status: implemented MVP import-copy behavior on the PR branch.
+
 Goal: show Kern as an option when a user taps a Markdown or plain-text document in Android file providers, Drive-style apps, or file managers.
+
+## Implemented files
+
+- `app/src/main/AndroidManifest.xml`
+  - registers Kern for `ACTION_VIEW` on `content://` and `file://` text/markdown MIME types
+  - sets `MainActivity` to `singleTop` so already-open Kern sessions receive new files through `onNewIntent()`
+- `app/src/main/java/com/attachdesign/kern/MainActivity.kt`
+  - converts incoming `ACTION_VIEW` intents into one-shot `ExternalOpenRequest` events
+- `app/src/main/java/com/attachdesign/kern/ExternalOpenRequest.kt`
+  - small event model for external file opens
+- `app/src/main/java/com/attachdesign/kern/Navigation.kt`
+  - imports the incoming file and navigates to the editor
+- `app/src/main/java/com/attachdesign/kern/data/storage/IncomingFileImporter.kt`
+  - reads the external URI, validates supported type, creates/uses `Opened Files`, writes a local copy, and inserts file metadata
+- `app/src/main/java/com/attachdesign/kern/data/storage/StorageManager.kt`
+  - adds `fileExists()` for duplicate-name handling
 
 ## Summary
 

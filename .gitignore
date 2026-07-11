@@ -22,3 +22,7 @@ keystore.properties
 # Firebase / Google service config
 app/google-services.json
 !app/google-services.json.example
+
+# Python helper cache
+__pycache__/
+*.pyc
