@@ -12,6 +12,10 @@ This project now has two release-oriented GitHub Actions workflows:
    - Builds a signed release Android App Bundle (`.aab`).
    - Uploads the bundle to Google Play using the selected track/status.
 
+3. `.github/workflows/deploy-website-ftp.yml`
+   - Runs manually or when a `website-v*` tag is pushed.
+   - Uploads the static `website/` directory to the configured FTP server.
+
 ## Required GitHub repository secrets
 
 Add these in GitHub → repository → Settings → Secrets and variables → Actions:
@@ -24,6 +28,9 @@ Add these in GitHub → repository → Settings → Secrets and variables → Ac
 | `ANDROID_KEY_PASSWORD` | Password for the signing key. |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Full JSON for a Google Play Console service account with release permissions. |
 | `GOOGLE_SERVICES_JSON_BASE64` | Base64-encoded Firebase `google-services.json`; kept out of git for open-source safety. |
+| `WEBSITE_FTP_SERVER` | FTP server hostname/address for static website deployment. |
+| `WEBSITE_FTP_USERNAME` | FTP username for website deployment. |
+| `WEBSITE_FTP_PASSWORD` | FTP password for website deployment. |
 
 ## Encoding secrets
 
@@ -68,6 +75,25 @@ git push origin v0.1.11
 
 3. The Google Play release workflow builds and uploads the signed `.aab`.
 4. Start with internal testing before alpha/beta/production.
+
+## Website deployment
+
+The website deploy workflow publishes the contents of `website/` over FTP when a website tag is pushed:
+
+```bash
+git tag website-v0.1.0
+git push origin website-v0.1.0
+```
+
+Required secrets:
+
+```text
+WEBSITE_FTP_SERVER
+WEBSITE_FTP_USERNAME
+WEBSITE_FTP_PASSWORD
+```
+
+The workflow can also be run manually from GitHub Actions.
 
 ## Current release-readiness caveats
 

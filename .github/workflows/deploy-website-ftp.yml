@@ -1,0 +1,40 @@
+name: Deploy website to FTP
+
+on:
+  push:
+    tags:
+      - 'website-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-ftp-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Upload static website
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify website files
+        run: |
+          test -f website/index.html
+          test -f website/privacy.html
+          test -f website/contact.html
+          test -f website/styles.css
+
+      - name: Deploy website via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.WEBSITE_FTP_SERVER }}
+          username: ${{ secrets.WEBSITE_FTP_USERNAME }}
+          password: ${{ secrets.WEBSITE_FTP_PASSWORD }}
+          local-dir: ./website/
+          protocol: ftp
+          dangerous-clean-slate: false

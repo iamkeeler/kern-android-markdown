@@ -16,11 +16,9 @@ Kern uses Android's file access flows so you can choose files or folders to work
 
 ## Analytics and diagnostics
 
-The current release build includes Firebase Analytics dependencies. If Firebase Analytics remains enabled in the production build, Google/Firebase may collect app interaction, device, and diagnostic information such as app events, device identifiers, install/referrer data, and technical information used for analytics.
+Kern uses Firebase Analytics for launch analytics. Google/Firebase may collect app interaction, device, and diagnostic information such as app events, device identifiers, install/referrer data, and technical information used for analytics.
 
 Kern does not use this analytics path to upload the contents of your markdown documents.
-
-If Firebase Analytics is removed or disabled before public release, this section should be updated accordingly.
 
 ## Accounts
 

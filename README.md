@@ -64,9 +64,28 @@ Release automation lives in:
 
 - `.github/workflows/release-readiness.yml`
 - `.github/workflows/google-play-release.yml`
+- `.github/workflows/deploy-website-ftp.yml`
 - `docs/release-automation.md`
 
 The Google Play workflow requires repository secrets for Firebase config, Play Console upload credentials, and release signing credentials.
+
+Website deployment uses FTP and runs when a `website-v*` tag is pushed. It requires these GitHub Actions secrets:
+
+```text
+WEBSITE_FTP_SERVER
+WEBSITE_FTP_USERNAME
+WEBSITE_FTP_PASSWORD
+```
+
+## Repository workflow
+
+Kern uses a protected-main workflow: work in branches, open pull requests, and merge to `main` only after release-readiness checks pass.
+
+See:
+
+```text
+docs/repository-governance.md
+```
 
 ## Security and open-source readiness
 

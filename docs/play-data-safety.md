@@ -9,11 +9,15 @@ Status: draft guidance only. Final answers must match the production build uploa
 - Gradle dependencies: `app/build.gradle.kts`
 - Source search for explicit analytics/permissions/API usage
 
+## Product decision
+
+Firebase Analytics will remain enabled for launch analytics. The Play Data Safety form and privacy policy should disclose analytics/device identifier collection accurately while continuing to state that Kern does not upload user markdown document contents.
+
 ## Important finding
 
 The source app does not declare dangerous runtime permissions such as camera, microphone, contacts, location, or storage permissions.
 
-However, the release merged manifest currently includes Firebase Analytics / Google Play Services permissions and services from dependencies:
+The release merged manifest currently includes Firebase Analytics / Google Play Services permissions and services from dependencies:
 
 ```text
 android.permission.INTERNET
@@ -32,15 +36,9 @@ implementation(platform(libs.firebase.bom))
 implementation(libs.firebase.analytics)
 ```
 
-This likely means the Play Data Safety form must disclose analytics/device identifiers unless Firebase Analytics is removed or explicitly disabled for production.
+This means the Play Data Safety form should disclose analytics/device identifiers.
 
-## Recommended product decision
-
-For the simplest privacy posture, consider removing Firebase Analytics from the production build if it is not needed. That would reduce Data Safety complexity and better match Kern's local-first positioning.
-
-If Firebase Analytics remains, disclose analytics collection accurately.
-
-## Draft answers if Firebase Analytics remains enabled
+## Draft answers with Firebase Analytics enabled
 
 ### Does the app collect or share user data?
 
@@ -84,18 +82,6 @@ and document what can and cannot be deleted, given analytics events may be aggre
 
 If Firebase Analytics is enabled by default with no in-app opt-out, answer as **No** for optionality.
 
-## Draft answers if Firebase Analytics is removed
-
-If the production build removes Firebase Analytics and no other network telemetry SDK remains:
-
-- Data collection: likely **No**
-- Files and documents: **not collected**
-- Account data: **not collected**
-- Location/contacts/photos/audio: **not collected**
-- Device IDs: **not collected by Kern**
-
-Still verify the final merged release manifest before submitting.
-
 ## Verification command before final Play submission
 
 ```bash
@@ -114,4 +100,4 @@ AD_ID
 
 ## Current recommendation
 
-Because Kern's product story is local-first and privacy-forward, the cleanest Play path is to remove Firebase Analytics unless there is a specific launch metric requirement. If analytics is needed for internal testing only, gate it by build type or remove it from release before public launch.
+Keep Firebase Analytics for launch analytics, disclose the collection in Play Data Safety, and keep the privacy copy clear that analytics does not upload markdown document contents.

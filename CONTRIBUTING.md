@@ -50,6 +50,28 @@ design.md
 agents.md
 ```
 
+## Branch and pull request workflow
+
+Do not work directly on `main`. Use short-lived topic branches and open a pull request back to `main`.
+
+Recommended branch prefixes:
+
+- `feat/` for features
+- `fix/` for bug fixes
+- `docs/` for documentation
+- `ci/` for release automation and GitHub Actions
+- `chore/` for maintenance
+
+Example:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c ci/example-change
+```
+
+See `docs/repository-governance.md` for the full PR process and recommended branch protection settings.
+
 ## Before opening a pull request
 
 Run:
@@ -68,6 +90,7 @@ A PR should include:
 ## Git hygiene
 
 - Keep PRs small and focused.
+- Do not commit directly to `main` unless it is an emergency maintenance change.
 - Do not commit `app/google-services.json`, keystores, local properties, or generated build outputs.
 - Avoid unrelated formatting churn.
 - Do not include credentials, tokens, or local machine paths in committed files.
