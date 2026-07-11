@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy — Kern</title>
+  <meta name="description" content="Privacy note for Kern, a local-first markdown workspace for Android.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Kern home">
+      <span class="mark">K</span>
+      <span>Kern</span>
+    </a>
+    <nav class="nav" aria-label="Primary navigation">
+      <a href="index.html#features">Features</a>
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="contact.html">Contact</a>
+      <a href="https://github.com/iamkeeler/AndroidMD-App">GitHub</a>
+    </nav>
+  </header>
+
+  <main class="page section-shell">
+    <p class="eyebrow">Privacy</p>
+    <h1>Privacy note</h1>
+    <p class="lede">Kern is being built as a local-first markdown reader and writing workspace for Android. This page is a plain-language privacy note for the pre-release website and app preparation work.</p>
+
+    <section class="prose-block">
+      <h2>Local documents</h2>
+      <p>Kern is designed to work with markdown files and folders you choose on your Android device. Your document content is not intended to be uploaded to Kern servers.</p>
+    </section>
+
+    <section class="prose-block">
+      <h2>Firebase configuration</h2>
+      <p>The Android project includes Firebase-related build support. The real Firebase configuration file is not published in the open-source repository; release workflows restore it from private CI secrets.</p>
+      <p>Before public release, the final Play Store Data Safety form and privacy policy should confirm whether Firebase Analytics or any other telemetry remains enabled in production.</p>
+    </section>
+
+    <section class="prose-block">
+      <h2>Website</h2>
+      <p>This static website does not require account creation. If it is later hosted with analytics or server logs, that hosting behavior should be documented here before launch.</p>
+    </section>
+
+    <section class="prose-block">
+      <h2>Contact</h2>
+      <p>For privacy questions, contact <a href="mailto:iamkeeler@gmail.com">iamkeeler@gmail.com</a>.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>© 2026 Gary Keeler</span>
+    <span><a href="index.html">Home</a> · <a href="contact.html">Contact</a></span>
+  </footer>
+</body>
+</html>
