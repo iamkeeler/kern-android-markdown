@@ -36,5 +36,5 @@ jobs:
           username: ${{ secrets.WEBSITE_FTP_USERNAME }}
           password: ${{ secrets.WEBSITE_FTP_PASSWORD }}
           local-dir: ./website/
-          protocol: ftp
+          protocol: ftps
           dangerous-clean-slate: false

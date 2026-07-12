@@ -69,7 +69,7 @@ Release automation lives in:
 
 The Google Play workflow requires repository secrets for Firebase config, Play Console upload credentials, and release signing credentials.
 
-Website deployment uses FTP and runs when a `website-v*` tag is pushed. It requires these GitHub Actions secrets:
+Website deployment uses FTPS and runs when a `website-v*` tag is pushed. It requires these GitHub Actions secrets:
 
 ```text
 WEBSITE_FTP_SERVER

@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.storage.StorageManager
+import com.attachdesign.kern.data.storage.IncomingFileImportPolicy
 import com.attachdesign.kern.theme.ModernAndroidMarkdownEditorTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,7 @@ class MainActivity : ComponentActivity() {
             onExternalOpenHandled = { handledRequest ->
               if (externalOpenRequest?.id == handledRequest.id) {
                 externalOpenRequest = null
+                clearExternalOpenIntent()
               }
             }
           )
@@ -79,10 +81,17 @@ class MainActivity : ComponentActivity() {
   private fun Intent?.toExternalOpenRequest(): ExternalOpenRequest? {
     if (this?.action != Intent.ACTION_VIEW) return null
     val uri: Uri = data ?: return null
+    if (!IncomingFileImportPolicy.isSupportedScheme(uri.scheme)) return null
     return ExternalOpenRequest(
       id = ++externalOpenRequestCounter,
       uriString = uri.toString(),
       mimeType = type
     )
+  }
+
+  private fun clearExternalOpenIntent() {
+    if (intent?.action == Intent.ACTION_VIEW) {
+      setIntent(Intent(this, MainActivity::class.java))
+    }
   }
 }

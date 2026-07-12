@@ -1,6 +1,6 @@
 # Android "Open with Kern" integration
 
-Status: implemented MVP import-copy behavior on the PR branch.
+Status: implemented MVP import-copy behavior on the PR branch; pending manual provider testing on real Android file sources.
 
 Goal: show Kern as an option when a user taps a Markdown or plain-text document in Android file providers, Drive-style apps, or file managers.
 

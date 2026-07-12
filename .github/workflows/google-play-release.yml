@@ -49,6 +49,16 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
+      - name: Validate release target
+        run: |
+          TRACK="${{ github.event.inputs.track || 'internal' }}"
+          STATUS="${{ github.event.inputs.status || 'draft' }}"
+          if [ "$TRACK" = "production" ] && [ "$STATUS" = "completed" ]; then
+            echo "Refusing to publish directly to production with completed status from this workflow." >&2
+            echo "Use a draft/inProgress production upload or promote manually in Play Console." >&2
+            exit 1
+          fi
+
       - name: Restore Firebase config
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
@@ -90,7 +100,7 @@ jobs:
 
       - name: Fail on Android lint errors
         run: |
-          if grep -R "^[0-9][0-9]* errors" app/build/reports/lint-results-*.txt; then
+          if grep -R "^[1-9][0-9]* errors" app/build/reports/lint-results-*.txt; then
             echo "Android lint reported errors. Fix them before release."
             exit 1
           fi

@@ -49,7 +49,7 @@ jobs:
 
       - name: Fail on Android lint errors
         run: |
-          if grep -R "^[0-9][0-9]* errors" app/build/reports/lint-results-*.txt; then
+          if grep -R "^[1-9][0-9]* errors" app/build/reports/lint-results-*.txt; then
             echo "Android lint reported errors. Fix them before release."
             exit 1
           fi

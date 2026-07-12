@@ -14,7 +14,7 @@ This project now has two release-oriented GitHub Actions workflows:
 
 3. `.github/workflows/deploy-website-ftp.yml`
    - Runs manually or when a `website-v*` tag is pushed.
-   - Uploads the static `website/` directory to the configured FTP server.
+   - Uploads the static `website/` directory to the configured FTPS server.
 
 ## Required GitHub repository secrets
 
@@ -28,9 +28,9 @@ Add these in GitHub → repository → Settings → Secrets and variables → Ac
 | `ANDROID_KEY_PASSWORD` | Password for the signing key. |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Full JSON for a Google Play Console service account with release permissions. |
 | `GOOGLE_SERVICES_JSON_BASE64` | Base64-encoded Firebase `google-services.json`; kept out of git for open-source safety. |
-| `WEBSITE_FTP_SERVER` | FTP server hostname/address for static website deployment. |
-| `WEBSITE_FTP_USERNAME` | FTP username for website deployment. |
-| `WEBSITE_FTP_PASSWORD` | FTP password for website deployment. |
+| `WEBSITE_FTP_SERVER` | FTPS server hostname/address for static website deployment. |
+| `WEBSITE_FTP_USERNAME` | FTPS username for website deployment. |
+| `WEBSITE_FTP_PASSWORD` | FTPS password for website deployment. |
 
 ## Encoding secrets
 
@@ -74,11 +74,12 @@ git push origin v0.1.11
 ```
 
 3. The Google Play release workflow builds and uploads the signed `.aab`.
+   - The workflow refuses a manual `production` + `completed` dispatch so an accidental click cannot publish directly to production. Use draft/in-progress production upload or promote manually in Play Console when ready.
 4. Start with internal testing before alpha/beta/production.
 
 ## Website deployment
 
-The website deploy workflow publishes the contents of `website/` over FTP when a website tag is pushed:
+The website deploy workflow publishes the contents of `website/` over FTPS when a website tag is pushed:
 
 ```bash
 git tag website-v0.1.0
@@ -97,6 +98,6 @@ The workflow can also be run manually from GitHub Actions.
 
 ## Current release-readiness caveats
 
-- Android lint currently reports `0 errors`, `66 warnings`, and `1 hint`; the new release workflows include an explicit guard to fail if future lint errors appear.
+- Android lint currently reports `0 errors`, `67 warnings`, and `1 hint`; the release workflows include an explicit guard to fail if future lint errors appear.
 - The existing Firebase distribution workflow builds a debug APK. Google Play needs a signed `.aab`, which is what the new Play workflow builds.
 - `app/google-services.json` is intentionally ignored by git for open-source safety. Keep the real file local or store it as `GOOGLE_SERVICES_JSON_BASE64` in GitHub Actions secrets; `app/google-services.json.example` is the public template.
