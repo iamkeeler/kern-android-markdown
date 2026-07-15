@@ -66,15 +66,7 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
-      # Run unit tests to ensure stability before distributing
-      - name: Run Unit Tests
-        run: ./gradlew test
-
-      # Build the Debug APK (signed automatically with standard debug keystore)
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      # Extract Firebase App ID dynamically from google-services.json to prevent secret missing errors
+      # Restore Firebase config before any Gradle task configures the Google Services plugin
       - name: Restore Firebase config
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
@@ -85,6 +77,15 @@ jobs:
           fi
           echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
 
+      # Run unit tests to ensure stability before distributing
+      - name: Run Unit Tests
+        run: ./gradlew test
+
+      # Build the Debug APK (signed automatically with standard debug keystore)
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      # Extract Firebase App ID dynamically from google-services.json
       - name: Extract Firebase App ID
         run: |
           app_id=$(grep '"mobilesdk_app_id"' app/google-services.json | head -n 1 | cut -d'"' -f4)
