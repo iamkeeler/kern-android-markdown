@@ -210,7 +210,7 @@ fun EditorScreen(
                             onCopyClick = {
                                 val fullText = uiState.paragraphs.items.joinToString("\n\n") { it.block.rawText }
                                 clipboardManager.setText(AnnotatedString(fullText))
-                                Toast.makeText(context, "Copied document text to clipboard", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Copied to Clipboard", Toast.LENGTH_SHORT).show()
                             },
                             onMetricsToggle = {
                                 viewModel.toggleReadabilityPopup()
