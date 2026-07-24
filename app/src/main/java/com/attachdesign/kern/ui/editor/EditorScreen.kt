@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.MoreVert
@@ -165,6 +166,8 @@ fun EditorScreen(
 
     val touchPos = remember(projectId, filePath) { com.attachdesign.kern.TouchTracker.lastTouchPosition }
 
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
@@ -204,6 +207,11 @@ fun EditorScreen(
                                 )
                             },
                             onBackClick = onBackClick,
+                            onCopyClick = {
+                                val fullText = uiState.paragraphs.items.joinToString("\n\n") { it.block.rawText }
+                                clipboardManager.setText(AnnotatedString(fullText))
+                                Toast.makeText(context, "Copied document text to clipboard", Toast.LENGTH_SHORT).show()
+                            },
                             onMetricsToggle = {
                                 viewModel.toggleReadabilityPopup()
                             },
@@ -408,6 +416,7 @@ fun EditorHeader(
     isMetricsOpen: Boolean,
     metricsContent: @Composable () -> Unit,
     onBackClick: () -> Unit,
+    onCopyClick: () -> Unit,
     onMetricsToggle: () -> Unit,
     onSettingsToggle: () -> Unit,
     onMoreOptionsAction: (String) -> Unit = {}
@@ -438,6 +447,17 @@ fun EditorHeader(
             }
         },
         actions = {
+            IconButton(
+                onClick = onCopyClick,
+                modifier = Modifier.semantics { contentDescription = "Copy all document text" }
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ContentCopy,
+                    contentDescription = "Copy document text",
+                    tint = theme.textMuted,
+                    modifier = Modifier.size(theme.dimensions.iconMedium)
+                )
+            }
             Box {
                 IconButton(
                     onClick = onMetricsToggle,
