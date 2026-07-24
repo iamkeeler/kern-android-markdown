@@ -57,6 +57,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -146,6 +147,20 @@ fun EditorScreen(
     // Load file if changed
     LaunchedEffect(projectId, filePath) {
         viewModel.loadFile(projectId, filePath, focusOnStart)
+    }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        viewModel.snackbarEvent.collect { event ->
+            val result = snackbarHostState.showSnackbar(
+                message = event.message,
+                actionLabel = event.actionLabel,
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                event.onAction?.invoke()
+            }
+        }
     }
 
     val touchPos = remember(projectId, filePath) { com.attachdesign.kern.TouchTracker.lastTouchPosition }
@@ -243,14 +258,16 @@ fun EditorScreen(
                             viewModel.setParagraphFocus(-1)
                         }
                 ) {
+                    // Floating Formatting Toolbar State
+                    var isToolbarMinimized by remember { mutableStateOf(false) }
+
                     EditorCanvas(
                         state = uiState,
                         textFieldValues = textFieldValues,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        isToolbarMinimized = isToolbarMinimized
                     )
 
-                                        // Floating Formatting Toolbar
-                    var isToolbarMinimized by remember { mutableStateOf(false) }
                     val activeIndex = uiState.focusedParagraphIndex
                     val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
 
@@ -371,6 +388,11 @@ fun EditorScreen(
                 )
             }
         }
+        
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = theme.dimensions.spacingHuge)
+        )
     }
 }
 
@@ -478,7 +500,8 @@ fun EditorHeader(
 fun EditorCanvas(
     state: EditorUiState,
     textFieldValues: Map<Int, TextFieldValue>,
-    viewModel: EditorViewModel
+    viewModel: EditorViewModel,
+    isToolbarMinimized: Boolean = false
 ) {
     val theme = state.activeTheme
     val lazyListState = rememberLazyListState()
@@ -489,12 +512,14 @@ fun EditorCanvas(
         }
     }
 
+    val bottomPadding = if (isToolbarMinimized) theme.dimensions.spacingMassive else theme.dimensions.editorBottomPadding
+
     LazyColumn(
         state = lazyListState,
         modifier = Modifier
             .fillMaxSize()
             .widthIn(max = theme.dimensions.maxTextLineWidth), // Cap max text width
-        contentPadding = PaddingValues(bottom = theme.dimensions.editorBottomPadding),
+        contentPadding = PaddingValues(bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
     ) {
         itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, wrapper ->
@@ -502,9 +527,10 @@ fun EditorCanvas(
             val value = textFieldValues[index] ?: TextFieldValue(paragraph.rawText)
             val isFocused = state.focusedParagraphIndex == index
 
-            val visualTransformation = remember(paragraph.rawText, isFocused, state.viewMode, state.activeTheme) {
+            val visualTransformation = remember(paragraph.rawText, isFocused, value.selection, state.viewMode, state.activeTheme) {
                 MarkdownVisualTransformation(
                     isFocused = isFocused,
+                    selection = value.selection,
                     viewMode = state.viewMode,
                     tokenColor = state.activeTheme.textMuted,
                     codeBackgroundColor = state.activeTheme.codeBackground
@@ -927,6 +953,12 @@ fun FloatingFormattingToolbar(
                             contentAlignment = Alignment.Center
                         ) {
                             Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = theme.typography.subtitle)
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.align(Alignment.BottomEnd).size(16.dp).padding(bottom = 2.dp, end = 2.dp),
+                                tint = theme.accent
+                            )
                         }
 
                         DropdownMenu(
@@ -1033,9 +1065,9 @@ fun FloatingFormattingToolbar(
             ) {
                 IconButton(
                     onClick = onMinimizeClick,
-                    modifier = Modifier.semantics { contentDescription = "Minimize toolbar" }
+                    modifier = Modifier.semantics { contentDescription = "Minimize formatting toolbar" }
                 ) {
-                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = "Minimize formatting toolbar", tint = theme.textMuted)
+                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = theme.textMuted)
                 }
             }
         }

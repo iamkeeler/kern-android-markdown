@@ -16,6 +16,8 @@ import com.attachdesign.kern.parser.MarkdownParser
 import com.attachdesign.kern.parser.IndexTransformationMatrix
 import com.attachdesign.kern.parser.IndexRange
 
+import androidx.compose.ui.text.TextRange
+
 enum class ViewMode {
     RENDERED,
     SYNTAX_HIGHLIGHTED,
@@ -24,6 +26,7 @@ enum class ViewMode {
 
 class MarkdownVisualTransformation(
     val isFocused: Boolean,
+    val selection: TextRange = TextRange.Zero,
     val viewMode: ViewMode,
     val tokenColor: Color,
     val codeBackgroundColor: Color
@@ -47,25 +50,19 @@ class MarkdownVisualTransformation(
                 TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
             }
             ViewMode.RENDERED -> {
-                if (isFocused) {
-                    val builder = AnnotatedString.Builder(rawText)
-                    applySyntaxHighlightingStyles(paragraph, builder)
-                    TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
-                } else {
-                    val (strippedText, matrix) = stripTokens(paragraph)
-                    val builder = AnnotatedString.Builder(strippedText)
-                    applyRenderedStyles(paragraph, builder, matrix)
+                val (strippedText, matrix) = stripTokens(paragraph)
+                val builder = AnnotatedString.Builder(strippedText)
+                applyRenderedStyles(paragraph, builder, matrix)
 
-                    val offsetMapping = object : OffsetMapping {
-                        override fun originalToTransformed(offset: Int): Int {
-                            return matrix.originalToTransformed(offset)
-                        }
-                        override fun transformedToOriginal(offset: Int): Int {
-                            return matrix.transformedToOriginal(offset)
-                        }
+                val offsetMapping = object : OffsetMapping {
+                    override fun originalToTransformed(offset: Int): Int {
+                        return matrix.originalToTransformed(offset)
                     }
-                    TransformedText(builder.toAnnotatedString(), offsetMapping)
+                    override fun transformedToOriginal(offset: Int): Int {
+                        return matrix.transformedToOriginal(offset)
+                    }
                 }
+                TransformedText(builder.toAnnotatedString(), offsetMapping)
             }
         }
     }
@@ -123,8 +120,8 @@ class MarkdownVisualTransformation(
         paragraph: com.attachdesign.kern.parser.ParagraphBlock
     ): Pair<String, IndexTransformationMatrix> {
         val raw = paragraph.rawText
-        val tokensToProcess = paragraph.elements.filter {
-            when (it.type) {
+        val tokensToProcess = paragraph.elements.filter { element ->
+            val isToken = when (element.type) {
                 MarkdownElementType.TOKEN_HEADER,
                 MarkdownElementType.TOKEN_BOLD,
                 MarkdownElementType.TOKEN_ITALIC,
@@ -136,6 +133,20 @@ class MarkdownVisualTransformation(
                 MarkdownElementType.TOKEN_LIST_BULLET,
                 MarkdownElementType.TOKEN_ESCAPE_CHAR -> true
                 else -> false
+            }
+            if (!isToken) return@filter false
+
+            // If focused, reveal token if active selection intersects or is adjacent to the token range
+            if (isFocused) {
+                val cursorStart = selection.min
+                val cursorEnd = selection.max
+                val tokenStart = element.start
+                val tokenEnd = element.end
+                // Expand token if cursor falls inside or touches token bounds
+                val intersects = (cursorStart <= tokenEnd && cursorEnd >= tokenStart)
+                !intersects
+            } else {
+                true
             }
         }.sortedBy { it.start }
 
@@ -253,6 +264,7 @@ class MarkdownVisualTransformation(
         if (other !is MarkdownVisualTransformation) return false
 
         if (isFocused != other.isFocused) return false
+        if (selection != other.selection) return false
         if (viewMode != other.viewMode) return false
         if (tokenColor != other.tokenColor) return false
         if (codeBackgroundColor != other.codeBackgroundColor) return false
@@ -262,6 +274,7 @@ class MarkdownVisualTransformation(
 
     override fun hashCode(): Int {
         var result = isFocused.hashCode()
+        result = 31 * result + selection.hashCode()
         result = 31 * result + viewMode.hashCode()
         result = 31 * result + tokenColor.hashCode()
         result = 31 * result + codeBackgroundColor.hashCode()
