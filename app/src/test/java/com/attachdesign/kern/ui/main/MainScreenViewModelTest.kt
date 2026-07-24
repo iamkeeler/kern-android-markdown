@@ -206,6 +206,8 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getAllProjectsFlow() } returns kotlinx.coroutines.flow.flowOf(emptyList())
         coEvery { projectDao.getSelectedProjectFlow() } returns kotlinx.coroutines.flow.flowOf(null)
         coEvery { projectDao.getSelectedProject() } returns proj
+        coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
+        coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
 
         viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
         val job = backgroundScope.launch {
