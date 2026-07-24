@@ -1533,15 +1533,18 @@ fun InputDialog(
             OutlinedTextField(
                 value         = value,
                 onValueChange = { value = it },
-                label         = { Text(label) },
+                label         = { Text(label, color = theme.textMuted) },
+                textStyle     = androidx.compose.ui.text.TextStyle(color = theme.textPrimary),
                 colors        = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor   = theme.textPrimary,
-                    unfocusedTextColor = theme.textPrimary,
+                    focusedTextColor     = theme.textPrimary,
+                    unfocusedTextColor   = theme.textPrimary,
+                    focusedContainerColor   = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
                     focusedBorderColor   = theme.accent,
                     unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
-                    focusedLabelColor   = theme.accent,
-                    unfocusedLabelColor = theme.textMuted,
-                    cursorColor = theme.accent
+                    focusedLabelColor    = theme.accent,
+                    unfocusedLabelColor  = theme.textMuted,
+                    cursorColor          = theme.accent
                 )
             )
         },
@@ -1649,15 +1652,18 @@ fun CreateProjectDialog(
                 OutlinedTextField(
                     value         = name,
                     onValueChange = { name = it },
-                    label         = { Text("Project Name") },
+                    label         = { Text("Project Name", color = theme.textMuted) },
+                    textStyle     = androidx.compose.ui.text.TextStyle(color = theme.textPrimary),
                     colors        = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor   = theme.textPrimary,
-                        unfocusedTextColor = theme.textPrimary,
+                        focusedTextColor     = theme.textPrimary,
+                        unfocusedTextColor   = theme.textPrimary,
+                        focusedContainerColor   = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
                         focusedBorderColor   = theme.accent,
                         unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
-                        focusedLabelColor   = theme.accent,
-                        unfocusedLabelColor = theme.textMuted,
-                        cursorColor = theme.accent
+                        focusedLabelColor    = theme.accent,
+                        unfocusedLabelColor  = theme.textMuted,
+                        cursorColor          = theme.accent
                     )
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)) {
