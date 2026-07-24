@@ -1281,6 +1281,344 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "settingsScreenFrame",
+      "x": 1308,
+      "y": 0,
+      "name": "Settings Screen / Sidebar",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$background",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "settingsStatusBar",
+          "name": "Settings Android Status Bar",
+          "width": "fill_container",
+          "height": 32,
+          "padding": [
+            0,
+            16
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "settingsStatusTime",
+              "name": "Settings Status Time",
+              "fill": "$muted",
+              "content": "5:09",
+              "fontFamily": "Roboto",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "settingsStatusIcons",
+              "name": "Settings Status Icons",
+              "gap": 6,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "settingsWifi",
+                  "name": "Settings WiFi",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "wifi",
+                  "library": "lucide",
+                  "fill": "$muted"
+                },
+                {
+                  "type": "icon",
+                  "id": "settingsSignal",
+                  "name": "Settings Signal",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "triangle",
+                  "library": "lucide",
+                  "fill": "$muted"
+                },
+                {
+                  "type": "icon",
+                  "id": "settingsBattery",
+                  "name": "Settings Battery",
+                  "width": 15,
+                  "height": 15,
+                  "icon": "battery-medium",
+                  "library": "lucide",
+                  "fill": "$muted"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "settingsHeader",
+          "name": "Settings Header Bar",
+          "width": "fill_container",
+          "height": 56,
+          "padding": [
+            0,
+            16
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "settingsTitle",
+              "name": "Settings Title",
+              "fill": "$ink",
+              "content": "Settings",
+              "fontFamily": "Newsreader",
+              "fontSize": 26,
+              "fontWeight": "700"
+            },
+            {
+              "type": "icon",
+              "id": "settingsCloseIcon",
+              "name": "Close Icon",
+              "width": 22,
+              "height": 22,
+              "icon": "x",
+              "library": "lucide",
+              "fill": "$muted"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "settingsTabRow",
+          "name": "Settings Tab Row",
+          "width": "fill_container",
+          "height": 44,
+          "padding": [
+            0,
+            16
+          ],
+          "gap": 20,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "tabVisuals",
+              "name": "Tab Visuals",
+              "fill": "$accent",
+              "content": "Visuals",
+              "fontFamily": "Roboto",
+              "fontSize": 15,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "tabBehavior",
+              "name": "Tab Behavior",
+              "fill": "$muted",
+              "content": "Behavior",
+              "fontFamily": "Roboto",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "tabSync",
+              "name": "Tab Sync",
+              "fill": "$muted",
+              "content": "Sync",
+              "fontFamily": "Roboto",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "tabAbout",
+              "name": "Tab About",
+              "fill": "$muted",
+              "content": "About",
+              "fontFamily": "Roboto",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "settingsDivider",
+          "name": "Tab Divider",
+          "width": "fill_container",
+          "height": 1,
+          "fill": "$border"
+        },
+        {
+          "type": "frame",
+          "id": "settingsBodyContent",
+          "name": "Settings Tab Content",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            16,
+            20,
+            16,
+            20
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "presetsLabel",
+              "name": "Presets Label",
+              "fill": "$muted",
+              "content": "PRESETS",
+              "fontFamily": "Geist Mono",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "presetRowLight",
+              "name": "Preset Light Row",
+              "width": "fill_container",
+              "height": 44,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "presetLightText",
+                  "name": "Preset Light Text",
+                  "fill": "$ink",
+                  "content": "Cream & Charcoal (Default)",
+                  "fontFamily": "Roboto",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "icon",
+                  "id": "presetLightCheck",
+                  "name": "Preset Selected Check",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "check",
+                  "library": "lucide",
+                  "fill": "$accent"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "presetRowDark",
+              "name": "Preset Dark Row",
+              "width": "fill_container",
+              "height": 44,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "presetDarkText",
+                  "name": "Preset Dark Text",
+                  "fill": "$ink",
+                  "content": "Inky Charcoal (Default)",
+                  "fontFamily": "Roboto",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "typographyLabel",
+              "name": "Typography Label",
+              "fill": "$muted",
+              "content": "TYPOGRAPHY",
+              "fontFamily": "Geist Mono",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "fontOptionSerif",
+              "name": "Font Serif Option",
+              "width": "fill_container",
+              "height": 40,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fontSerifText",
+                  "name": "Font Serif Text",
+                  "fill": "$ink",
+                  "content": "Serif (Newsreader)",
+                  "fontFamily": "Newsreader",
+                  "fontSize": 15,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "icon",
+                  "id": "fontSerifCheck",
+                  "name": "Font Selected Check",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "check",
+                  "library": "lucide",
+                  "fill": "$accent"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fontOptionSans",
+              "name": "Font Sans Option",
+              "width": "fill_container",
+              "height": 40,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fontSansText",
+                  "name": "Font Sans Text",
+                  "fill": "$ink",
+                  "content": "Sans-Serif (Roboto)",
+                  "fontFamily": "Roboto",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fontOptionMono",
+              "name": "Font Mono Option",
+              "width": "fill_container",
+              "height": 40,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fontMonoText",
+                  "name": "Font Mono Text",
+                  "fill": "$ink",
+                  "content": "Monospace (Geist Mono)",
+                  "fontFamily": "Geist Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "variables": {
