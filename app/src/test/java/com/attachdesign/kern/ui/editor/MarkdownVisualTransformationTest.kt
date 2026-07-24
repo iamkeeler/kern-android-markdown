@@ -59,7 +59,7 @@ class MarkdownVisualTransformationTest {
 
         // Raw: "This is **bold**"
         // Transformed: "This is bold" (len 12)
-        // Raw length is 16
+        // Original tokens: "**" at [8, 10) and "**" at [14, 16)
         val rawText = androidx.compose.ui.text.AnnotatedString("This is **bold**")
         val result = transformation.filter(rawText)
 
@@ -67,12 +67,14 @@ class MarkdownVisualTransformationTest {
 
         // Index 0 in original ('T') -> 0 in transformed
         assertEquals(0, result.offsetMapping.originalToTransformed(0))
-        // Index 8 in original (start of 'b' in bold) -> 8 in transformed
+        // Index 8 in original (start of first '**') -> 8 in transformed (start of 'b')
         assertEquals(8, result.offsetMapping.originalToTransformed(8))
-        // Index 12 in original (end of 'd' in bold) -> 12 in transformed
-        assertEquals(12, result.offsetMapping.originalToTransformed(12))
+        // Index 10 in original (start of 'b' in bold) -> 8 in transformed
+        assertEquals(8, result.offsetMapping.originalToTransformed(10))
+        // Index 14 in original (end of 'd' in bold / start of second '**') -> 12 in transformed
+        assertEquals(12, result.offsetMapping.originalToTransformed(14))
 
-        // Transformed index 8 ('b') -> 8 in original
-        assertEquals(8, result.offsetMapping.transformedToOriginal(8))
+        // Transformed index 8 ('b') -> 10 in original
+        assertEquals(10, result.offsetMapping.transformedToOriginal(8))
     }
 }
