@@ -105,7 +105,7 @@ fun EditorScreen(
             onDismiss = { showRenameDialog = false },
             onConfirm = { newName ->
                 viewModel.renameCurrentFile(newName) { newPath ->
-                    Toast.makeText(context, "Renamed successfully", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Renamed", Toast.LENGTH_SHORT).show()
                 }
                 showRenameDialog = false
             }
@@ -116,7 +116,7 @@ fun EditorScreen(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete File?", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete this file? This cannot be undone.", color = theme.textPrimary, fontSize = theme.typography.body) },
+            text = { Text("Delete this file? This cannot be undone.", color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
@@ -233,11 +233,11 @@ fun EditorScreen(
                                     }
                                     "Cloud Sync" -> {
                                         viewModel.triggerCloudSyncSweep()
-                                        Toast.makeText(context, "Cloud sync triggered", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Sync started", Toast.LENGTH_SHORT).show()
                                     }
                                     "Duplicate" -> {
                                         viewModel.duplicateCurrentFile { newPath ->
-                                            Toast.makeText(context, "Duplicated to $newPath", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Duplicated", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                     "Delete" -> {

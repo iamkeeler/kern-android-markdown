@@ -88,6 +88,12 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 
+enum class SortMode(val displayName: String) {
+    ALPHA_ASC("[A-Z]"),
+    ALPHA_DESC("[Z-A]"),
+    RECENT("[REC]")
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainScreen(
@@ -101,6 +107,20 @@ fun MainScreen(
     val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager, fileOpsManager) }
     val state by vm.explorerState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        vm.snackbarEvent.collect { event ->
+            val result = snackbarHostState.showSnackbar(
+                message = event.message,
+                actionLabel = event.actionLabel,
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                event.onAction?.invoke()
+            }
+        }
+    }
 
     var isIntroDialogOpen by remember { mutableStateOf(false) }
     var dontShowAgainCheck by remember { mutableStateOf(false) }
@@ -134,7 +154,7 @@ fun MainScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
-    var isSortAscending by remember { mutableStateOf(true) }
+    var sortMode by remember { mutableStateOf(SortMode.ALPHA_ASC) }
     var draggedNode by remember { mutableStateOf<VfsNode?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val folderBounds = remember { mutableStateMapOf<String, Rect>() }
@@ -228,6 +248,7 @@ fun MainScreen(
                     .fillMaxSize()
                     .graphicsLayer { alpha = if (state.showSplash) (1f - splashAlpha.value) else 1f },
                 containerColor = theme.background,
+                snackbarHost = { SnackbarHost(snackbarHostState) },
                 bottomBar = {
                     FlexibleBottomAppBar(
                         containerColor = if (!theme.isDark) Color(0xFF1C1C1A) else theme.surface,
@@ -533,12 +554,18 @@ fun MainScreen(
                     }
 
                     Text(
-                        text = if (isSortAscending) "[A-Z]" else "[Z-A]",
+                        text = sortMode.displayName,
                         color = theme.accent,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier
-                            .clickable { isSortAscending = !isSortAscending }
+                            .clickable { 
+                                sortMode = when (sortMode) {
+                                    SortMode.ALPHA_ASC -> SortMode.ALPHA_DESC
+                                    SortMode.ALPHA_DESC -> SortMode.RECENT
+                                    SortMode.RECENT -> SortMode.ALPHA_ASC
+                                }
+                            }
                             .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingMedium)
                     )
                 }
@@ -580,12 +607,15 @@ fun MainScreen(
                 label = "FileExplorerTransition"
             ) { (activeProj, currentPath, isSearching) ->
                 if (isSearching) {
-                    val filteredItems = remember(state.allItems, searchQuery, isSortAscending) {
+                    val filteredItems = remember(state.allItems, searchQuery, sortMode) {
                         state.allItems.filterIsInstance<FileListItem.FileRow>().filter {
                             it.node.name.contains(searchQuery, ignoreCase = true)
                         }.let { list ->
-                            if (isSortAscending) list.sortedBy { it.node.name.lowercase() }
-                            else list.sortedByDescending { it.node.name.lowercase() }
+                            when (sortMode) {
+                                SortMode.ALPHA_ASC -> list.sortedBy { it.node.name.lowercase() }
+                                SortMode.ALPHA_DESC -> list.sortedByDescending { it.node.name.lowercase() }
+                                SortMode.RECENT -> list.sortedByDescending { (it.node as? com.attachdesign.kern.data.storage.VfsNode.File)?.lastModified ?: 0L }
+                            }
                         }
                     }
 
@@ -624,9 +654,12 @@ fun MainScreen(
                     }
                 } else if (activeProj == null) {
                     // Root view: flat list of watched project folders
-                    val sortedProjects = remember(state.projects, isSortAscending) {
-                        if (isSortAscending) state.projects.sortedBy { it.name.lowercase() }
-                        else state.projects.sortedByDescending { it.name.lowercase() }
+                    val sortedProjects = remember(state.projects, sortMode) {
+                        when (sortMode) {
+                            SortMode.ALPHA_ASC -> state.projects.sortedBy { it.name.lowercase() }
+                            SortMode.ALPHA_DESC -> state.projects.sortedByDescending { it.name.lowercase() }
+                            SortMode.RECENT -> state.projects.sortedByDescending { it.id }
+                        }
                     }
 
                     if (sortedProjects.isEmpty()) {
@@ -656,9 +689,12 @@ fun MainScreen(
                     }
                 } else {
                     // Drill-down view: list subfolders and files inside active project directory
-                    val sortedFiles = remember(state.drillFiles, isSortAscending) {
-                        if (isSortAscending) state.drillFiles.sortedBy { it.name.lowercase() }
-                        else state.drillFiles.sortedByDescending { it.name.lowercase() }
+                    val sortedFiles = remember(state.drillFiles, sortMode) {
+                        when (sortMode) {
+                            SortMode.ALPHA_ASC -> state.drillFiles.sortedBy { it.name.lowercase() }
+                            SortMode.ALPHA_DESC -> state.drillFiles.sortedByDescending { it.name.lowercase() }
+                            SortMode.RECENT -> state.drillFiles.sortedByDescending { (it as? com.attachdesign.kern.data.storage.VfsNode.File)?.lastModified ?: 0L }
+                        }
                     }
 
                     if (sortedFiles.isEmpty()) {
@@ -919,7 +955,7 @@ fun MainScreen(
             onDismissRequest = { nodeToDelete = null },
             title = { Text("Delete ${if (node.isDirectory) "Folder" else "File"}?",
                 color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text  = { Text("Are you sure you want to delete '${node.name}'? This cannot be undone.",
+            text  = { Text("Delete '${node.name}'? This cannot be undone.",
                 color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteNode(node, project); nodeToDelete = null }) {
@@ -966,7 +1002,7 @@ fun MainScreen(
             onDismissRequest = { projectToDelete = null },
             title = { Text("Delete Workspace?",
                 color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text  = { Text("Are you sure you want to delete '${proj.name}'? This cannot be undone.",
+            text  = { Text("Delete '${proj.name}'? This cannot be undone.",
                 color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteProject(proj); projectToDelete = null }) {

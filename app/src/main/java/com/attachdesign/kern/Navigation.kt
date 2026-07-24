@@ -50,9 +50,9 @@ fun MainNavigation(
             val importer = IncomingFileImporter(appContext, db, storageManager)
             val imported = importer.import(Uri.parse(request.uriString), request.mimeType)
             backStack.add(EditorKey(imported.projectId, imported.filePath))
-            Toast.makeText(context, "Imported ${imported.fileName} to Kern", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Imported ${imported.fileName}", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(context, e.message ?: "Unable to open this file in Kern", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, e.message ?: "Cannot open file", Toast.LENGTH_LONG).show()
         } finally {
             onExternalOpenHandled(request)
         }

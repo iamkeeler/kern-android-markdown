@@ -329,7 +329,7 @@ fun SettingsTabsContent(
                             )
                             val serialized = ThemeEngine.serialize(currentThemeJson)
                             clipboardManager.setText(AnnotatedString(serialized))
-                            Toast.makeText(context, "Theme JSON copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Theme copied", Toast.LENGTH_SHORT).show()
                         },
                         theme = theme,
                         modifier = Modifier.fillMaxWidth()
@@ -337,19 +337,33 @@ fun SettingsTabsContent(
                     Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
                     var inputThemeJson by remember { mutableStateOf("") }
+                    val isJsonValid = remember(inputThemeJson) {
+                        if (inputThemeJson.isBlank()) true else ThemeEngine.deserialize(inputThemeJson) != null
+                    }
+                    
                     OutlinedTextField(
                         value = inputThemeJson,
                         onValueChange = { inputThemeJson = it },
                         label = { Text("Paste Theme JSON", fontSize = theme.typography.small, color = theme.textMuted) },
+                        isError = !isJsonValid,
+                        supportingText = {
+                            if (!isJsonValid) {
+                                Text("Invalid Theme JSON format", color = Color(0xFFE53935))
+                            }
+                        },
                         textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = theme.typography.small, color = theme.textPrimary),
                         modifier = Modifier.fillMaxWidth().height(theme.dimensions.themeInputHeight),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor   = theme.textPrimary,
                             unfocusedTextColor = theme.textPrimary,
+                            errorTextColor = theme.textPrimary,
                             focusedBorderColor   = theme.accent,
                             unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
+                            errorBorderColor = Color(0xFFE53935),
                             focusedLabelColor   = theme.accent,
                             unfocusedLabelColor = theme.textMuted,
+                            errorLabelColor = Color(0xFFE53935),
+                            errorSupportingTextColor = Color(0xFFE53935),
                             cursorColor = theme.accent
                         )
                     )
@@ -358,18 +372,18 @@ fun SettingsTabsContent(
                     MinimalOutlinedButton(
                         text = "Import Custom Theme",
                         onClick = {
-                            if (inputThemeJson.isNotBlank()) {
+                            if (inputThemeJson.isNotBlank() && isJsonValid) {
                                 val themeJson = ThemeEngine.deserialize(inputThemeJson)
                                 if (themeJson != null) {
                                     coroutineScope.launch(Dispatchers.IO) {
                                         val id = db.themeDao().insertTheme(ThemeEntity(name = themeJson.name, jsonString = inputThemeJson))
                                         db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
                                     }
-                                    Toast.makeText(context, "Custom theme applied successfully!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Theme applied", Toast.LENGTH_SHORT).show()
                                     inputThemeJson = ""
-                                } else {
-                                    Toast.makeText(context, "Invalid Theme JSON schema!", Toast.LENGTH_SHORT).show()
                                 }
+                            } else if (inputThemeJson.isNotBlank() && !isJsonValid) {
+                                Toast.makeText(context, "Invalid theme JSON", Toast.LENGTH_SHORT).show()
                             }
                         },
                         theme = theme,
