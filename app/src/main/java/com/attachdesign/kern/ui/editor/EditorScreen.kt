@@ -213,6 +213,10 @@ fun EditorScreen(
                             },
                             onMoreOptionsAction = { action ->
                                 when(action) {
+                                    "Settings" -> {
+                                        val currentMode = uiState.sidebarMode
+                                        viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
+                                    }
                                     "Share" -> {
                                         viewModel.shareCurrentFile()
                                     }
@@ -457,18 +461,6 @@ fun EditorHeader(
                     metricsContent()
                 }
             }
-            IconButton(
-                onClick = onSettingsToggle,
-                modifier = Modifier.semantics { contentDescription = "Toggle consolidated settings sidebar" }
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    tint = theme.textMuted,
-                    modifier = Modifier.size(theme.dimensions.iconMedium)
-                )
-            }
-
             var showMenu by remember { mutableStateOf(false) }
             Box {
                 IconButton(onClick = { showMenu = true }) {
@@ -479,6 +471,7 @@ fun EditorHeader(
                     )
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; onMoreOptionsAction("Settings") })
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showMenu = false; onMoreOptionsAction("Rename") })
                     DropdownMenuItem(text = { Text("Cloud Sync") }, onClick = { showMenu = false; onMoreOptionsAction("Cloud Sync") })
