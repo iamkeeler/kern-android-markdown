@@ -101,21 +101,14 @@
               "alignItems": "center",
               "children": [
                 {
-                  "type": "frame",
-                  "id": "LXHJ4",
-                  "name": "Header Balance",
-                  "width": 40,
-                  "height": 40
-                },
-                {
                   "type": "text",
                   "id": "UTMNy",
                   "name": "Kern Wordmark",
                   "fill": "$ink",
                   "content": "Kern",
                   "fontFamily": "Newsreader",
-                  "fontSize": 28,
-                  "fontWeight": "500"
+                  "fontSize": 32,
+                  "fontWeight": "300"
                 },
                 {
                   "type": "frame",
@@ -202,7 +195,7 @@
                       "id": "FCNzX",
                       "name": "Sort Action",
                       "fill": "$accent",
-                      "content": "[A-Z]",
+                      "content": "A-Z",
                       "fontFamily": "Geist Mono",
                       "fontSize": 11,
                       "fontWeight": "normal"
