@@ -563,7 +563,7 @@
         {
           "type": "frame",
           "id": "gnqlV",
-          "name": "Code Button",
+          "name": "Strikethrough Button",
           "width": 32,
           "height": 40,
           "fill": "#FFFFFF00",
@@ -586,7 +586,7 @@
         {
           "type": "frame",
           "id": "wE8Jt",
-          "name": "Link Button",
+          "name": "Code Button",
           "width": 32,
           "height": 40,
           "fill": "#FFFFFF00",
@@ -608,6 +608,29 @@
         },
         {
           "type": "frame",
+          "id": "wE8Link",
+          "name": "Link Button",
+          "width": 32,
+          "height": 40,
+          "fill": "#FFFFFF00",
+          "cornerRadius": 8,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "KFIkLink",
+              "name": "Link Mark",
+              "fill": "$ink",
+              "content": "L",
+              "fontFamily": "Roboto",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
           "id": "KqAH3",
           "name": "Checklist Button",
           "width": 32,
@@ -618,24 +641,90 @@
           "alignItems": "center",
           "children": [
             {
+              "type": "text",
+              "id": "hu3y2Text",
+              "name": "Checklist Mark",
+              "fill": "$ink",
+              "content": "☑",
+              "fontFamily": "Roboto",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KqBullet",
+          "name": "Bullet List Button",
+          "width": 32,
+          "height": 40,
+          "fill": "#FFFFFF00",
+          "cornerRadius": 8,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
               "type": "icon",
-              "id": "hu3y2",
-              "name": "Checklist Icon",
+              "id": "huBulletIcon",
+              "name": "Bullet Icon",
               "width": 20,
               "height": 20,
-              "icon": "chevron-down",
+              "icon": "list",
               "library": "lucide",
-              "fill": "$muted"
+              "fill": "$ink"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KqOutdent",
+          "name": "Outdent Button",
+          "width": 32,
+          "height": 40,
+          "fill": "#FFFFFF00",
+          "cornerRadius": 8,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "huOutdentIcon",
+              "name": "Outdent Icon",
+              "width": 20,
+              "height": 20,
+              "icon": "indent-decrease",
+              "library": "lucide",
+              "fill": "$ink"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KqIndent",
+          "name": "Indent Button",
+          "width": 32,
+          "height": 40,
+          "fill": "#FFFFFF00",
+          "cornerRadius": 8,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "huIndentIcon",
+              "name": "Indent Icon",
+              "width": 20,
+              "height": 20,
+              "icon": "indent-increase",
+              "library": "lucide",
+              "fill": "$ink"
             }
           ]
         },
         {
           "type": "frame",
           "id": "kEzwx",
-          "x": 250,
-          "y": 12,
-          "name": "More Button",
-          "enabled": false,
+          "name": "Minimize Button",
           "width": 32,
           "height": 40,
           "fill": "#FFFFFF00",
@@ -646,12 +735,12 @@
             {
               "type": "icon",
               "id": "hg51T",
-              "name": "More Icon",
+              "name": "Minimize Icon",
               "width": 20,
               "height": 20,
-              "icon": "ellipsis",
+              "icon": "chevron-down",
               "library": "lucide",
-              "fill": "$ink"
+              "fill": "$muted"
             }
           ]
         }
