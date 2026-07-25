@@ -350,35 +350,30 @@ fun MainScreen(
                         .padding(horizontal = theme.dimensions.spacingHuge)
                         .padding(top = theme.dimensions.spacingExtraLarge)
                 ) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "Kern",
-                            fontSize = theme.typography.h1,
-                            fontFamily = appFont,
-                            fontWeight = FontWeight.Light,
-                            color = theme.textPrimary,
-                            letterSpacing = (theme.typography.h1.value * -0.02f).sp
-                        )
-                    },
-            actions = {
-                IconButton(onClick = { onItemClick(SettingsKey) }) {
-                    Icon(
-                        imageVector = Icons.Outlined.Settings,
-                        contentDescription = "Settings",
-                        tint = theme.textMuted,
-                        modifier = Modifier.size(theme.dimensions.iconMedium)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = theme.dimensions.spacingSmall),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Kern",
+                        fontSize = theme.typography.h1,
+                        fontFamily = appFont,
+                        fontWeight = FontWeight.Light,
+                        color = theme.textPrimary,
+                        letterSpacing = (theme.typography.h1.value * -0.02f).sp
                     )
+                    IconButton(onClick = { onItemClick(SettingsKey) }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Settings",
+                            tint = theme.textMuted,
+                            modifier = Modifier.size(theme.dimensions.iconMedium)
+                        )
+                    }
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.Transparent,
-                titleContentColor = theme.textPrimary,
-                actionIconContentColor = theme.textMuted
-            ),
-            windowInsets = WindowInsets(0, 0, 0, 0),
-            modifier = Modifier.fillMaxWidth()
-        )
 
         state.activeQuote?.let { quote ->
             Text(
