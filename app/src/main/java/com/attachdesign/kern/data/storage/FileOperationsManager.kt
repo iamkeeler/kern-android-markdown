@@ -213,23 +213,24 @@ class FileOperationsManager(
         }
     }
 
-    suspend fun shareNode(project: ProjectEntity, node: VfsNode) = withContext(Dispatchers.IO) {
-        val cacheDir = context.cacheDir
-        val shareDir = File(cacheDir, "shared_exports")
-        
-        if (shareDir.exists()) {
-            shareDir.listFiles()?.forEach { file ->
-                if (file.lastModified() < System.currentTimeMillis() - 3_600_000) {
-                    file.delete()
+    suspend fun shareNode(project: ProjectEntity, node: VfsNode): Result<Uri> = withContext(Dispatchers.IO) {
+        try {
+            val cacheDir = context.cacheDir
+            val shareDir = File(cacheDir, "shared_exports")
+            
+            if (shareDir.exists()) {
+                shareDir.listFiles()?.forEach { file ->
+                    if (file.lastModified() < System.currentTimeMillis() - 3_600_000) {
+                        file.delete()
+                    }
                 }
+            } else {
+                shareDir.mkdirs()
             }
-        } else {
-            shareDir.mkdirs()
-        }
 
-        val uriToShare: Uri? = if (node.isDirectory) {
-            val zipFile = File(shareDir, "${node.name}_${System.currentTimeMillis()}.zip")
-            try {
+            var textContent: String? = null
+            val uriToShare: Uri? = if (node.isDirectory) {
+                val zipFile = File(shareDir, "${node.name}_${System.currentTimeMillis()}.zip")
                 ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
                     suspend fun addDirToZip(dirNode: VfsNode, parentPath: String) {
                         val children = storageManager.listDirectory(project, dirNode.relativePath)
@@ -250,30 +251,176 @@ class FileOperationsManager(
                     addDirToZip(node, "")
                 }
                 FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", zipFile)
-            } catch (e: Exception) {
-                Log.e("FileOpsManager", "Failed to zip directory", e)
-                null
+            } else {
+                val shareFile = File(shareDir, node.name)
+                val contentStr = storageManager.readFile(project, node.relativePath)
+                textContent = contentStr
+                shareFile.writeText(contentStr, Charsets.UTF_8)
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", shareFile)
             }
-        } else {
-            val shareFile = File(shareDir, node.name)
-            val contentStr = storageManager.readFile(project, node.relativePath)
-            shareFile.writeText(contentStr, Charsets.UTF_8)
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", shareFile)
-        }
 
-        uriToShare?.let { uri ->
-            withContext(Dispatchers.Main) {
-                val shareIntent = Intent().apply {
-                    action = Intent.ACTION_SEND
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    type = if (node.isDirectory) "application/zip" else "text/plain"
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (uriToShare != null) {
+                withContext(Dispatchers.Main) {
+                    val mimeType = if (node.isDirectory) {
+                        "application/zip"
+                    } else if (node.name.endsWith(".md", ignoreCase = true) || node.name.endsWith(".markdown", ignoreCase = true)) {
+                        "text/markdown"
+                    } else {
+                        "text/plain"
+                    }
+
+                    val shareIntent = Intent().apply {
+                        action = Intent.ACTION_SEND
+                        putExtra(Intent.EXTRA_STREAM, uriToShare)
+                        if (!node.isDirectory && !textContent.isNullOrEmpty()) {
+                            putExtra(Intent.EXTRA_TEXT, textContent)
+                        }
+                        type = mimeType
+                        clipData = android.content.ClipData.newRawUri(node.name, uriToShare)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    val chooser = Intent.createChooser(shareIntent, "Share ${node.name}").apply {
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(chooser)
                 }
-                val chooser = Intent.createChooser(shareIntent, "Share ${node.name}").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(chooser)
+                Result.success(uriToShare)
+            } else {
+                Result.failure(IllegalStateException("Could not generate URI for ${node.name}"))
             }
+        } catch (e: Exception) {
+            Log.e("FileOpsManager", "Failed to share ${node.name}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun moveToTrash(project: ProjectEntity, node: VfsNode): Result<VfsNode> = withContext(Dispatchers.IO) {
+        try {
+            val trashDir = ".trash"
+            val newName = "${System.currentTimeMillis()}_${node.name}"
+            val newPath = "$trashDir/$newName"
+            
+            val success = storageManager.renameFile(project, node.relativePath, newPath)
+            if (!success) {
+                // Try creating directory first
+                storageManager.createDirectory(project, trashDir)
+                if (!storageManager.renameFile(project, node.relativePath, newPath)) {
+                    return@withContext Result.failure(Exception("Failed to move to trash on disk"))
+                }
+            }
+
+            if (!node.isDirectory) {
+                val currentFile = db.fileDao().getFileByPath(project.id, node.relativePath)
+                if (currentFile != null) {
+                    db.runInTransaction {
+                        db.fileDao().deleteFile(project.id, node.relativePath)
+                        db.fileDao().insertFile(
+                            currentFile.copy(
+                                id = 0,
+                                relativePath = newPath,
+                                lastModified = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+                Result.success(VfsNode.File(newName, newPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
+            } else {
+                val allProjectFiles = db.fileDao().getFilesForProject(project.id)
+                val oldPrefix = "${node.relativePath}/"
+                val newPrefix = "$newPath/"
+                val childrenToUpdate = allProjectFiles.filter { it.relativePath.startsWith(oldPrefix) }
+                val currentDir = db.fileDao().getFileByPath(project.id, node.relativePath)
+
+                db.runInTransaction {
+                    if (currentDir != null) {
+                        db.fileDao().deleteFile(project.id, node.relativePath)
+                        db.fileDao().insertFile(
+                            currentDir.copy(
+                                id = 0,
+                                relativePath = newPath,
+                                lastModified = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                    for (child in childrenToUpdate) {
+                        val suffix = child.relativePath.removePrefix(oldPrefix)
+                        val childNewPath = "$newPrefix$suffix"
+                        db.fileDao().deleteFile(project.id, child.relativePath)
+                        db.fileDao().insertFile(
+                            child.copy(
+                                id = 0,
+                                relativePath = childNewPath,
+                                lastModified = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+                Result.success(VfsNode.Directory(newName, newPath))
+            }
+        } catch (e: Exception) {
+            Log.e("FileOpsManager", "Failed to move to trash", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun restoreFromTrash(project: ProjectEntity, trashNode: VfsNode, originalPath: String): Result<VfsNode> = withContext(Dispatchers.IO) {
+        try {
+            val success = storageManager.renameFile(project, trashNode.relativePath, originalPath)
+            if (!success) {
+                return@withContext Result.failure(Exception("Failed to restore from trash on disk"))
+            }
+
+            if (!trashNode.isDirectory) {
+                val currentFile = db.fileDao().getFileByPath(project.id, trashNode.relativePath)
+                if (currentFile != null) {
+                    db.runInTransaction {
+                        db.fileDao().deleteFile(project.id, trashNode.relativePath)
+                        db.fileDao().insertFile(
+                            currentFile.copy(
+                                id = 0,
+                                relativePath = originalPath,
+                                lastModified = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+                Result.success(VfsNode.File(originalPath.substringAfterLast('/'), originalPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
+            } else {
+                val allProjectFiles = db.fileDao().getFilesForProject(project.id)
+                val oldPrefix = "${trashNode.relativePath}/"
+                val newPrefix = "$originalPath/"
+                val childrenToUpdate = allProjectFiles.filter { it.relativePath.startsWith(oldPrefix) }
+                val currentDir = db.fileDao().getFileByPath(project.id, trashNode.relativePath)
+
+                db.runInTransaction {
+                    if (currentDir != null) {
+                        db.fileDao().deleteFile(project.id, trashNode.relativePath)
+                        db.fileDao().insertFile(
+                            currentDir.copy(
+                                id = 0,
+                                relativePath = originalPath,
+                                lastModified = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                    for (child in childrenToUpdate) {
+                        val suffix = child.relativePath.removePrefix(oldPrefix)
+                        val childNewPath = "$newPrefix$suffix"
+                        db.fileDao().deleteFile(project.id, child.relativePath)
+                        db.fileDao().insertFile(
+                            child.copy(
+                                id = 0,
+                                relativePath = childNewPath,
+                                lastModified = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+                Result.success(VfsNode.Directory(originalPath.substringAfterLast('/'), originalPath))
+            }
+        } catch (e: Exception) {
+            Log.e("FileOpsManager", "Failed to restore from trash", e)
+            Result.failure(e)
         }
     }
 

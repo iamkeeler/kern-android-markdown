@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
+import kotlinx.coroutines.flow.asSharedFlow
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.data.storage.VfsNodeMapper
@@ -61,6 +62,10 @@ class MainScreenViewModel(
     private val _canNavigateBack = MutableStateFlow(false)
     private val _canNavigateForward = MutableStateFlow(false)
     private val _showSplash     = MutableStateFlow(!hasSplashRun)
+
+    data class SnackbarEvent(val message: String, val actionLabel: String? = null, val onAction: (() -> Unit)? = null)
+    private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
+    val snackbarEvent = _snackbarEvent.asSharedFlow()
 
     private val backStack = mutableListOf<Pair<ProjectEntity?, String>>()
     private val forwardStack = mutableListOf<Pair<ProjectEntity?, String>>()
@@ -530,10 +535,27 @@ class MainScreenViewModel(
 
     fun deleteNode(node: VfsNode, project: ProjectEntity) {
         viewModelScope.launch {
-            fileOpsManager.deleteNode(project, node)
+            val result = fileOpsManager.moveToTrash(project, node)
+            val trashNode = result.getOrNull() ?: return@launch
+            
             val active = _activeProject.value
             if (active != null) loadDrillFiles(active, _currentPath.value)
             else refreshAllFiles()
+
+            val deleteJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(5000)
+                fileOpsManager.deleteNode(project, trashNode)
+            }
+
+            _snackbarEvent.emit(SnackbarEvent("File deleted", "Undo") {
+                deleteJob.cancel()
+                viewModelScope.launch {
+                    fileOpsManager.restoreFromTrash(project, trashNode, node.relativePath)
+                    val act = _activeProject.value
+                    if (act != null) loadDrillFiles(act, _currentPath.value)
+                    else refreshAllFiles()
+                }
+            })
         }
     }
 

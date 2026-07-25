@@ -178,4 +178,24 @@ class FileOperationsManagerTest {
         assertNull(database.fileDao().getFileByPath(project.id, "docs"))
         assertNull(database.fileDao().getFileByPath(project.id, "docs/doc1.md"))
     }
+
+    @Test
+    fun testShareNodeFile() = runTest {
+        val fileName = "share_test.md"
+        val relativePath = "share_test.md"
+        storageManager.writeFile(project, relativePath, "# Shared Content\nHello World")
+
+        val node = VfsNode.File(fileName, relativePath, 28L, System.currentTimeMillis())
+        val result = fileOpsManager.shareNode(project, node)
+
+        assertTrue(result.isSuccess)
+        val uri = result.getOrThrow()
+        assertNotNull(uri)
+        assertTrue(uri.toString().contains("com.attachdesign.kern.fileprovider"))
+
+        // Check shared file in exports cache directory
+        val exportFile = File(context.cacheDir, "shared_exports/$fileName")
+        assertTrue(exportFile.exists())
+        assertEquals("# Shared Content\nHello World", exportFile.readText())
+    }
 }

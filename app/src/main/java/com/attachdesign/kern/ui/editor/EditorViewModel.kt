@@ -10,6 +10,7 @@ import com.attachdesign.kern.analysis.HemingwayMetrics
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
+import kotlinx.coroutines.flow.asSharedFlow
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.local.ThemeEntity
 import com.attachdesign.kern.data.storage.StorageManager
@@ -95,6 +96,10 @@ class EditorViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private var saveJob: Job? = null
+
+    data class SnackbarEvent(val message: String, val actionLabel: String? = null, val onAction: (() -> Unit)? = null)
+    private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
+    val snackbarEvent = _snackbarEvent.asSharedFlow()
 
     init {
         // Load default settings
@@ -1108,7 +1113,10 @@ viewModelScope.launch(Dispatchers.IO) {
                 size = 0,
                 lastModified = System.currentTimeMillis()
             )
-            fileOpsManager.deleteNode(project, fileNode)
+            
+            val result = fileOpsManager.moveToTrash(project, fileNode)
+            val trashNode = result.getOrNull() ?: return@launch
+            
             _uiState.value = _uiState.value.copy(
                 activeFilePath = "",
                 paragraphs = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
@@ -1117,6 +1125,19 @@ viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 onDeleted()
             }
+            
+            val deleteJob = viewModelScope.launch {
+                delay(5000)
+                fileOpsManager.deleteNode(project, trashNode)
+            }
+            
+            _snackbarEvent.emit(SnackbarEvent("File deleted", "Undo") {
+                deleteJob.cancel()
+                viewModelScope.launch {
+                    fileOpsManager.restoreFromTrash(project, trashNode, filePath)
+                    loadFile(project.id, filePath)
+                }
+            })
         }
     }
 

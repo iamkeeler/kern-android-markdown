@@ -62,6 +62,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getSelectedProjectFlow() } returns emptyFlow()
         coEvery { quoteDao.getCount() } returns 1
         coEvery { quoteDao.getAllQuotes() } returns emptyList()
+        coEvery { quoteDao.insertQuotes(any()) } returns Unit
         coEvery { fileDao.getFilesForProjects(any()) } returns emptyList()
         coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
         coEvery { fileDao.insertFile(any()) } returns 1L
