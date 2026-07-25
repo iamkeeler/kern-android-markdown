@@ -235,10 +235,6 @@ fun EditorScreen(
                                     "Rename" -> {
                                         showRenameDialog = true
                                     }
-                                    "Sync Now" -> {
-                                        viewModel.triggerCloudSyncSweep()
-                                        Toast.makeText(context, "Syncing with cloud...", Toast.LENGTH_SHORT).show()
-                                    }
                                     "Duplicate" -> {
                                         viewModel.duplicateCurrentFile { newPath ->
                                             Toast.makeText(context, "Document duplicated", Toast.LENGTH_SHORT).show()
@@ -505,7 +501,6 @@ fun EditorHeader(
                     DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; onMoreOptionsAction("Settings") })
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showMenu = false; onMoreOptionsAction("Rename") })
-                    DropdownMenuItem(text = { Text("Sync Now") }, onClick = { showMenu = false; onMoreOptionsAction("Sync Now") })
                     DropdownMenuItem(text = { Text("Duplicate") }, onClick = { showMenu = false; onMoreOptionsAction("Duplicate") })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false; onMoreOptionsAction("Delete") })
                 }
