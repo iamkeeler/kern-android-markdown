@@ -779,39 +779,106 @@ fun SettingsTabsContent(
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                     
+                     Text(
+                         text = "A modern, typography-focused Markdown editor built for distraction-free writing, local file privacy, and rich document analytics.",
+                         color = theme.textMuted,
+                         fontSize = theme.typography.body,
+                         fontFamily = appFont,
+                         lineHeight = theme.typography.title,
+                         modifier = Modifier.padding(vertical = theme.dimensions.spacingSmall)
+                     )
 
-                    Text(
-                        text = "OPEN SOURCE LIBRARIES",
-                        color = theme.textMuted,
-                        fontSize = theme.typography.tiny,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp
-                    )
-                    Spacer(Modifier.height(theme.dimensions.elevationMedium))
+                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
 
-                    val libraries = listOf(
-                        "Jetpack Compose"                to "Apache 2.0 · Google",
-                        "Compose Material 3"             to "Apache 2.0 · Google",
-                        "AndroidX Navigation 3"          to "Apache 2.0 · Google",
-                        "Room Persistence Library"       to "Apache 2.0 · Google",
-                        "AndroidX Lifecycle & ViewModel" to "Apache 2.0 · Google",
-                        "KotlinX Serialization"          to "Apache 2.0 · JetBrains",
-                        "KotlinX Collections Immutable"  to "Apache 2.0 · JetBrains",
-                        "Kotlin"                         to "Apache 2.0 · JetBrains"
-                    )
-                    libraries.forEach { (lib, license) ->
-                         Row(
-                             modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.elevationMedium),
-                             horizontalArrangement = Arrangement.SpaceBetween,
-                             verticalAlignment = Alignment.CenterVertically
-                         ) {
-                             Text(lib, color = theme.textPrimary, fontSize = theme.typography.body,
-                                 fontFamily = appFont, modifier = Modifier.weight(1f))
-                            Text(license, color = theme.textMuted, fontSize = theme.typography.tiny,
-                                fontFamily = FontFamily.Monospace)
-                        }
-                    }
+                     Row(
+                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         Text("Design & Development", color = theme.textMuted, fontSize = theme.typography.small)
+                         Text("Attach.design", color = theme.accent, fontSize = theme.typography.body,
+                             fontFamily = appFont, fontWeight = FontWeight.Medium,
+                             modifier = Modifier.clickable {
+                                 try {
+                                     uriHandler.openUri("https://kern.attach.design")
+                                 } catch (e: Exception) {
+                                     e.printStackTrace()
+                                 }
+                             })
+                     }
+
+                     Row(
+                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         Text("Source Code", color = theme.textMuted, fontSize = theme.typography.small)
+                         Text("GitHub Repository", color = theme.accent, fontSize = theme.typography.body,
+                             fontFamily = appFont, fontWeight = FontWeight.Medium,
+                             modifier = Modifier.clickable {
+                                 try {
+                                     uriHandler.openUri("https://github.com/iamkeeler/AndroidMD-App")
+                                 } catch (e: Exception) {
+                                     e.printStackTrace()
+                                 }
+                             })
+                     }
+
+                     Row(
+                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         Text("Privacy Policy", color = theme.textMuted, fontSize = theme.typography.small)
+                         Text("Read Policy", color = theme.accent, fontSize = theme.typography.body,
+                             fontFamily = appFont, fontWeight = FontWeight.Medium,
+                             modifier = Modifier.clickable {
+                                 try {
+                                     uriHandler.openUri("https://kern.attach.design/privacy.html")
+                                 } catch (e: Exception) {
+                                     e.printStackTrace()
+                                 }
+                             })
+                     }
+
+                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+                     Text(
+                         text = "OPEN SOURCE LIBRARIES",
+                         color = theme.textMuted,
+                         fontSize = theme.typography.tiny,
+                         fontFamily = FontFamily.Monospace,
+                         fontWeight = FontWeight.Bold,
+                         letterSpacing = 1.2.sp
+                     )
+                     Spacer(Modifier.height(theme.dimensions.elevationMedium))
+
+                     val libraries = listOf(
+                         "Jetpack Compose"                to "Apache 2.0 · Google",
+                         "Compose Material 3"             to "Apache 2.0 · Google",
+                         "AndroidX Navigation 3"          to "Apache 2.0 · Google",
+                         "Room Persistence Library"       to "Apache 2.0 · Google",
+                         "AndroidX Lifecycle & ViewModel" to "Apache 2.0 · Google",
+                         "Firebase Analytics"             to "Apache 2.0 · Google",
+                         "KotlinX Serialization"          to "Apache 2.0 · JetBrains",
+                         "KotlinX Collections Immutable"  to "Apache 2.0 · JetBrains",
+                         "Kotlin"                         to "Apache 2.0 · JetBrains"
+                     )
+                     libraries.forEach { (lib, license) ->
+                          Row(
+                              modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.elevationMedium),
+                              horizontalArrangement = Arrangement.SpaceBetween,
+                              verticalAlignment = Alignment.CenterVertically
+                          ) {
+                              Text(lib, color = theme.textPrimary, fontSize = theme.typography.body,
+                                  fontFamily = appFont, modifier = Modifier.weight(1f))
+                             Text(license, color = theme.textMuted, fontSize = theme.typography.tiny,
+                                 fontFamily = FontFamily.Monospace)
+                         }
+                     }
                 }
             }
             Spacer(Modifier.height(theme.dimensions.spacingMassive))
