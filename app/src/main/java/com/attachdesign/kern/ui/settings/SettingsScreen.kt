@@ -764,7 +764,7 @@ fun SettingsTabsContent(
                               fontFamily = appFont, fontWeight = FontWeight.Medium,
                               modifier = Modifier.clickable {
                                   try {
-                                      uriHandler.openUri("https://kern.attach.design/privacy")
+                                      uriHandler.openUri("https://kern.attach.design/privacy.html")
                                   } catch (e: Exception) {
                                       e.printStackTrace()
                                   }
