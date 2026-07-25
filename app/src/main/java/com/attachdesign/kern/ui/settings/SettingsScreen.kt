@@ -146,7 +146,8 @@ fun SettingsTabsContent(
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
                     )
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
 
@@ -182,7 +183,7 @@ fun SettingsTabsContent(
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
-                    Text("View Mode", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Text("VIEW MODE", color = theme.textMuted, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     val modes = listOf(
                         "RENDERED"           to "Live Preview",
@@ -219,7 +220,7 @@ fun SettingsTabsContent(
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
-                    Text("Editor Font", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                    Text("EDITOR FONT", color = theme.textMuted, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     val fonts = listOf(
                         "serif"      to "Serif (Book)",
@@ -266,11 +267,12 @@ fun SettingsTabsContent(
                     }
                     
                     Text(
-                        text = "Editor Font Size: $sizeLabel",
-                        color = theme.textPrimary,
-                        fontSize = theme.typography.bodyLarge,
-                        fontFamily = appFont,
-                        fontWeight = FontWeight.Bold
+                        text = "EDITOR FONT SIZE: ${sizeLabel.uppercase()}",
+                        color = theme.textMuted,
+                        fontSize = theme.typography.tiny,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
                     )
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     Slider(
@@ -305,11 +307,12 @@ fun SettingsTabsContent(
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
                     Text(
-                        text = "Custom Theme",
+                        text = "CUSTOM THEME",
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
                     )
                     Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
@@ -391,6 +394,16 @@ fun SettingsTabsContent(
                     )
                 }
                 1 -> { // Behavior tab
+                    Text(
+                        text = "EDITOR BEHAVIOR",
+                        color = theme.textMuted,
+                        fontSize = theme.typography.tiny,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -480,6 +493,16 @@ fun SettingsTabsContent(
                       Spacer(Modifier.height(theme.dimensions.spacingLarge))
                       HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
                       Spacer(Modifier.height(theme.dimensions.spacingLarge))
+
+                      Text(
+                          text = "TYPING & AUTOMATION",
+                          color = theme.textMuted,
+                          fontSize = theme.typography.tiny,
+                          fontFamily = FontFamily.Monospace,
+                          fontWeight = FontWeight.Bold,
+                          letterSpacing = 1.2.sp
+                      )
+                      Spacer(Modifier.height(theme.dimensions.spacingSmall))
 
                       Row(
                           modifier = Modifier
@@ -685,7 +708,7 @@ fun SettingsTabsContent(
                       }
                 }
                 2 -> { // Sync tab
-                     Text("Cloud Sync", color = theme.textPrimary, fontSize = theme.typography.bodyLarge, fontFamily = appFont, fontWeight = FontWeight.Bold)
+                     Text("CLOUD SYNC", color = theme.textMuted, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                      Spacer(Modifier.height(theme.dimensions.spacingMedium))
                      Text(
                          "We are actively working on adding cloud synchronization features so you can access your documents anywhere. Stay tuned for updates!",
@@ -753,11 +776,12 @@ fun SettingsTabsContent(
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
                     Text(
-                        text = "Open Source Libraries",
+                        text = "OPEN SOURCE LIBRARIES",
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = (theme.typography.tiny.value * 0.045f).sp
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
                     )
                     Spacer(Modifier.height(theme.dimensions.elevationMedium))
 
