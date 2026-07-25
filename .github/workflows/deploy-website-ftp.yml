@@ -41,5 +41,6 @@ jobs:
           username: ${{ secrets.WEBSITE_FTP_USERNAME }}
           password: ${{ secrets.WEBSITE_FTP_PASSWORD }}
           local-dir: ./website/
-          server-dir: /public_html/kern/
+          server-dir: public_html/kern/
+          log-level: verbose
           dangerous-clean-slate: false
