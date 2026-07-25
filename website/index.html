@@ -4,52 +4,117 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kern — Markdown workspace for Android</title>
-  <meta name="description" content="Kern is a focused markdown reader and writing workspace for Android, built around local files and a calm document-first interface.">
+  <meta name="description" content="Kern is a focused, local-first markdown reader and writing workspace for Android, built around calm typography and document-first design.">
+  <link rel="canonical" href="https://attach.design/kern/">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Kern">
+  <meta property="og:title" content="Kern — Markdown workspace for Android">
+  <meta property="og:description" content="A focused, local-first markdown reader and writing workspace for Android without cloud lock-in.">
+  <meta property="og:url" content="https://attach.design/kern/">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kern — Markdown workspace for Android">
+  <meta name="twitter:description" content="A focused, local-first markdown reader and writing workspace for Android.">
+
+  <!-- Structured Data / JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Kern",
+    "operatingSystem": "Android",
+    "applicationCategory": "ProductivityApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0.00",
+      "priceCurrency": "USD"
+    },
+    "description": "Kern is a focused markdown reader and writing workspace for Android, built around local files and a calm document-first interface."
+  }
+  </script>
+
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <a href="#main" class="skip-to-content">Skip to content</a>
+
   <header class="site-header">
-    <a class="brand" href="index.html" aria-label="Kern home">
-      <span class="mark">K</span>
+    <a class="brand" href="index.html" aria-label="Kern Home">
+      <span class="mark" aria-hidden="true">K</span>
       <span>Kern</span>
     </a>
-    <nav class="nav" aria-label="Primary navigation">
-      <a href="#features">Features</a>
-      <a href="privacy.html">Privacy</a>
-      <a href="contact.html">Contact</a>
-      <a href="https://github.com/iamkeeler/AndroidMD-App">GitHub</a>
-    </nav>
+
+    <div class="nav-group">
+      <nav class="nav" id="main-nav" aria-label="Primary navigation">
+        <a href="#features">Features</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="contact.html">Contact</a>
+        <a href="https://github.com/iamkeeler/AndroidMD-App" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+        <svg viewBox="0 0 24 24" id="theme-icon" aria-hidden="true">
+          <!-- Sun icon (shown in dark mode) / Moon icon (shown in light mode) -->
+          <circle cx="12" cy="12" r="5"></circle>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+        </svg>
+      </button>
+
+      <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
   </header>
 
-  <main>
+  <main id="main">
     <section class="hero section-shell">
       <div class="hero-copy">
         <p class="eyebrow">Markdown for Android</p>
         <h1>A calm workspace for reading and writing markdown.</h1>
-        <p class="lede">Kern keeps local documents close, the interface quiet, and the editor responsive. It is built for people who want a focused markdown environment on Android without turning notes into a cloud product.</p>
+        <p class="lede">Kern keeps local documents close, the interface quiet, and the editor responsive. Built for people who want a focused markdown environment on Android without cloud lock-in.</p>
         <div class="actions">
-          <a class="button primary" href="https://github.com/iamkeeler/AndroidMD-App">View on GitHub</a>
-          <a class="button secondary" href="https://play.google.com/store/apps/details?id=com.attachdesign.kern">Play Store</a>
+          <a class="button primary" href="https://github.com/iamkeeler/AndroidMD-App" target="_blank" rel="noopener">View on GitHub</a>
+          <a class="button secondary" href="https://play.google.com/store/apps/details?id=com.attachdesign.kern" target="_blank" rel="noopener">Play Store</a>
         </div>
       </div>
 
-      <div class="device-frame" aria-label="Kern app interface preview">
+      <div class="device-frame" aria-label="Kern app interactive workspace preview">
         <div class="phone-top">
           <span class="dot"></span>
-          <span class="path">Project › notes › draft.md</span>
+          <span class="path" id="active-path">Project › notes › draft.md</span>
         </div>
         <div class="workspace-preview">
           <aside>
-            <p class="small-label">Files</p>
-            <span class="file active">draft.md</span>
-            <span class="file">research.md</span>
-            <span class="file">outline.md</span>
+            <p class="small-label">Explorer</p>
+            <div class="file-list" role="tablist" aria-label="Sample markdown documents">
+              <button type="button" class="file-btn active" data-file="draft" role="tab" aria-selected="true">
+                <span>📄</span> draft.md
+              </button>
+              <button type="button" class="file-btn" data-file="research" role="tab" aria-selected="false">
+                <span>📄</span> research.md
+              </button>
+              <button type="button" class="file-btn" data-file="outline" role="tab" aria-selected="false">
+                <span>📄</span> outline.md
+              </button>
+            </div>
           </aside>
           <article>
-            <p class="small-label">Editor</p>
-            <h2>Quiet text, fast structure</h2>
-            <p>Kern treats markdown as a working document, not a formatting trick. The surface stays plain until you need structure.</p>
-            <code>## Next section</code>
+            <div class="editor-tabs">
+              <button type="button" class="tab-btn active" id="tab-editor">Editor</button>
+              <button type="button" class="tab-btn" id="tab-preview">Rendered</button>
+            </div>
+            <div id="editor-view">
+              <textarea id="demo-textarea" class="editor-input" aria-label="Markdown live editor" spellcheck="false"></textarea>
+            </div>
+            <div id="render-view" class="live-render" style="display: none;"></div>
           </article>
         </div>
       </div>
@@ -63,7 +128,7 @@
       <div class="feature-list">
         <div class="feature-item">
           <h3>Local-first files</h3>
-          <p>Work with markdown documents and project folders through Android’s file system flows.</p>
+          <p>Work with markdown documents and project folders directly through Android's Storage Access Framework.</p>
         </div>
         <div class="feature-item">
           <h3>Readable workspace</h3>
@@ -71,11 +136,11 @@
         </div>
         <div class="feature-item">
           <h3>Adaptive layout</h3>
-          <p>A file tree and document canvas can sit together on wider Android surfaces without visual clutter.</p>
+          <p>A 35/65 dual-pane split seats the project file tree and central document canvas together on wide screens and tablets.</p>
         </div>
         <div class="feature-item">
           <h3>Open-source path</h3>
-          <p>Kern is being prepared for a public GitHub release with release automation, security review, and clear contribution docs.</p>
+          <p>Kern is prepared for public GitHub releases with continuous CI distribution, security guidelines, and transparent contributions.</p>
         </div>
       </div>
     </section>
@@ -85,20 +150,132 @@
         <p class="eyebrow">Privacy posture</p>
         <h2>Your writing should stay yours.</h2>
       </div>
-      <p>Kern is designed around local markdown files. The public repository keeps Firebase configuration out of git and uses explicit CI secrets for release workflows.</p>
-      <a class="text-link" href="privacy.html">Read the privacy note</a>
+      <p>Kern is designed around local markdown files. The public repository keeps sensitive credentials out of version control and uses explicit CI secrets for builds.</p>
+      <a class="text-link" href="privacy.html">Read the privacy note →</a>
     </section>
 
     <section class="contact section-shell" aria-labelledby="contact-title">
       <p class="eyebrow">Contact</p>
       <h2 id="contact-title">Questions, feedback, or release testing?</h2>
-      <p>Send a note to <a href="mailto:iamkeeler@gmail.com">iamkeeler@gmail.com</a>.</p>
+      <p>Send a note to <a class="text-link" href="mailto:iamkeeler@gmail.com">iamkeeler@gmail.com</a>.</p>
     </section>
   </main>
 
   <footer class="site-footer">
     <span>© 2026 Gary Keeler</span>
-    <span><a href="privacy.html">Privacy</a> · <a href="contact.html">Contact</a> · <a href="https://github.com/iamkeeler/AndroidMD-App">GitHub</a></span>
+    <span>
+      <a href="index.html">Home</a> · 
+      <a href="privacy.html">Privacy</a> · 
+      <a href="contact.html">Contact</a> · 
+      <a href="https://github.com/iamkeeler/AndroidMD-App" target="_blank" rel="noopener">GitHub</a>
+    </span>
   </footer>
+
+  <script>
+    // Theme toggle management
+    const themeToggle = document.getElementById('theme-toggle');
+    const storedTheme = localStorage.getItem('theme');
+    
+    if (storedTheme) {
+      document.documentElement.setAttribute('data-theme', storedTheme);
+    }
+
+    themeToggle.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      let target = 'dark';
+      if (current === 'dark') {
+        target = 'light';
+      } else if (!current && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        target = 'light';
+      }
+      document.documentElement.setAttribute('data-theme', target);
+      localStorage.setItem('theme', target);
+    });
+
+    // Mobile nav toggle
+    const menuToggle = document.getElementById('menu-toggle');
+    const mainNav = document.getElementById('main-nav');
+    menuToggle.addEventListener('click', () => {
+      const open = mainNav.classList.toggle('open');
+      menuToggle.setAttribute('aria-expanded', open);
+    });
+
+    // Interactive Demo Markdown Editor
+    const sampleFiles = {
+      draft: {
+        path: 'Project › notes › draft.md',
+        content: `## Quiet text, fast structure\n\nKern treats markdown as a working document, not a formatting trick. The surface stays plain until you need structure.\n\n- Fast local storage integration\n- Custom index transformation matrix\n- High contrast warm canvas\n\n\`\`\`kotlin\nval strokeBudget = 11.ms\n\`\`\``
+      },
+      research: {
+        path: 'Project › research › architecture.md',
+        content: `# Headless Domain Engine\n\nDecoupled from Android UI bindings for pure Kotlin speed.\n\n> Zero references to Jetpack Compose or Context inside the domain text parser.\n\n1. Immutable data trees\n2. Differential update loops\n3. Bounded IO thread pool`
+      },
+      outline: {
+        path: 'Project › plans › outline.md',
+        content: `# Kern 1.0 Release Roadmap\n\n- [x] Storage Access Framework binding\n- [x] Dual-pane adaptive split view\n- [x] Custom syntax transition engine\n- [ ] Public store deployment`
+      }
+    };
+
+    let activeFileKey = 'draft';
+    const textarea = document.getElementById('demo-textarea');
+    const renderView = document.getElementById('render-view');
+    const pathLabel = document.getElementById('active-path');
+    const fileButtons = document.querySelectorAll('.file-btn');
+    const tabEditor = document.getElementById('tab-editor');
+    const tabPreview = document.getElementById('tab-preview');
+    const editorView = document.getElementById('editor-view');
+
+    function renderMarkdown(text) {
+      let html = text
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^- (.*$)/gim, '• $1<br>');
+      return html.replace(/\n/g, '<br>');
+    }
+
+    function loadFile(fileKey) {
+      activeFileKey = fileKey;
+      const fileData = sampleFiles[fileKey];
+      textarea.value = fileData.content;
+      pathLabel.textContent = fileData.path;
+      renderView.innerHTML = renderMarkdown(fileData.content);
+
+      fileButtons.forEach(btn => {
+        const isMatch = btn.dataset.file === fileKey;
+        btn.classList.toggle('active', isMatch);
+        btn.setAttribute('aria-selected', isMatch);
+      });
+    }
+
+    fileButtons.forEach(btn => {
+      btn.addEventListener('click', () => loadFile(btn.dataset.file));
+    });
+
+    textarea.addEventListener('input', () => {
+      sampleFiles[activeFileKey].content = textarea.value;
+      renderView.innerHTML = renderMarkdown(textarea.value);
+    });
+
+    tabEditor.addEventListener('click', () => {
+      tabEditor.classList.add('active');
+      tabPreview.classList.remove('active');
+      editorView.style.display = 'block';
+      renderView.style.display = 'none';
+    });
+
+    tabPreview.addEventListener('click', () => {
+      tabPreview.classList.add('active');
+      tabEditor.classList.remove('active');
+      editorView.style.display = 'none';
+      renderView.style.display = 'block';
+      renderView.innerHTML = renderMarkdown(textarea.value);
+    });
+
+    // Initialize demo
+    loadFile('draft');
+  </script>
 </body>
 </html>

@@ -1,43 +1,37 @@
-# Kern website
+# Kern Landing Website
 
-A simple static landing site for Kern.
+A focused, local-first static landing website for Kern — a Markdown reader and writing workspace for Android.
 
-## Pages
+## Features
 
-- `index.html` — landing page
-- `privacy.html` — privacy note for app/website launch
-- `contact.html` — contact and project links
-- `styles.css` — shared visual system
+- **Interactive Markdown Workspace**: Interactive live editor showcase with document switching (`draft.md`, `research.md`, `outline.md`) and real-time Markdown rendering directly in the hero device frame.
+- **Theme Support**: Seamless dark/light theme switching with automatic `prefers-color-scheme` OS detection and local storage persistence.
+- **Brand Alignment**: Custom design tokens mirroring the app design language from `design.md` (warm `#FCFBFA` canvas, dark `#121212` canvas, charcoal text, utility blue accents).
+- **SEO & Social Sharing**: Complete Open Graph, Twitter Cards, canonical links, and structured JSON-LD schema.
+- **Accessibility & Responsive Navigation**: Mobile drawer menu, high contrast themes, and skip-to-content keyboard accessibility.
 
-## Visual direction
+## File Inventory
 
-The site mirrors the app design language from `design.md`:
+- `index.html` — Main landing page featuring interactive workspace showcase
+- `privacy.html` — Privacy policy and data posture statement
+- `contact.html` — Contact info, project links, and security reporting
+- `styles.css` — Central visual system and theme variable declarations
+- `favicon.svg` — Signature Kern "K" vector favicon
 
-- warm off-white canvas (`#FCFBFA`)
-- muted surface color (`#F4F3F0`)
-- charcoal text (`#1A1A18`)
-- muted steel metadata (`#7C7A75`)
-- utility blue CTAs (`#2E5BFF`)
-- typography-first hierarchy
-- restrained lines and broad spacing
+## Local Preview
 
-## Local preview
+Start a local HTTP server:
 
 ```bash
 python3 -m http.server 8087 --directory website
 ```
 
-Then open:
+Open in your browser:
 
 ```text
 http://localhost:8087/index.html
 ```
 
-## Launch notes
+## Continuous Deployment
 
-Before public launch:
-
-1. Replace the Play Store placeholder link if the final package/listing URL changes.
-2. Replace the privacy note with the final policy after Play Data Safety decisions are complete.
-3. Add final screenshots or app imagery if desired.
-4. Decide hosting target: GitHub Pages, Netlify, Cloudflare Pages, or another static host.
+This site is deployed automatically to `attach.design/kern/` via GitHub Actions FTP deployment (`.github/workflows/deploy-website-ftp.yml`).
