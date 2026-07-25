@@ -42,10 +42,10 @@ jobs:
           fi
 
       - name: Run unit tests
-        run: ./gradlew test
+        run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Run Android lint
-        run: ./gradlew lint
+        run: ./gradlew lint --no-daemon
 
       - name: Fail on Android lint errors
         run: |
@@ -55,10 +55,10 @@ jobs:
           fi
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Build unsigned release APK for smoke packaging
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload lint reports
         if: always()

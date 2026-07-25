@@ -85,11 +85,11 @@ jobs:
 
       # Run unit tests to ensure stability before distributing
       - name: Run Unit Tests
-        run: ./gradlew test
+        run: ./gradlew testDebugUnitTest --no-daemon
 
       # Build the Debug APK (signed automatically with standard debug keystore)
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
 
       # Extract Firebase App ID dynamically from google-services.json to prevent secret missing errors
       - name: Extract Firebase App ID
