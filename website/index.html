@@ -86,36 +86,21 @@
         </div>
       </div>
 
-      <div class="device-frame" aria-label="Kern app interactive workspace preview">
+      <div class="device-frame" aria-label="Kern app video demonstration preview">
         <div class="phone-top">
           <span class="dot"></span>
-          <span class="path" id="active-path">Project › notes › draft.md</span>
+          <span class="path">Project › notes › <span class="active-node">draft.md</span></span>
         </div>
-        <div class="workspace-preview">
-          <aside>
-            <p class="small-label">Explorer</p>
-            <div class="file-list" role="tablist" aria-label="Sample markdown documents">
-              <button type="button" class="file-btn active" data-file="draft" role="tab" aria-selected="true">
-                <span>📄</span> draft.md
-              </button>
-              <button type="button" class="file-btn" data-file="research" role="tab" aria-selected="false">
-                <span>📄</span> research.md
-              </button>
-              <button type="button" class="file-btn" data-file="outline" role="tab" aria-selected="false">
-                <span>📄</span> outline.md
-              </button>
+        <div class="video-placeholder" role="region" aria-label="Kern App Walkthrough Video Preview">
+          <div class="video-poster-preview">
+            <div class="play-btn-wrapper" aria-label="Play Kern walkthrough video">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
             </div>
-          </aside>
-          <article>
-            <div class="editor-tabs" role="tablist" aria-label="Editor view options">
-              <button type="button" class="tab-btn active" id="tab-editor" role="tab" aria-selected="true" aria-controls="editor-view">Editor</button>
-              <button type="button" class="tab-btn" id="tab-preview" role="tab" aria-selected="false" aria-controls="render-view">Rendered</button>
-            </div>
-            <div id="editor-view">
-              <textarea id="demo-textarea" class="editor-input" aria-label="Markdown live editor" spellcheck="false"></textarea>
-            </div>
-            <div id="render-view" class="live-render" style="display: none;"></div>
-          </article>
+            <p class="video-caption">Watch Kern in Action</p>
+            <p class="video-subcaption">Quiet Markdown workspace for Android</p>
+          </div>
         </div>
       </div>
     </section>
@@ -157,7 +142,7 @@
     <section class="contact section-shell" aria-labelledby="contact-title">
       <p class="eyebrow">Contact</p>
       <h2 id="contact-title">Questions, feedback, or release testing?</h2>
-      <p>Send a note to <a class="text-link" href="mailto:iamkeeler@gmail.com">iamkeeler@gmail.com</a>.</p>
+      <p>Send a note to <a class="text-link" href="mailto:gary@attach.design">gary@attach.design</a>.</p>
     </section>
   </main>
 
@@ -172,7 +157,7 @@
   </footer>
 
   <script>
-    // Theme toggle management
+    // Theme toggle management (Default: Creamy Light style)
     const themeToggle = document.getElementById('theme-toggle');
     const storedTheme = localStorage.getItem('theme');
     
@@ -182,22 +167,17 @@
       themeToggle.setAttribute('title', `Switch to ${nextTheme} theme`);
     }
 
-    if (storedTheme) {
-      document.documentElement.setAttribute('data-theme', storedTheme);
-      updateThemeAria(storedTheme);
+    if (storedTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      updateThemeAria('dark');
     } else {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      updateThemeAria(isDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+      updateThemeAria('light');
     }
 
     themeToggle.addEventListener('click', () => {
       const current = document.documentElement.getAttribute('data-theme');
-      let target = 'dark';
-      if (current === 'dark') {
-        target = 'light';
-      } else if (!current && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        target = 'light';
-      }
+      const target = (current === 'dark') ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', target);
       localStorage.setItem('theme', target);
       updateThemeAria(target);
@@ -210,89 +190,6 @@
       const open = mainNav.classList.toggle('open');
       menuToggle.setAttribute('aria-expanded', open);
     });
-
-    // Interactive Demo Markdown Editor
-    const sampleFiles = {
-      draft: {
-        path: 'Project › notes › draft.md',
-        content: `## Quiet text, fast structure\n\nKern treats markdown as a working document, not a formatting trick. The surface stays plain until you need structure.\n\n- Fast local storage integration\n- Custom index transformation matrix\n- High contrast warm canvas\n\n\`\`\`kotlin\nval strokeBudget = 11.ms\n\`\`\``
-      },
-      research: {
-        path: 'Project › research › architecture.md',
-        content: `# Headless Domain Engine\n\nDecoupled from Android UI bindings for pure Kotlin speed.\n\n> Zero references to Jetpack Compose or Context inside the domain text parser.\n\n1. Immutable data trees\n2. Differential update loops\n3. Bounded IO thread pool`
-      },
-      outline: {
-        path: 'Project › plans › outline.md',
-        content: `# Kern 1.0 Release Roadmap\n\n- [x] Storage Access Framework binding\n- [x] Dual-pane adaptive split view\n- [x] Custom syntax transition engine\n- [ ] Public store deployment`
-      }
-    };
-
-    let activeFileKey = 'draft';
-    const textarea = document.getElementById('demo-textarea');
-    const renderView = document.getElementById('render-view');
-    const pathLabel = document.getElementById('active-path');
-    const fileButtons = document.querySelectorAll('.file-btn');
-    const tabEditor = document.getElementById('tab-editor');
-    const tabPreview = document.getElementById('tab-preview');
-    const editorView = document.getElementById('editor-view');
-
-    function renderMarkdown(text) {
-      let html = text
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/^- (.*$)/gim, '• $1<br>');
-      return html.replace(/\n/g, '<br>');
-    }
-
-    function loadFile(fileKey) {
-      activeFileKey = fileKey;
-      const fileData = sampleFiles[fileKey];
-      textarea.value = fileData.content;
-      const parts = fileData.path.split(' › ');
-      const activeFile = parts.pop();
-      pathLabel.innerHTML = parts.join(' › ') + ' › <span class="active-node">' + activeFile + '</span>';
-      renderView.innerHTML = renderMarkdown(fileData.content);
-
-      fileButtons.forEach(btn => {
-        const isMatch = btn.dataset.file === fileKey;
-        btn.classList.toggle('active', isMatch);
-        btn.setAttribute('aria-selected', isMatch);
-      });
-    }
-
-    fileButtons.forEach(btn => {
-      btn.addEventListener('click', () => loadFile(btn.dataset.file));
-    });
-
-    textarea.addEventListener('input', () => {
-      sampleFiles[activeFileKey].content = textarea.value;
-      renderView.innerHTML = renderMarkdown(textarea.value);
-    });
-
-    tabEditor.addEventListener('click', () => {
-      tabEditor.classList.add('active');
-      tabEditor.setAttribute('aria-selected', 'true');
-      tabPreview.classList.remove('active');
-      tabPreview.setAttribute('aria-selected', 'false');
-      editorView.style.display = 'block';
-      renderView.style.display = 'none';
-    });
-
-    tabPreview.addEventListener('click', () => {
-      tabPreview.classList.add('active');
-      tabPreview.setAttribute('aria-selected', 'true');
-      tabEditor.classList.remove('active');
-      tabEditor.setAttribute('aria-selected', 'false');
-      editorView.style.display = 'none';
-      renderView.style.display = 'block';
-      renderView.innerHTML = renderMarkdown(textarea.value);
-    });
-
-    // Initialize demo
-    loadFile('draft');
   </script>
 </body>
 </html>

@@ -57,7 +57,7 @@
 
     <section class="contact-card">
       <span class="small-label">Email</span>
-      <a href="mailto:iamkeeler@gmail.com">iamkeeler@gmail.com</a>
+      <a href="mailto:gary@attach.design">gary@attach.design</a>
     </section>
 
     <section class="prose-block">
@@ -83,7 +83,7 @@
   </footer>
 
   <script>
-    // Theme toggle management
+    // Theme toggle management (Default: Creamy Light style)
     const themeToggle = document.getElementById('theme-toggle');
     const storedTheme = localStorage.getItem('theme');
     
@@ -93,22 +93,17 @@
       themeToggle.setAttribute('title', `Switch to ${nextTheme} theme`);
     }
 
-    if (storedTheme) {
-      document.documentElement.setAttribute('data-theme', storedTheme);
-      updateThemeAria(storedTheme);
+    if (storedTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      updateThemeAria('dark');
     } else {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      updateThemeAria(isDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+      updateThemeAria('light');
     }
 
     themeToggle.addEventListener('click', () => {
       const current = document.documentElement.getAttribute('data-theme');
-      let target = 'dark';
-      if (current === 'dark') {
-        target = 'light';
-      } else if (!current && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        target = 'light';
-      }
+      const target = (current === 'dark') ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', target);
       localStorage.setItem('theme', target);
       updateThemeAria(target);

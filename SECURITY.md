@@ -11,7 +11,7 @@ Please do not report security vulnerabilities through public GitHub issues.
 Send reports to:
 
 ```text
-iamkeeler@gmail.com
+gary@attach.design
 ```
 
 Include:

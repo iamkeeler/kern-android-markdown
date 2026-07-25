@@ -33,7 +33,7 @@ Kern does not sell personal information. If analytics remains enabled, analytics
 For privacy requests, contact:
 
 ```text
-iamkeeler@gmail.com
+gary@attach.design
 ```
 
 Because Kern is local-first, markdown files stored on your device can be deleted by you directly from your device or file provider. Analytics data, if enabled, may be aggregated or pseudonymous and handled according to Firebase/Google retention controls.
@@ -47,5 +47,5 @@ Kern is not directed to children.
 For privacy questions, contact:
 
 ```text
-iamkeeler@gmail.com
+gary@attach.design
 ```

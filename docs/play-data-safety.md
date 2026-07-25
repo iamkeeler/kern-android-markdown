@@ -73,7 +73,7 @@ Likely answer: **Yes** for Firebase/Google SDK traffic.
 If Firebase Analytics remains, provide a contact path:
 
 ```text
-iamkeeler@gmail.com
+gary@attach.design
 ```
 
 and document what can and cannot be deleted, given analytics events may be aggregated/pseudonymous.

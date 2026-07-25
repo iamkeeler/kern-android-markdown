@@ -32,21 +32,7 @@
   --grid-line: rgba(255, 255, 255, 0.03);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --canvas: #121212;
-    --surface: #1E1E1E;
-    --ink: #E3E3E3;
-    --muted: #9E9C96;
-    --border: rgba(255, 255, 255, 0.12);
-    --accent: #5E81FF;
-    --accent-hover: #7D9BFF;
-    --icon-bg: #2E2E32;
-    --icon-fg: #E3E3E3;
-    --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-    --grid-line: rgba(255, 255, 255, 0.03);
-  }
-}
+/* Dark theme activates explicitly via [data-theme="dark"] attribute */
 
 * {
   box-sizing: border-box;
@@ -525,12 +511,68 @@ h3 {
   color: var(--ink);
 }
 
-.live-render blockquote {
-  margin: 16px 0;
-  padding-left: 14px;
-  border-left: 2px solid var(--accent);
+/* Video Preview Placeholder */
+.video-placeholder {
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-bottom-left-radius: 24px;
+  border-bottom-right-radius: 24px;
+  background: linear-gradient(145deg, var(--surface), var(--canvas));
+  overflow: hidden;
+  cursor: pointer;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.video-poster-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.play-btn-wrapper {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: 0 12px 32px rgba(46, 91, 255, 0.3);
+  transition: transform 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+}
+
+.video-placeholder:hover .play-btn-wrapper {
+  transform: scale(1.08);
+  box-shadow: 0 16px 40px rgba(46, 91, 255, 0.4);
+}
+
+.play-btn-wrapper svg {
+  width: 32px;
+  height: 32px;
+  fill: currentColor;
+  margin-left: 4px;
+}
+
+.video-caption {
+  font-family: Roboto, ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 8px 0 0;
+}
+
+.video-subcaption {
+  font-family: "JetBrains Mono", "Roboto Mono", monospace;
+  font-size: 13px;
   color: var(--muted);
-  font-style: normal;
+  margin: 4px 0 0;
 }
 
 .live-render code {
