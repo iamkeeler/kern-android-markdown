@@ -210,11 +210,12 @@ class MainScreenViewModelTest {
         coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
         coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
 
-        val testVm = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-        val job = backgroundScope.launch {
+        val localDispatcher = StandardTestDispatcher(testScheduler)
+        val testVm = MainScreenViewModel(db, storageManager, fileOpsManager, localDispatcher)
+        val job = backgroundScope.launch(localDispatcher) {
             testVm.explorerState.collect {}
         }
-        advanceUntilIdle()
+        testScheduler.advanceUntilIdle()
         assertEquals(false, testVm.explorerState.value.isLoading)
         job.cancel()
     }
