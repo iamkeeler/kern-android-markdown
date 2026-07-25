@@ -30,3 +30,7 @@ This journal tracks unique visual hierarchy and information architecture insight
 **Learning:** In breadcrumb file rails, text action triggers rendered in `FontFamily.Monospace` (such as sort mode or file actions) can suffer from visual weight dilution if horizontal padding matches standard body text. Applying explicit tracking (`letterSpacing = (tiny * 0.05).sp`) and trimming excess horizontal padding prevents layout displacement while keeping section label hierarchy intact.
 **Action:** Use fixed tracking steps for inline monospace text buttons to distinguish actionable controls from static VFS path segment labels.
 
+## 2026-07-24 - Landing Showcase Dual-Pane Workspace Alignment
+**Learning:** Mirroring a mobile app's core editor on a landing website requires strictly adopting the app's exact design specifications — 35/65 dual-pane explorer ratio, 680px text canvas constraint, 1.6x line height, `JetBrains Mono` typography, and breadcrumb header path rendering (`Project › notes › draft.md`). Matching these invariants eliminates visual dissonance between product previews and runtime app experience.
+**Action:** Always map web interactive mockups directly to app `design.md` layout boundaries and typography tokens.
+

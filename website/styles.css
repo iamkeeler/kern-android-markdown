@@ -358,18 +358,34 @@ h3 {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px 16px;
+  padding: 10px 14px;
   color: var(--muted);
   font-size: 13px;
-  font-family: "JetBrains Mono", "Roboto Mono", monospace;
+  font-family: Roboto, ui-sans-serif, system-ui, sans-serif;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+}
+
+.phone-top .path {
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phone-top .path .active-node {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
+  box-shadow: 0 0 6px var(--accent);
 }
 
 .workspace-preview {
@@ -377,22 +393,22 @@ h3 {
   display: grid;
   grid-template-columns: 35% 65%;
   overflow: hidden;
-  border-radius: 24px;
+  border-bottom-left-radius: 24px;
+  border-bottom-right-radius: 24px;
   background: var(--canvas);
-  border: 1px solid var(--border);
 }
 
 .workspace-preview aside {
   background: var(--surface);
-  padding: 20px 16px;
+  padding: 24px 16px;
   border-right: 1px solid var(--border);
 }
 
 .file-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .file-btn {
@@ -414,7 +430,7 @@ h3 {
 }
 
 .file-btn:hover {
-  background: rgba(124, 122, 117, 0.1);
+  background: rgba(124, 122, 117, 0.08);
   color: var(--ink);
 }
 
@@ -422,14 +438,15 @@ h3 {
   background: var(--canvas);
   color: var(--ink);
   font-weight: 600;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .workspace-preview article {
-  padding: 20px 24px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
   max-width: 680px;
+  margin: 0 auto;
 }
 
 .editor-tabs {
@@ -437,7 +454,7 @@ h3 {
   gap: 16px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .tab-btn {
@@ -462,33 +479,64 @@ h3 {
 
 .editor-input {
   width: 100%;
-  min-height: 280px;
+  min-height: 320px;
   background: transparent;
   border: none;
   color: var(--ink);
   font-family: "JetBrains Mono", "Roboto Mono", monospace;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   resize: none;
   outline: none;
 }
 
 .live-render {
-  min-height: 280px;
+  min-height: 320px;
+  font-family: "JetBrains Mono", "Roboto Mono", monospace;
   font-size: 15px;
   line-height: 1.6;
+  color: var(--ink);
+}
+
+.live-render h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: var(--ink);
 }
 
 .live-render h2 {
-  font-size: 22px;
-  margin-top: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin-top: 20px;
   margin-bottom: 12px;
+  color: var(--ink);
+}
+
+.live-render h3 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+
+.live-render blockquote {
+  margin: 16px 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+  font-style: normal;
 }
 
 .live-render code {
   display: inline-block;
   margin-top: 12px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--accent);

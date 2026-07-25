@@ -251,7 +251,9 @@
       activeFileKey = fileKey;
       const fileData = sampleFiles[fileKey];
       textarea.value = fileData.content;
-      pathLabel.textContent = fileData.path;
+      const parts = fileData.path.split(' › ');
+      const activeFile = parts.pop();
+      pathLabel.innerHTML = parts.join(' › ') + ' › <span class="active-node">' + activeFile + '</span>';
       renderView.innerHTML = renderMarkdown(fileData.content);
 
       fileButtons.forEach(btn => {
