@@ -102,6 +102,12 @@ interface FileDao {
 
     @Query("DELETE FROM files WHERE projectId = :projectId")
     fun deleteFilesForProject(projectId: Long)
+
+    @Query("SELECT COUNT(*) FROM files WHERE isDirectory = 0")
+    fun getTotalFileCountFlow(): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(wordCount), 0) FROM files WHERE isDirectory = 0")
+    fun getTotalWordCountFlow(): Flow<Long>
 }
 
 @Dao

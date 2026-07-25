@@ -28,6 +28,8 @@ class SyncEngineTest {
         override fun updateFile(file: FileEntity) {}
         override fun deleteFile(projectId: Long, relativePath: String) {}
         override fun deleteFilesForProject(projectId: Long) {}
+        override fun getTotalFileCountFlow(): Flow<Long> = flowOf(0L)
+        override fun getTotalWordCountFlow(): Flow<Long> = flowOf(0L)
     }
 
     @Test

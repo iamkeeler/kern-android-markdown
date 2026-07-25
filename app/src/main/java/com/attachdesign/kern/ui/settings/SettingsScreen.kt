@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.local.ThemeEntity
+import com.attachdesign.kern.data.stats.StatsRepository
+import com.attachdesign.kern.domain.stats.UserStats
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.theme.AppThemeJson
 import kotlinx.coroutines.Dispatchers
@@ -106,7 +108,7 @@ fun SettingsTabsContent(
             divider = {},
             modifier = Modifier.fillMaxWidth()
         ) {
-            val tabs = listOf("Appearance", "Behavior", "Sync", "About")
+            val tabs = listOf("Appearance", "Behavior", "Stats", "Sync", "About")
             tabs.forEachIndexed { idx, tabName ->
                 val selected = activeTab == idx
                 Tab(
@@ -707,7 +709,10 @@ fun SettingsTabsContent(
                           }
                       }
                 }
-                2 -> { // Sync tab
+                2 -> { // Stats tab
+                    StatsTabContent(db = db, theme = theme, appFont = appFont)
+                }
+                3 -> { // Sync tab
                      Text("CLOUD SYNC", color = theme.textMuted, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                      Spacer(Modifier.height(theme.dimensions.spacingMedium))
                      Text(
@@ -719,7 +724,7 @@ fun SettingsTabsContent(
                      )
                      Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                 }
-                3 -> { // About tab
+                4 -> { // About tab
                      Row(
                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingMedium),
                          horizontalArrangement = Arrangement.SpaceBetween,
@@ -985,3 +990,225 @@ fun MinimalOutlinedButtonSmall(
         )
     }
 }
+
+@Composable
+fun StatsTabContent(
+    db: AppDatabase,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    appFont: FontFamily
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val statsRepository = remember(db) { StatsRepository(db) }
+    val userStats by statsRepository.getStatsFlow().collectAsState(initial = UserStats())
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = theme.dimensions.spacingSmall)
+    ) {
+        // WRITING METRICS
+        Text(
+            text = "WRITING METRICS",
+            color = theme.textMuted,
+            fontSize = theme.typography.tiny,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingMedium))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            MetricStatTile(
+                label = "Words Written",
+                value = UserStats.formatNumber(userStats.wordsWritten),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            MetricStatTile(
+                label = "Characters Written",
+                value = UserStats.formatNumber(userStats.charactersWritten),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+        HorizontalDivider(
+            thickness = theme.dimensions.borderWidth,
+            color = theme.textMuted.copy(alpha = 0.15f)
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+        // READING METRICS
+        Text(
+            text = "READING METRICS",
+            color = theme.textMuted,
+            fontSize = theme.typography.tiny,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingMedium))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            MetricStatTile(
+                label = "Words Read",
+                value = UserStats.formatNumber(userStats.wordsRead),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            MetricStatTile(
+                label = "Est. Reading Time",
+                value = UserStats.formatReadingTime(userStats.estimatedReadingTimeMinutes),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+        HorizontalDivider(
+            thickness = theme.dimensions.borderWidth,
+            color = theme.textMuted.copy(alpha = 0.15f)
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+        // ACTIVITY METRICS
+        Text(
+            text = "ACTIVITY METRICS",
+            color = theme.textMuted,
+            fontSize = theme.typography.tiny,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingMedium))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            MetricStatTile(
+                label = "Documents Opened",
+                value = UserStats.formatNumber(userStats.documentsOpened),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            MetricStatTile(
+                label = "Times Shared",
+                value = UserStats.formatNumber(userStats.timesShared),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+        HorizontalDivider(
+            thickness = theme.dimensions.borderWidth,
+            color = theme.textMuted.copy(alpha = 0.15f)
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+        // WORKSPACE TOTALS
+        Text(
+            text = "WORKSPACE TOTALS",
+            color = theme.textMuted,
+            fontSize = theme.typography.tiny,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.2.sp
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingMedium))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            MetricStatTile(
+                label = "Indexed Files",
+                value = UserStats.formatNumber(userStats.totalIndexedFiles),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            MetricStatTile(
+                label = "Workspace Words",
+                value = UserStats.formatNumber(userStats.totalIndexedWords),
+                theme = theme,
+                appFont = appFont,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge * 2))
+
+        // Reset Button
+        OutlinedButton(
+            onClick = { showResetDialog = true },
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            border = BorderStroke(theme.dimensions.borderWidth, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+        ) {
+            Text("Reset Statistics", fontFamily = appFont, fontSize = theme.typography.body)
+        }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Reset Statistics", fontFamily = appFont) },
+            text = { Text("Are you sure you want to reset all tracked writing, reading, and document activity statistics?", fontFamily = appFont) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            statsRepository.resetAllStats()
+                            showResetDialog = false
+                        }
+                    }
+                ) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error, fontFamily = appFont)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("Cancel", fontFamily = appFont)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun MetricStatTile(
+    label: String,
+    value: String,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    appFont: FontFamily,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(theme.textMuted.copy(alpha = 0.05f), RoundedCornerShape(theme.dimensions.spacingSmall))
+            .padding(theme.dimensions.spacingLarge)
+    ) {
+        Text(
+            text = value,
+            fontSize = 26.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = theme.accent
+        )
+        Spacer(Modifier.height(theme.dimensions.spacingTiny))
+        Text(
+            text = label,
+            fontSize = theme.typography.tiny,
+            fontFamily = appFont,
+            color = theme.textMuted
+        )
+    }
+}
+

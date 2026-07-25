@@ -26,6 +26,7 @@ import com.attachdesign.kern.parser.MarkdownEditorEngine
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import com.attachdesign.kern.ui.theme.AppThemeJson
 import com.attachdesign.kern.ui.theme.ThemeEngine
+import com.attachdesign.kern.data.stats.StatsRepository
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -82,6 +83,7 @@ class EditorViewModel(
     private val context: Context
 ) : ViewModel() {
     val database: AppDatabase get() = db
+    val statsRepository = StatsRepository(db)
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -286,6 +288,12 @@ viewModelScope.launch(Dispatchers.IO) {
         viewModelScope.launch {
             val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) } ?: return@launch
             val content = storageManager.readFile(project, filePath)
+            
+            // Track document open and words read stats
+            statsRepository.incrementDocumentsOpened()
+            val wordCount = countWords(content)
+            statsRepository.addWordsRead(wordCount.toLong())
+
             val rawBlocks = MarkdownParser.splitDocument(content)
             val parsedBlocks = rawBlocks.map { raw ->
                 ImmutableParagraphBlock(MarkdownParser.parseParagraph(raw))
@@ -397,6 +405,19 @@ viewModelScope.launch(Dispatchers.IO) {
         val items = currentState.paragraphs.items.toMutableList()
         val originalRaw = items[index].block.rawText
         val oldValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(originalRaw)
+
+        val charDelta = (newValue.text.length - oldValue.text.length).toLong()
+        if (charDelta > 0) {
+            val oldWords = countWords(oldValue.text)
+            val newWords = countWords(newValue.text)
+            val wordDelta = (newWords - oldWords).toLong()
+            viewModelScope.launch {
+                statsRepository.addCharactersWritten(charDelta)
+                if (wordDelta > 0) {
+                    statsRepository.addWordsWritten(wordDelta)
+                }
+            }
+        }
 
         // 1. Check if it's a newline split
         if (newValue.text.contains('\n')) {
@@ -1088,6 +1109,7 @@ viewModelScope.launch(Dispatchers.IO) {
         if (filePath.isEmpty()) return
 
         viewModelScope.launch {
+            statsRepository.incrementTimesShared()
             saveActiveFile()
             val fileNode = VfsNode.File(
                 name = filePath.substringAfterLast('/'),
