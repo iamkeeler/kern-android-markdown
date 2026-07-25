@@ -41,5 +41,5 @@ jobs:
           username: ${{ secrets.WEBSITE_FTP_USERNAME }}
           password: ${{ secrets.WEBSITE_FTP_PASSWORD }}
           local-dir: ./website/
-          server-dir: /home/u391498577/domains/attach.design/public_html/kern/
+          server-dir: /public_html/kern/
           dangerous-clean-slate: false
