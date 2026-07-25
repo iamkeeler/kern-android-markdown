@@ -36,7 +36,7 @@ jobs:
       - name: Deploy website via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.WEBSITE_FTP_SERVER }}
+          server: ${{ secrets.WEBSITE_SERVER }}
           username: ${{ secrets.WEBSITE_FTP_USERNAME }}
           password: ${{ secrets.WEBSITE_FTP_PASSWORD }}
           local-dir: ./website/
