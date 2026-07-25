@@ -1,12 +1,9 @@
 # Quill's Copy Backlog & Audit Log
 
-## Applied Copy Refinements (2026-07-24)
+## Applied Copy Refinements (2026-07-24 - Pass 2)
 
-- [x] **Hero Privacy Band Copy (`index.html`)**: Converted technical CI secret jargon into direct document sovereignty promise ("Your documents never leave your device...").
-- [x] **Feature Item #4 (`index.html`)**: Renamed "Open-source path" to "Open-source foundation" and simplified copy to active voice ("Kern is fully open source on GitHub...").
-- [x] **Feature Item #3 (`index.html`)**: Rewrote "Adaptive layout" text to active voice ("Enjoy a dual-pane workspace on tablets and wide screens...").
-- [x] **Contact Page Lede (`contact.html`)**: Rewrote lede to direct question/action structure ("Have feedback, feature requests, or security reports? Send a direct note...").
-
-## Deferred String Overhauls
-
-- [ ] **Play Store Listing Short Description Audit**: Review Play Console short description string against character budget constraints (80 char max).
+- [x] **Hero Lede (`index.html`)**: Rewrote passive fragments into active sentences ("Kern is a community-built Markdown workspace for Android. It handles local files with calm typography...").
+- [x] **Local File Access (`index.html`)**: Converted fragment "Operates directly..." into active lead-with-the-point sentence ("Read and write Markdown files directly using Android's Storage Access Framework...").
+- [x] **Document Typography (`index.html`)**: Replaced noun stack with active benefit ("Read comfortably with warm canvas themes, 1.6x line spacing...").
+- [x] **Adaptive Split View (`index.html`)**: Rewrote passive "Supports..." to active imperative ("Use a dual-pane workspace on tablets and foldables...").
+- [x] **100% Open Source (`index.html`)**: Cut wordy bureaucracy ("are hosted publicly under open license standards" -> "are public on GitHub under open licenses").
