@@ -96,8 +96,18 @@
     const themeToggle = document.getElementById('theme-toggle');
     const storedTheme = localStorage.getItem('theme');
     
+    function updateThemeAria(theme) {
+      const nextTheme = theme === 'dark' ? 'light' : 'dark';
+      themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+      themeToggle.setAttribute('title', `Switch to ${nextTheme} theme`);
+    }
+
     if (storedTheme) {
       document.documentElement.setAttribute('data-theme', storedTheme);
+      updateThemeAria(storedTheme);
+    } else {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      updateThemeAria(isDark ? 'dark' : 'light');
     }
 
     themeToggle.addEventListener('click', () => {
@@ -110,6 +120,7 @@
       }
       document.documentElement.setAttribute('data-theme', target);
       localStorage.setItem('theme', target);
+      updateThemeAria(target);
     });
 
     // Mobile nav toggle

@@ -107,9 +107,9 @@
             </div>
           </aside>
           <article>
-            <div class="editor-tabs">
-              <button type="button" class="tab-btn active" id="tab-editor">Editor</button>
-              <button type="button" class="tab-btn" id="tab-preview">Rendered</button>
+            <div class="editor-tabs" role="tablist" aria-label="Editor view options">
+              <button type="button" class="tab-btn active" id="tab-editor" role="tab" aria-selected="true" aria-controls="editor-view">Editor</button>
+              <button type="button" class="tab-btn" id="tab-preview" role="tab" aria-selected="false" aria-controls="render-view">Rendered</button>
             </div>
             <div id="editor-view">
               <textarea id="demo-textarea" class="editor-input" aria-label="Markdown live editor" spellcheck="false"></textarea>
@@ -176,8 +176,18 @@
     const themeToggle = document.getElementById('theme-toggle');
     const storedTheme = localStorage.getItem('theme');
     
+    function updateThemeAria(theme) {
+      const nextTheme = theme === 'dark' ? 'light' : 'dark';
+      themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+      themeToggle.setAttribute('title', `Switch to ${nextTheme} theme`);
+    }
+
     if (storedTheme) {
       document.documentElement.setAttribute('data-theme', storedTheme);
+      updateThemeAria(storedTheme);
+    } else {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      updateThemeAria(isDark ? 'dark' : 'light');
     }
 
     themeToggle.addEventListener('click', () => {
@@ -190,6 +200,7 @@
       }
       document.documentElement.setAttribute('data-theme', target);
       localStorage.setItem('theme', target);
+      updateThemeAria(target);
     });
 
     // Mobile nav toggle
@@ -261,14 +272,18 @@
 
     tabEditor.addEventListener('click', () => {
       tabEditor.classList.add('active');
+      tabEditor.setAttribute('aria-selected', 'true');
       tabPreview.classList.remove('active');
+      tabPreview.setAttribute('aria-selected', 'false');
       editorView.style.display = 'block';
       renderView.style.display = 'none';
     });
 
     tabPreview.addEventListener('click', () => {
       tabPreview.classList.add('active');
+      tabPreview.setAttribute('aria-selected', 'true');
       tabEditor.classList.remove('active');
+      tabEditor.setAttribute('aria-selected', 'false');
       editorView.style.display = 'none';
       renderView.style.display = 'block';
       renderView.innerHTML = renderMarkdown(textarea.value);
