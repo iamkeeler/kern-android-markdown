@@ -202,6 +202,7 @@ class MainScreenViewModelTest {
     @Test
     fun `isLoading starts true and becomes false after initialization`() = runTest {
         val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
+        coEvery { quoteDao.getAllQuotesFlow() } returns kotlinx.coroutines.flow.flowOf(emptyList())
         coEvery { projectDao.getAllProjects() } returns listOf(proj)
         coEvery { projectDao.getAllProjectsFlow() } returns kotlinx.coroutines.flow.flowOf(emptyList())
         coEvery { projectDao.getSelectedProjectFlow() } returns kotlinx.coroutines.flow.flowOf(null)

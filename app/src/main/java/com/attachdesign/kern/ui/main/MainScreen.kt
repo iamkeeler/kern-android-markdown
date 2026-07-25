@@ -558,6 +558,7 @@ fun MainScreen(
                         color = theme.accent,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
+                        letterSpacing = (theme.typography.tiny.value * 0.05f).sp,
                         modifier = Modifier
                             .clickable { 
                                 sortMode = when (sortMode) {
@@ -566,7 +567,7 @@ fun MainScreen(
                                     SortMode.RECENT -> SortMode.ALPHA_ASC
                                 }
                             }
-                            .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingMedium)
+                            .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingSmall)
                     )
                 }
             }

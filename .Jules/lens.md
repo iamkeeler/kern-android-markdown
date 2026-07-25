@@ -25,3 +25,8 @@ This journal tracks unique visual hierarchy and information architecture insight
 ## 2026-06-23 - Swipe Row Content Gutter
 **Learning:** Under the cardless layout system, sliding list items horizontally (e.g. to reveal actions like Delete, Edit, Share) can cause information elements placed on the extreme edges (such as file sizes or metadata) to collide directly with the action strip buttons. Establishing a minimum end-gutter of `theme.dimensions.spacingMedium` on the sliding content wrapper maintains proper typography boundaries even under full horizontal offsets.
 **Action:** For swipeable or sliding lists, always enforce end-padding on the sliding item content Row to keep meta details separated from background actions.
+
+## 2026-07-24 - Monospace Header Action Rhythm & Touch Boundaries
+**Learning:** In breadcrumb file rails, text action triggers rendered in `FontFamily.Monospace` (such as sort mode or file actions) can suffer from visual weight dilution if horizontal padding matches standard body text. Applying explicit tracking (`letterSpacing = (tiny * 0.05).sp`) and trimming excess horizontal padding prevents layout displacement while keeping section label hierarchy intact.
+**Action:** Use fixed tracking steps for inline monospace text buttons to distinguish actionable controls from static VFS path segment labels.
+
