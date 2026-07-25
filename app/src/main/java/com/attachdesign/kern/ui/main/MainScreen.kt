@@ -864,7 +864,7 @@ fun MainScreen(
     if (isIntroDialogOpen) {
         AlertDialog(
             onDismissRequest = { isIntroDialogOpen = false },
-            title = { Text("Add Local Folder", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
+            title = { Text("Open Local Folder", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text(
@@ -920,7 +920,7 @@ fun MainScreen(
     createFileDialogTargetProject?.let { targetProj ->
         InputDialog(
             title       = "New File in ${targetProj.name}",
-            label       = "Filename",
+            label       = "Document name",
             confirmText = "Create",
             theme       = theme,
             onDismiss   = { createFileDialogTargetProject = null },
@@ -954,9 +954,9 @@ fun MainScreen(
     nodeToDelete?.let { (node, project) ->
         AlertDialog(
             onDismissRequest = { nodeToDelete = null },
-            title = { Text("Delete ${if (node.isDirectory) "Folder" else "File"}?",
+            title = { Text("Delete ${if (node.isDirectory) "folder" else "document"}?",
                 color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text  = { Text("Delete '${node.name}'? This cannot be undone.",
+            text  = { Text("This will permanently remove '${node.name}'. You cannot undo this action.",
                 color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteNode(node, project); nodeToDelete = null }) {
@@ -973,7 +973,7 @@ fun MainScreen(
     nodeToRename?.let { (node, project) ->
         InputDialog(
             title       = "Rename ${if (node.isDirectory) "Folder" else "File"}",
-            label       = "New name",
+            label       = if (node.isDirectory) "Folder name" else "Document name",
             confirmText = "Rename",
             theme       = theme,
             onDismiss   = { nodeToRename = null },
@@ -987,7 +987,7 @@ fun MainScreen(
     projectToRename?.let { proj ->
         InputDialog(
             title       = "Rename Workspace",
-            label       = "New name",
+            label       = "Folder name",
             confirmText = "Rename",
             theme       = theme,
             onDismiss   = { projectToRename = null },
@@ -1001,9 +1001,9 @@ fun MainScreen(
     projectToDelete?.let { proj ->
         AlertDialog(
             onDismissRequest = { projectToDelete = null },
-            title = { Text("Delete Workspace?",
+            title = { Text("Delete workspace?",
                 color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text  = { Text("Delete '${proj.name}'? This cannot be undone.",
+            text  = { Text("This will permanently remove '${proj.name}'. You cannot undo this action.",
                 color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteProject(proj); projectToDelete = null }) {

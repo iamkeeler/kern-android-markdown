@@ -106,7 +106,7 @@ fun SettingsTabsContent(
             divider = {},
             modifier = Modifier.fillMaxWidth()
         ) {
-            val tabs = listOf("Visuals", "Behavior", "Sync", "About")
+            val tabs = listOf("Appearance", "Behavior", "Sync", "About")
             tabs.forEachIndexed { idx, tabName ->
                 val selected = activeTab == idx
                 Tab(
@@ -140,9 +140,9 @@ fun SettingsTabsContent(
                 .verticalScroll(rememberScrollState())
         ) {
             when (activeTab) {
-                0 -> { // Visuals tab
+                0 -> { // Appearance tab
                     Text(
-                        text = "Presets",
+                        text = "THEMES",
                         color = theme.textMuted,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
@@ -412,7 +412,7 @@ fun SettingsTabsContent(
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "Keep selections active when applying toolbar formatting.",
+                                  text = "Maintain text selection after applying formatting.",
                                   color = theme.textMuted,
                                   fontSize = theme.typography.tiny,
                                   lineHeight = theme.typography.bodyLarge
@@ -457,7 +457,7 @@ fun SettingsTabsContent(
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "Automatically open the editor when a new file is created.",
+                                  text = "Open the editor automatically when creating a new file.",
                                   color = theme.textMuted,
                                   fontSize = theme.typography.tiny,
                                   lineHeight = theme.typography.bodyLarge
@@ -502,7 +502,7 @@ fun SettingsTabsContent(
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "#Text becomes # Text automatically.",
+                                  text = "Insert a space after header symbols automatically (e.g. # Header).",
                                   color = theme.textMuted,
                                   fontSize = theme.typography.tiny,
                                   lineHeight = theme.typography.bodyLarge
@@ -593,7 +593,7 @@ fun SettingsTabsContent(
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "Show confirmation dialog before adding watched folders.",
+                                  text = "Show confirmation prompt before adding watched folders.",
                                   color = theme.textMuted,
                                   fontSize = theme.typography.tiny,
                                   lineHeight = theme.typography.bodyLarge

@@ -99,13 +99,13 @@ fun EditorScreen(
     if (showRenameDialog) {
         InputDialog(
             title = "Rename File",
-            label = "New name",
+            label = "Document name",
             confirmText = "Rename",
             theme = theme,
             onDismiss = { showRenameDialog = false },
             onConfirm = { newName ->
                 viewModel.renameCurrentFile(newName) { newPath ->
-                    Toast.makeText(context, "Renamed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Document renamed", Toast.LENGTH_SHORT).show()
                 }
                 showRenameDialog = false
             }
@@ -115,8 +115,8 @@ fun EditorScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete File?", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text = { Text("Delete this file? This cannot be undone.", color = theme.textPrimary, fontSize = theme.typography.body) },
+            title = { Text("Delete document?", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
+            text = { Text("This will permanently remove this document. You cannot undo this action.", color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
@@ -231,13 +231,13 @@ fun EditorScreen(
                                     "Rename" -> {
                                         showRenameDialog = true
                                     }
-                                    "Cloud Sync" -> {
+                                    "Sync Now" -> {
                                         viewModel.triggerCloudSyncSweep()
-                                        Toast.makeText(context, "Sync started", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Syncing with cloud...", Toast.LENGTH_SHORT).show()
                                     }
                                     "Duplicate" -> {
                                         viewModel.duplicateCurrentFile { newPath ->
-                                            Toast.makeText(context, "Duplicated", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Document duplicated", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                     "Delete" -> {
@@ -494,7 +494,7 @@ fun EditorHeader(
                     DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; onMoreOptionsAction("Settings") })
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showMenu = false; onMoreOptionsAction("Rename") })
-                    DropdownMenuItem(text = { Text("Cloud Sync") }, onClick = { showMenu = false; onMoreOptionsAction("Cloud Sync") })
+                    DropdownMenuItem(text = { Text("Sync Now") }, onClick = { showMenu = false; onMoreOptionsAction("Sync Now") })
                     DropdownMenuItem(text = { Text("Duplicate") }, onClick = { showMenu = false; onMoreOptionsAction("Duplicate") })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false; onMoreOptionsAction("Delete") })
                 }
