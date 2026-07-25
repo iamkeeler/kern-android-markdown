@@ -430,7 +430,7 @@ fun EditorHeader(
                 color = theme.textPrimary,
                 fontSize = theme.typography.h2,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.SemiBold
             )
         },
         navigationIcon = {
@@ -989,6 +989,12 @@ fun FloatingFormattingToolbar(
                             }
                         }
                     }
+                    Box(
+                        modifier = Modifier
+                            .height(16.dp)
+                            .width(1.dp)
+                            .background(theme.textMuted.copy(alpha = 0.25f))
+                    )
                     IconButton(
                         onClick = { onFormat("**", "**") },
                         modifier = Modifier.semantics { contentDescription = "Format selection bold" }
@@ -1191,7 +1197,7 @@ fun MetricsTab(
                 .fillMaxWidth()
                 .padding(vertical = theme.dimensions.spacingLarge)
         ) {
-            Text("Readability", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold)
+            Text("READABILITY", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
             Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
             Text(metrics.readabilityGrade, color = theme.accent, fontSize = theme.typography.h1, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(theme.dimensions.elevationMedium))
@@ -1238,7 +1244,7 @@ fun MetricsTab(
                 .padding(vertical = theme.dimensions.spacingLarge),
             verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
         ) {
-            Text("Hemingway Suggestions", color = theme.textPrimary, fontSize = theme.typography.body, fontWeight = FontWeight.Bold)
+            Text("HEMINGWAY SUGGESTIONS", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
             Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
 
             HemingwayStatRow("Very Hard Sentences", metrics.veryHardSentenceCount, theme.danger, theme)
