@@ -136,14 +136,14 @@ class MarkdownVisualTransformation(
             }
             if (!isToken) return@filter false
 
-            // If focused, reveal token if active selection intersects or is adjacent to the token range
+            // If focused, reveal token if active selection intersects or is inside the construct range
             if (isFocused) {
                 val cursorStart = selection.min
                 val cursorEnd = selection.max
-                val tokenStart = element.start
-                val tokenEnd = element.end
-                // Expand token if cursor falls inside or touches token bounds
-                val intersects = (cursorStart <= tokenEnd && cursorEnd >= tokenStart)
+                val constructStart = element.constructStart
+                val constructEnd = element.constructEnd
+                // Reveal token if cursor/selection intersects or touches construct bounds
+                val intersects = (cursorStart <= constructEnd && cursorEnd >= constructStart)
                 !intersects
             } else {
                 true
@@ -252,6 +252,21 @@ class MarkdownVisualTransformation(
                     val tEnd = matrix.originalToTransformed(end)
                     if (tStart < tEnd) {
                         builder.addStyle(SpanStyle(color = tokenColor, fontWeight = FontWeight.Bold), tStart, tEnd)
+                    }
+                }
+                MarkdownElementType.TOKEN_HEADER,
+                MarkdownElementType.TOKEN_BOLD,
+                MarkdownElementType.TOKEN_ITALIC,
+                MarkdownElementType.TOKEN_STRIKETHROUGH,
+                MarkdownElementType.TOKEN_INLINE_CODE,
+                MarkdownElementType.TOKEN_LINK_TEXT,
+                MarkdownElementType.TOKEN_LINK_URL,
+                MarkdownElementType.TOKEN_BLOCKQUOTE,
+                MarkdownElementType.TOKEN_ESCAPE_CHAR -> {
+                    val tStart = matrix.originalToTransformed(start)
+                    val tEnd = matrix.originalToTransformed(end)
+                    if (tStart < tEnd) {
+                        builder.addStyle(SpanStyle(color = tokenColor, fontWeight = FontWeight.Normal), tStart, tEnd)
                     }
                 }
                 else -> {}

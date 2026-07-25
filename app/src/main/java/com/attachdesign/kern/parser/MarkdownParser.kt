@@ -151,58 +151,59 @@ object MarkdownParser {
         } else if (rawText.startsWith("###### ")) {
             blockType = MarkdownBlockType.HEADER_6
             contentStart = 7
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 7))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 7, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("##### ")) {
             blockType = MarkdownBlockType.HEADER_5
             contentStart = 6
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 6))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 6, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("#### ")) {
             blockType = MarkdownBlockType.HEADER_4
             contentStart = 5
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 5))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 5, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("### ")) {
             blockType = MarkdownBlockType.HEADER_3
             contentStart = 4
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 4))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 4, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("## ")) {
             blockType = MarkdownBlockType.HEADER_2
             contentStart = 3
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 3))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 3, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("# ")) {
             blockType = MarkdownBlockType.HEADER_1
             contentStart = 2
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 2))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 2, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("> ") || rawText == ">") {
             blockType = MarkdownBlockType.BLOCKQUOTE
             contentStart = if (rawText.startsWith("> ")) 2 else 1
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, 0, contentStart))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, 0, contentStart, constructStart = 0, constructEnd = len))
         } else if (checklistMatch != null && checklistMatch.range.start == 0) {
             blockType = MarkdownBlockType.TASK_LIST
             contentStart = checklistMatch.value.length
             val leadingSpaces = checklistMatch.groupValues[1].length
             val isChecked = checklistMatch.groupValues[2].lowercase() == "x"
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, extra = if (isChecked) "checked" else "unchecked"))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, extra = if (isChecked) "checked" else "unchecked", constructStart = 0, constructEnd = len))
         } else if (unorderedMatch != null && unorderedMatch.range.start == 0) {
             blockType = MarkdownBlockType.UNORDERED_LIST
             contentStart = unorderedMatch.value.length
             val leadingSpaces = unorderedMatch.value.takeWhile { it.isWhitespace() }.length
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("```")) {
             blockType = MarkdownBlockType.CODE_BLOCK
             val closeIdx = rawText.indexOf("```", 3)
             if (closeIdx != -1) {
-                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, 3))
-                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, 3, closeIdx))
-                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, closeIdx, closeIdx + 3))
+                val cEnd = closeIdx + 3
+                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, 3, constructStart = 0, constructEnd = cEnd))
+                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, 3, closeIdx, constructStart = 0, constructEnd = cEnd))
+                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, closeIdx, cEnd, constructStart = 0, constructEnd = cEnd))
             } else {
-                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, 3))
-                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, 3, len))
+                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, 3, constructStart = 0, constructEnd = len))
+                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, 3, len, constructStart = 0, constructEnd = len))
             }
         } else if (orderedMatch != null && orderedMatch.range.start == 0) {
             blockType = MarkdownBlockType.ORDERED_LIST
             contentStart = orderedMatch.value.length
             val leadingSpaces = orderedMatch.value.takeWhile { it.isWhitespace() }.length
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart))
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
         }
 
         // Inline parser content bounds
@@ -225,7 +226,9 @@ object MarkdownParser {
         while (i < n) {
             // Escape Character
             if (text[i] == '\\' && i + 1 < n && (text[i + 1] == '*' || text[i + 1] == '_' || text[i + 1] == '~' || text[i + 1] == '`' || text[i + 1] == '[' || text[i + 1] == ']' || text[i + 1] == '!' || text[i + 1] == '\\')) {
-                result.add(MarkdownElement(MarkdownElementType.TOKEN_ESCAPE_CHAR, offset + i, offset + i + 1))
+                val cStart = offset + i
+                val cEnd = offset + i + 2
+                result.add(MarkdownElement(MarkdownElementType.TOKEN_ESCAPE_CHAR, offset + i, offset + i + 1, constructStart = cStart, constructEnd = cEnd))
                 i += 2
                 continue
             }
@@ -236,9 +239,11 @@ object MarkdownParser {
                 if (closeIdx != -1) {
                     val innerStart = i + 2
                     val innerEnd = closeIdx
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + i, offset + innerStart))
-                    result.add(MarkdownElement(MarkdownElementType.BOLD, offset + innerStart, offset + innerEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + innerEnd, offset + closeIdx + 2))
+                    val cStart = offset + i
+                    val cEnd = offset + closeIdx + 2
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.BOLD, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + innerEnd, offset + closeIdx + 2, constructStart = cStart, constructEnd = cEnd))
                     result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
                     i = closeIdx + 2
                     continue
@@ -250,9 +255,11 @@ object MarkdownParser {
                 if (closeIdx != -1) {
                     val innerStart = i + 2
                     val innerEnd = closeIdx
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + i, offset + innerStart))
-                    result.add(MarkdownElement(MarkdownElementType.BOLD, offset + innerStart, offset + innerEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + innerEnd, offset + closeIdx + 2))
+                    val cStart = offset + i
+                    val cEnd = offset + closeIdx + 2
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.BOLD, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + innerEnd, offset + closeIdx + 2, constructStart = cStart, constructEnd = cEnd))
                     result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
                     i = closeIdx + 2
                     continue
@@ -264,9 +271,11 @@ object MarkdownParser {
                 if (closeIdx != -1) {
                     val innerStart = i + 2
                     val innerEnd = closeIdx
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_STRIKETHROUGH, offset + i, offset + innerStart))
-                    result.add(MarkdownElement(MarkdownElementType.STRIKETHROUGH, offset + innerStart, offset + innerEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_STRIKETHROUGH, offset + innerEnd, offset + closeIdx + 2))
+                    val cStart = offset + i
+                    val cEnd = offset + closeIdx + 2
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_STRIKETHROUGH, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.STRIKETHROUGH, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_STRIKETHROUGH, offset + innerEnd, offset + closeIdx + 2, constructStart = cStart, constructEnd = cEnd))
                     result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
                     i = closeIdx + 2
                     continue
@@ -278,9 +287,11 @@ object MarkdownParser {
                 if (closeIdx != -1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, offset + i, offset + innerStart))
-                    result.add(MarkdownElement(MarkdownElementType.INLINE_CODE, offset + innerStart, offset + innerEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, offset + innerEnd, offset + closeIdx + 1))
+                    val cStart = offset + i
+                    val cEnd = offset + closeIdx + 1
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.INLINE_CODE, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, offset + innerEnd, offset + closeIdx + 1, constructStart = cStart, constructEnd = cEnd))
                     i = closeIdx + 1
                     continue
                 }
@@ -296,11 +307,13 @@ object MarkdownParser {
                         val urlStart = closeBrackIdx + 2
                         val urlEnd = closeParenIdx
                         val url = text.substring(urlStart, urlEnd)
+                        val cStart = offset + i
+                        val cEnd = offset + closeParenIdx + 1
 
-                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + i, offset + textStart))
-                        result.add(MarkdownElement(MarkdownElementType.IMAGE, offset + textStart, offset + textEnd, url))
-                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + textEnd, offset + urlStart))
-                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_URL, offset + urlStart, offset + urlEnd + 1))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + i, offset + textStart, constructStart = cStart, constructEnd = cEnd))
+                        result.add(MarkdownElement(MarkdownElementType.IMAGE, offset + textStart, offset + textEnd, extra = url, constructStart = cStart, constructEnd = cEnd))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + textEnd, offset + urlStart, constructStart = cStart, constructEnd = cEnd))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_URL, offset + urlStart, offset + urlEnd + 1, constructStart = cStart, constructEnd = cEnd))
                         result.addAll(parseInline(text.substring(textStart, textEnd), offset + textStart))
                         i = closeParenIdx + 1
                         continue
@@ -319,11 +332,13 @@ object MarkdownParser {
                         val urlStart = closeBrackIdx + 2
                         val urlEnd = closeParenIdx
                         val url = text.substring(urlStart, urlEnd)
+                        val cStart = offset + i
+                        val cEnd = offset + closeParenIdx + 1
 
-                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + i, offset + textStart))
-                        result.add(MarkdownElement(MarkdownElementType.LINK, offset + textStart, offset + textEnd, url))
-                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + textEnd, offset + urlStart))
-                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_URL, offset + urlStart, offset + urlEnd + 1))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + i, offset + textStart, constructStart = cStart, constructEnd = cEnd))
+                        result.add(MarkdownElement(MarkdownElementType.LINK, offset + textStart, offset + textEnd, extra = url, constructStart = cStart, constructEnd = cEnd))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_TEXT, offset + textEnd, offset + urlStart, constructStart = cStart, constructEnd = cEnd))
+                        result.add(MarkdownElement(MarkdownElementType.TOKEN_LINK_URL, offset + urlStart, offset + urlEnd + 1, constructStart = cStart, constructEnd = cEnd))
                         result.addAll(parseInline(text.substring(textStart, textEnd), offset + textStart))
                         i = closeParenIdx + 1
                         continue
@@ -336,9 +351,11 @@ object MarkdownParser {
                 if (closeIdx != -1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + i, offset + innerStart))
-                    result.add(MarkdownElement(MarkdownElementType.ITALIC, offset + innerStart, offset + innerEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + innerEnd, offset + closeIdx + 1))
+                    val cStart = offset + i
+                    val cEnd = offset + closeIdx + 1
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.ITALIC, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + innerEnd, offset + closeIdx + 1, constructStart = cStart, constructEnd = cEnd))
                     result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
                     i = closeIdx + 1
                     continue
@@ -350,9 +367,11 @@ object MarkdownParser {
                 if (closeIdx != -1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + i, offset + innerStart))
-                    result.add(MarkdownElement(MarkdownElementType.ITALIC, offset + innerStart, offset + innerEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + innerEnd, offset + closeIdx + 1))
+                    val cStart = offset + i
+                    val cEnd = offset + closeIdx + 1
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.ITALIC, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
+                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + innerEnd, offset + closeIdx + 1, constructStart = cStart, constructEnd = cEnd))
                     result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
                     i = closeIdx + 1
                     continue

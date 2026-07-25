@@ -155,4 +155,26 @@ class MarkdownParserTest {
         val italicElement = nested.elements.find { it.type == MarkdownElementType.ITALIC }
         assertEquals("italic", nested.rawText.substring(italicElement!!.start, italicElement.end))
     }
+
+    @Test
+    fun testConstructBounds() {
+        val paragraphText = "**bold** and *italic*"
+        val parsed = MarkdownParser.parseParagraph(paragraphText)
+
+        val boldTokens = parsed.elements.filter { it.type == MarkdownElementType.TOKEN_BOLD }
+        assertEquals(2, boldTokens.size)
+        // **bold** is indices 0..8
+        assertEquals(0, boldTokens[0].constructStart)
+        assertEquals(8, boldTokens[0].constructEnd)
+        assertEquals(0, boldTokens[1].constructStart)
+        assertEquals(8, boldTokens[1].constructEnd)
+
+        val italicTokens = parsed.elements.filter { it.type == MarkdownElementType.TOKEN_ITALIC }
+        assertEquals(2, italicTokens.size)
+        // *italic* is indices 13..21
+        assertEquals(13, italicTokens[0].constructStart)
+        assertEquals(21, italicTokens[0].constructEnd)
+        assertEquals(13, italicTokens[1].constructStart)
+        assertEquals(21, italicTokens[1].constructEnd)
+    }
 }

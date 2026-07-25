@@ -1,9 +1,9 @@
 package com.attachdesign.kern.ui.editor
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MarkdownVisualTransformationTest {
@@ -12,69 +12,85 @@ class MarkdownVisualTransformationTest {
     private val codeBgColor = Color.LightGray
 
     @Test
-    fun testRenderedModeStripsTokensWhenCursorOutside() {
-        val transformation = MarkdownVisualTransformation(
-            isFocused = false,
-            selection = TextRange(50, 50),
-            viewMode = ViewMode.RENDERED,
-            tokenColor = tokenColor,
-            codeBackgroundColor = codeBgColor
-        )
+    fun testSelectiveTokenRevealWhenCursorIsInsideBold() {
+        val rawText = "**this is bold**, and *this is italic*"
+        // **this is bold** is indices 0..16
+        // , and  is indices 16..23
+        // *this is italic* is indices 23..38
+        val text = AnnotatedString(rawText)
 
-        // Raw: "> **Hello** there"
-        val rawText = androidx.compose.ui.text.AnnotatedString("> **Hello** there")
-        val result = transformation.filter(rawText)
-
-        // Stripped output should be "Hello there"
-        assertEquals("Hello there", result.text.text)
-    }
-
-    @Test
-    fun testRenderedModeExpandsTokensWhenCursorIntersects() {
-        // Cursor at position 3, inside "**" or "Hello" range
-        val transformation = MarkdownVisualTransformation(
+        // Cursor at position 5 (inside "this is bold")
+        val vt = MarkdownVisualTransformation(
             isFocused = true,
-            selection = TextRange(3, 3),
+            selection = TextRange(5, 5),
             viewMode = ViewMode.RENDERED,
             tokenColor = tokenColor,
             codeBackgroundColor = codeBgColor
         )
 
-        val rawText = androidx.compose.ui.text.AnnotatedString("> **Hello** there")
-        val result = transformation.filter(rawText)
-
-        // When cursor intersects **Hello**, the ** token should be revealed for editing
-        assertTrue(result.text.text.contains("**Hello**") || result.text.text.contains("Hello"))
+        val transformed = vt.filter(text)
+        // ** is revealed for bold, but * is stripped for italic
+        // Expected text: "**this is bold**, and this is italic"
+        assertEquals("**this is bold**, and this is italic", transformed.text.text)
     }
 
     @Test
-    fun testOffsetMappingCorrectnessWhenTokensStripped() {
-        val transformation = MarkdownVisualTransformation(
-            isFocused = false,
-            selection = TextRange(100, 100),
+    fun testSelectiveTokenRevealWhenCursorIsInsideItalic() {
+        val rawText = "**this is bold**, and *this is italic*"
+        val text = AnnotatedString(rawText)
+
+        // Cursor at position 28 (inside "this is italic")
+        val vt = MarkdownVisualTransformation(
+            isFocused = true,
+            selection = TextRange(28, 28),
             viewMode = ViewMode.RENDERED,
             tokenColor = tokenColor,
             codeBackgroundColor = codeBgColor
         )
 
-        // Raw: "This is **bold**"
-        // Transformed: "This is bold" (len 12)
-        // Original tokens: "**" at [8, 10) and "**" at [14, 16)
-        val rawText = androidx.compose.ui.text.AnnotatedString("This is **bold**")
-        val result = transformation.filter(rawText)
+        val transformed = vt.filter(text)
+        // ** is stripped for bold, but * is revealed for italic
+        // Expected text: "this is bold, and *this is italic*"
+        assertEquals("this is bold, and *this is italic*", transformed.text.text)
+    }
 
-        assertEquals("This is bold", result.text.text)
+    @Test
+    fun testSelectiveTokenRevealWhenCursorIsOutsideFormatting() {
+        val rawText = "**this is bold**, and *this is italic*"
+        val text = AnnotatedString(rawText)
 
-        // Index 0 in original ('T') -> 0 in transformed
-        assertEquals(0, result.offsetMapping.originalToTransformed(0))
-        // Index 8 in original (start of first '**') -> 8 in transformed (start of 'b')
-        assertEquals(8, result.offsetMapping.originalToTransformed(8))
-        // Index 10 in original (start of 'b' in bold) -> 8 in transformed
-        assertEquals(8, result.offsetMapping.originalToTransformed(10))
-        // Index 14 in original (end of 'd' in bold / start of second '**') -> 12 in transformed
-        assertEquals(12, result.offsetMapping.originalToTransformed(14))
+        // Cursor at position 18 (inside ", and ")
+        val vt = MarkdownVisualTransformation(
+            isFocused = true,
+            selection = TextRange(18, 18),
+            viewMode = ViewMode.RENDERED,
+            tokenColor = tokenColor,
+            codeBackgroundColor = codeBgColor
+        )
 
-        // Transformed index 8 ('b') -> 10 in original
-        assertEquals(10, result.offsetMapping.transformedToOriginal(8))
+        val transformed = vt.filter(text)
+        // Both ** and * are stripped
+        // Expected text: "this is bold, and this is italic"
+        assertEquals("this is bold, and this is italic", transformed.text.text)
+    }
+
+    @Test
+    fun testSelectiveTokenRevealWhenSelectionSpansBothConstructs() {
+        val rawText = "**this is bold**, and *this is italic*"
+        val text = AnnotatedString(rawText)
+
+        // Selection from 5 to 28
+        val vt = MarkdownVisualTransformation(
+            isFocused = true,
+            selection = TextRange(5, 28),
+            viewMode = ViewMode.RENDERED,
+            tokenColor = tokenColor,
+            codeBackgroundColor = codeBgColor
+        )
+
+        val transformed = vt.filter(text)
+        // Both ** and * are revealed
+        // Expected text: "**this is bold**, and *this is italic*"
+        assertEquals("**this is bold**, and *this is italic*", transformed.text.text)
     }
 }

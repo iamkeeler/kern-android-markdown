@@ -33,7 +33,9 @@ data class MarkdownElement(
     val type: MarkdownElementType,
     val start: Int,
     val end: Int,
-    val extra: String? = null
+    val extra: String? = null,
+    val constructStart: Int = start,
+    val constructEnd: Int = end
 )
 
 data class ParagraphBlock(
