@@ -347,7 +347,7 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
-                        .padding(horizontal = theme.dimensions.spacingHuge)
+                        .padding(horizontal = theme.dimensions.spacingExtraLarge)
                         .padding(top = theme.dimensions.spacingExtraLarge)
                 ) {
                 TopAppBar(
@@ -358,8 +358,7 @@ fun MainScreen(
                             fontFamily = appFont,
                             fontWeight = FontWeight.Light,
                             color = theme.textPrimary,
-                            letterSpacing = (theme.typography.h1.value * -0.02f).sp,
-                            modifier = Modifier.offset(x = (-16).dp)
+                            letterSpacing = (theme.typography.h1.value * -0.02f).sp
                         )
                     },
                     actions = {
