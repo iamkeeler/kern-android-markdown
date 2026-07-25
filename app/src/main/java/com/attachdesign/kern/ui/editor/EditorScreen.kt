@@ -220,6 +220,9 @@ fun EditorScreen(
                                 val currentMode = uiState.sidebarMode
                                 viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
                             },
+                            onTitleClick = {
+                                showRenameDialog = true
+                            },
                             onMoreOptionsAction = { action ->
                                 when(action) {
                                     "Settings" -> {
@@ -420,7 +423,8 @@ fun EditorHeader(
     onCopyClick: () -> Unit,
     onMetricsToggle: () -> Unit,
     onSettingsToggle: () -> Unit,
-    onMoreOptionsAction: (String) -> Unit = {}
+    onMoreOptionsAction: (String) -> Unit = {},
+    onTitleClick: () -> Unit = {}
 ) {
     val fileName = filePath.split('/').last()
 
@@ -429,11 +433,15 @@ fun EditorHeader(
             Text(
                 text = fileName,
                 color = theme.textPrimary,
-                fontSize = theme.typography.h2,
+                fontSize = theme.typography.subtitle,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(theme.dimensions.cornerRadiusSmall))
+                    .clickable { onTitleClick() }
+                    .padding(horizontal = theme.dimensions.spacingSmall, vertical = theme.dimensions.spacingTiny)
             )
         },
         navigationIcon = {
