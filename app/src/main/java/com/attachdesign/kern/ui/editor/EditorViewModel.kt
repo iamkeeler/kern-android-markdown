@@ -27,6 +27,7 @@ import com.attachdesign.kern.ui.theme.AppColorTheme
 import com.attachdesign.kern.ui.theme.AppThemeJson
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.data.stats.StatsRepository
+import com.attachdesign.kern.data.analytics.AnalyticsTracker
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -84,6 +85,7 @@ class EditorViewModel(
 ) : ViewModel() {
     val database: AppDatabase get() = db
     val statsRepository = StatsRepository(db)
+    val analyticsTracker = AnalyticsTracker(context)
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -291,8 +293,10 @@ viewModelScope.launch(Dispatchers.IO) {
             
             // Track document open and words read stats
             statsRepository.incrementDocumentsOpened()
+            analyticsTracker.logDocumentOpened()
             val wordCount = countWords(content)
             statsRepository.addWordsRead(wordCount.toLong())
+            analyticsTracker.logWordsRead(wordCount.toLong())
 
             val rawBlocks = MarkdownParser.splitDocument(content)
             val parsedBlocks = rawBlocks.map { raw ->
@@ -413,8 +417,10 @@ viewModelScope.launch(Dispatchers.IO) {
             val wordDelta = (newWords - oldWords).toLong()
             viewModelScope.launch {
                 statsRepository.addCharactersWritten(charDelta)
+                analyticsTracker.logCharactersWritten(charDelta)
                 if (wordDelta > 0) {
                     statsRepository.addWordsWritten(wordDelta)
+                    analyticsTracker.logWordsWritten(wordDelta)
                 }
             }
         }
@@ -1110,6 +1116,7 @@ viewModelScope.launch(Dispatchers.IO) {
 
         viewModelScope.launch {
             statsRepository.incrementTimesShared()
+            analyticsTracker.logDocumentShared()
             saveActiveFile()
             val fileNode = VfsNode.File(
                 name = filePath.substringAfterLast('/'),
