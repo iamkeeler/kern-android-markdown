@@ -95,8 +95,8 @@ data class AppDimensions(
     val elevationLarge: Dp = 8.dp,
 
     val iconSmall: Dp = 16.dp,
-    val iconMedium: Dp = 24.dp,
-    val iconLarge: Dp = 32.dp,
+    val iconMedium: Dp = 20.dp,
+    val iconLarge: Dp = 28.dp,
     val iconHuge: Dp = 48.dp,
 
     val buttonHeight: Dp = 48.dp,

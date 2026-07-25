@@ -494,7 +494,8 @@ fun EditorHeader(
                     Icon(
                         imageVector = Icons.Outlined.MoreVert,
                         contentDescription = "More Options",
-                        tint = theme.textMuted
+                        tint = theme.textMuted,
+                        modifier = Modifier.size(theme.dimensions.iconMedium)
                     )
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
@@ -1099,7 +1100,7 @@ fun FloatingFormattingToolbar(
                     onClick = onMinimizeClick,
                     modifier = Modifier.semantics { contentDescription = "Minimize formatting toolbar" }
                 ) {
-                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = theme.textMuted)
+                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = theme.textMuted, modifier = Modifier.size(theme.dimensions.iconMedium))
                 }
             }
         }
