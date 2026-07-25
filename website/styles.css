@@ -109,6 +109,26 @@ a {
   margin-inline: auto;
 }
 
+.site-header-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: transparent;
+  transition: background-color 300ms ease, border-color 300ms ease, box-shadow 300ms ease, backdrop-filter 300ms ease;
+}
+
+.site-header-wrapper.is-scrolled {
+  background: rgba(252, 251, 250, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="dark"] .site-header-wrapper.is-scrolled {
+  background: rgba(18, 18, 18, 0.88);
+}
+
 /* Header & Navigation */
 .site-header {
   min-height: 88px;
@@ -116,6 +136,11 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+  transition: min-height 300ms ease;
+}
+
+.site-header-wrapper.is-scrolled .site-header {
+  min-height: 64px;
 }
 
 .brand {
@@ -337,8 +362,35 @@ h3 {
   padding: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
-  transition: border-color 200ms ease, background-color 200ms ease;
+  transform: perspective(1000px) rotateX(6deg) scale(0.96) translateY(20px);
+  transform-origin: center top;
+  transition: border-color 200ms ease, background-color 200ms ease, transform 600ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 600ms ease;
+  will-change: transform;
 }
+
+.device-frame.is-visible,
+.device-frame:hover {
+  transform: perspective(1000px) rotateX(0deg) scale(1) translateY(0);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.08);
+}
+
+/* Native Scroll Reveal Utility Cues */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1), transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+[data-reveal-delay="100"] { transition-delay: 100ms; }
+[data-reveal-delay="200"] { transition-delay: 200ms; }
+[data-reveal-delay="300"] { transition-delay: 300ms; }
+[data-reveal-delay="400"] { transition-delay: 400ms; }
 
 .phone-top {
   display: flex;

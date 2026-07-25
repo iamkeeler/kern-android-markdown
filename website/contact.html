@@ -19,36 +19,38 @@
 <body>
   <a href="#main" class="skip-to-content">Skip to content</a>
 
-  <header class="site-header">
-    <a class="brand" href="index.html" aria-label="Kern Home">
-      <span class="mark" aria-hidden="true">K</span>
-      <span>Kern</span>
-    </a>
+  <div class="site-header-wrapper" id="header-wrapper">
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Kern Home">
+        <span class="mark" aria-hidden="true">K</span>
+        <span>Kern</span>
+      </a>
 
-    <div class="nav-group">
-      <nav class="nav" id="main-nav" aria-label="Primary navigation">
-        <a href="index.html#features">Features</a>
-        <a href="privacy.html">Privacy</a>
-        <a href="contact.html" aria-current="page">Contact</a>
-        <a href="https://github.com/iamkeeler/AndroidMD-App" target="_blank" rel="noopener">GitHub</a>
-      </nav>
+      <div class="nav-group">
+        <nav class="nav" id="main-nav" aria-label="Primary navigation">
+          <a href="index.html#overview">Overview</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="contact.html" aria-current="page">Contact</a>
+          <a href="https://github.com/iamkeeler/AndroidMD-App" target="_blank" rel="noopener">GitHub</a>
+        </nav>
 
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
-        <svg viewBox="0 0 24 24" id="theme-icon" aria-hidden="true">
-          <circle cx="12" cy="12" r="5"></circle>
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
-        </svg>
-      </button>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+          <svg viewBox="0 0 24 24" id="theme-icon" aria-hidden="true">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+          </svg>
+        </button>
 
-      <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-  </header>
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+  </div>
 
   <main id="main" class="page section-shell">
     <p class="eyebrow">Contact</p>
@@ -116,6 +118,16 @@
       const open = mainNav.classList.toggle('open');
       menuToggle.setAttribute('aria-expanded', open);
     });
+
+    // Sticky Header scroll trigger
+    const headerWrapper = document.getElementById('header-wrapper');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 20) {
+        headerWrapper.classList.add('is-scrolled');
+      } else {
+        headerWrapper.classList.remove('is-scrolled');
+      }
+    }, { passive: true });
   </script>
 </body>
 </html>
