@@ -93,10 +93,10 @@ jobs:
           EOF
 
       - name: Run unit tests
-        run: ./gradlew test
+        run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Run Android lint
-        run: ./gradlew lint
+        run: ./gradlew lintDebug --no-daemon
 
       - name: Fail on Android lint errors
         run: |
@@ -106,7 +106,7 @@ jobs:
           fi
 
       - name: Build signed release bundle
-        run: ./gradlew bundleRelease
+        run: ./gradlew bundleRelease --no-daemon
 
       - name: Upload signed AAB artifact
         uses: actions/upload-artifact@v4
