@@ -3,9 +3,9 @@ name: Deploy website to FTP
 on:
   push:
     tags:
-      - 'website-v*'
-      - 'website/*'
-      - 'website-*'
+      - "website-v*"
+      - "website/*"
+      - "website-*"
   workflow_dispatch:
 
 permissions:
@@ -41,6 +41,6 @@ jobs:
           username: ${{ secrets.WEBSITE_FTP_USERNAME }}
           password: ${{ secrets.WEBSITE_FTP_PASSWORD }}
           local-dir: ./website/
-          server-dir: public_html/kern/
+          server-dir: /domains/attach.design/public_html/kern/
           log-level: verbose
           dangerous-clean-slate: false
