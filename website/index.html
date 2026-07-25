@@ -80,27 +80,128 @@
       <div class="hero-copy" data-reveal>
         <p class="eyebrow" data-reveal data-reveal-delay="100">Open Source Project</p>
         <h1 data-reveal data-reveal-delay="200">Live preview Markdown editing for Android.</h1>
-        <p class="lede" data-reveal data-reveal-delay="300">Kern is a Markdown app built for the community. It combines real-time Markdown rendering and local file control.</p>
+        <p class="lede" data-reveal data-reveal-delay="300">Kern combines real-time Markdown rendering with local file control in a calm, focused writing environment.</p>
         <div class="actions" data-reveal data-reveal-delay="400">
           <a class="button primary" href="https://github.com/iamkeeler/AndroidMD-App" target="_blank" rel="noopener">View on GitHub</a>
-          <a class="button secondary" href="https://play.google.com/store/apps/details?id=com.attachdesign.kern" target="_blank" rel="noopener">Google Play</a>
+          <a class="button secondary" href="#interactive-demo">Try Interactive Demo ↓</a>
         </div>
       </div>
 
-      <div class="device-frame" id="hero-device" data-reveal data-reveal-delay="200" aria-label="Kern app video demonstration preview">
-        <div class="phone-top">
-          <span class="dot"></span>
-          <span class="path">Project › notes › <span class="active-node">draft.md</span></span>
+      <div class="hero-preview-badge" data-reveal data-reveal-delay="300">
+        <div class="preview-mini-card">
+          <div class="mini-card-header">
+            <span class="dot"></span>
+            <span class="mini-title">Live Editor Preview</span>
+          </div>
+          <p class="mini-code"># Calm Markdown\n\nWriting with **Kern** instantly renders styled text.</p>
+          <div class="mini-scroll-indicator">
+            <span>Scroll down to see it type live</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          </div>
         </div>
-        <div class="video-placeholder" role="region" aria-label="Kern App Walkthrough Video Preview">
-          <div class="video-poster-preview">
-            <div class="play-btn-wrapper" aria-label="Play Kern walkthrough video">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-              </svg>
+      </div>
+    </section>
+
+    <!-- Scroll-Driven Interactive App Demo -->
+    <section id="interactive-demo" class="scroll-interactive-section section-shell" aria-label="Interactive App Editor Demo">
+      <div class="section-heading" data-reveal>
+        <p class="eyebrow">Interactive Demo</p>
+        <h2>Experience Kern as you scroll.</h2>
+        <p class="section-subtext">Scroll down to watch the live Markdown editor type out syntax, compute readability metrics, switch themes, and navigate local files.</p>
+      </div>
+
+      <div class="interactive-layout-grid">
+        <!-- Scroll Narrative Steps -->
+        <div class="scroll-steps-column">
+          <article class="scroll-step is-active" data-step="0">
+            <span class="step-num">01</span>
+            <span class="step-tagline">Real-Time Engine</span>
+            <h3>Instant Live Preview</h3>
+            <p>Write standard Markdown syntax and watch it render instantly without modal preview switches. Headers, bolding, italics, lists, and code blocks format smoothly as you type.</p>
+          </article>
+
+          <article class="scroll-step" data-step="1">
+            <span class="step-num">02</span>
+            <span class="step-tagline">Hemingway Analyzer</span>
+            <h3>On-Demand Readability Metrics</h3>
+            <p>Evaluate sentence complexity and target grade levels on the fly. Kern highlights intricate sentences in warm tones without slowing down typing speed.</p>
+          </article>
+
+          <article class="scroll-step" data-step="2">
+            <span class="step-num">03</span>
+            <span class="step-tagline">Adaptive Styling</span>
+            <h3>Warm Cream & Charcoal Themes</h3>
+            <p>Seamlessly toggle between light cream canvas and dark charcoal modes engineered specifically for daytime writing and night reading sessions.</p>
+          </article>
+
+          <article class="scroll-step" data-step="3">
+            <span class="step-num">04</span>
+            <span class="step-tagline">Local First</span>
+            <h3>Direct Storage Access (SAF)</h3>
+            <p>Access document folders directly through Android's Storage Access Framework. Clean breadcrumbs, folder trees, and local file independence with zero cloud lock-in.</p>
+          </article>
+        </div>
+
+        <!-- Sticky Interactive Phone Frame -->
+        <div class="sticky-demo-column">
+          <div class="sticky-demo-container">
+            <div class="interactive-phone-frame" id="demo-phone" data-demo-theme="cream">
+              <!-- Phone Bezel & Top bar -->
+              <div class="phone-status-bar">
+                <span class="time">09:41</span>
+                <span class="notch"></span>
+                <span class="icons">📶 🔋</span>
+              </div>
+
+              <div class="phone-app-bar">
+                <button type="button" class="drawer-icon-btn" id="demo-drawer-btn" title="Toggle local folder tree" aria-label="Toggle local file navigation">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+                <div class="app-breadcrumbs">
+                  <span class="folder">notes</span> / <span class="filename" id="demo-filename">draft.md</span>
+                </div>
+                <div class="readability-pill" id="demo-readability-pill">
+                  <span class="pill-dot"></span>
+                  <span class="pill-text" id="demo-pill-text">Grade 5 · 14 WPM</span>
+                </div>
+              </div>
+
+              <!-- Drawer File Explorer Overlay -->
+              <div class="demo-file-drawer" id="demo-drawer">
+                <div class="drawer-header">
+                  <span class="drawer-title">📁 Storage Access Framework</span>
+                </div>
+                <ul class="drawer-tree">
+                  <li class="folder-item">📂 <span>/Documents/Notes</span></li>
+                  <li class="file-item active">📄 <span>draft.md</span></li>
+                  <li class="file-item">📄 <span>journal.md</span></li>
+                  <li class="file-item">📄 <span>ideas.md</span></li>
+                  <li class="file-item">📄 <span>project_plan.md</span></li>
+                </ul>
+              </div>
+
+              <!-- Live Editor Split Area -->
+              <div class="demo-editor-canvas">
+                <div class="editor-pane-header">
+                  <span class="pane-tab active">Raw Markdown</span>
+                  <span class="pane-tab">Live Output</span>
+                </div>
+
+                <div class="editor-pane-body">
+                  <div class="raw-code-box">
+                    <pre><code id="demo-typing-target"># Live Preview\n\nWriting with **Kern** renders styled text...</code></pre>
+                  </div>
+                  <div class="rendered-preview-box" id="demo-render-target">
+                    <h1>Live Preview</h1>
+                    <p>Writing with <strong>Kern</strong> renders styled text...</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="phone-bottom-nav">
+                <span class="nav-indicator">1.6x Line Height · JetBrains Mono</span>
+              </div>
             </div>
-            <p class="video-caption">Watch Kern in Action</p>
-            <p class="video-subcaption">Quiet Markdown workspace with instant live preview</p>
           </div>
         </div>
       </div>
@@ -138,124 +239,64 @@
     <section id="showcase" class="screenshots-showcase section-shell" aria-labelledby="showcase-title">
       <div class="section-heading" data-reveal>
         <p class="eyebrow">App Tour</p>
-        <h2 id="showcase-title">Designed for quiet, focused writing.</h2>
-        <p class="section-subtext">Every screen in Kern is built for legibility, local-first control, and minimal visual noise.</p>
+        <h2 id="showcase-title">Explore Kern in detail.</h2>
+        <p class="section-subtext">Click any screen tab below to explore features or inspect full-resolution screenshots.</p>
       </div>
 
-      <div class="showcase-grid">
-        <!-- Card 1: Live Preview -->
-        <article class="showcase-card" data-reveal data-reveal-delay="100">
-          <div class="card-header">
-            <span class="card-tagline">Live Preview Editor</span>
-            <h3 class="card-title">Write and see formatting in real time</h3>
-            <p class="card-description">Markdown syntax tokens reveal themselves inline when focused and render smoothly when editing completes.</p>
-          </div>
-          <div class="device-frame-wrapper">
-            <div class="device-frame-mockup">
-              <div class="device-bezel">
-                <div class="device-notch"></div>
-                <div class="device-screen">
-                  <img src="screenshots/Screenshot_20260725_075131.png" alt="Kern Live Preview Editor Screen" loading="lazy">
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
+      <div class="compact-gallery-wrapper" data-reveal>
+        <!-- Interactive Gallery Tabs -->
+        <div class="gallery-tabs" role="tablist" aria-label="Kern App Feature Screens">
+          <button type="button" class="gallery-tab active" data-tab="0" role="tab" aria-selected="true">
+            <span class="tab-icon">✨</span> Live Editor
+          </button>
+          <button type="button" class="gallery-tab" data-tab="1" role="tab" aria-selected="false">
+            <span class="tab-icon">📁</span> Workspace
+          </button>
+          <button type="button" class="gallery-tab" data-tab="2" role="tab" aria-selected="false">
+            <span class="tab-icon">📊</span> Readability
+          </button>
+          <button type="button" class="gallery-tab" data-tab="3" role="tab" aria-selected="false">
+            <span class="tab-icon">🎨</span> Themes
+          </button>
+          <button type="button" class="gallery-tab" data-tab="4" role="tab" aria-selected="false">
+            <span class="tab-icon">🎯</span> Sticky Handles
+          </button>
+          <button type="button" class="gallery-tab" data-tab="5" role="tab" aria-selected="false">
+            <span class="tab-icon">⚡</span> Open Source
+          </button>
+        </div>
 
-        <!-- Card 2: File Explorer -->
-        <article class="showcase-card" data-reveal data-reveal-delay="200">
-          <div class="card-header">
-            <span class="card-tagline">Project Workspace</span>
-            <h3 class="card-title">Local folder navigation</h3>
-            <p class="card-description">Organize files locally on your device with breadcrumb paths and immediate folder exploration.</p>
+        <!-- Active Screen Card Display -->
+        <div class="gallery-card">
+          <div class="gallery-info">
+            <span class="gallery-tagline" id="gallery-tagline">Live Preview Editor</span>
+            <h3 class="gallery-title" id="gallery-title">Write and see formatting in real time</h3>
+            <p class="gallery-desc" id="gallery-desc">Markdown syntax tokens reveal themselves inline when focused and render smoothly when editing completes.</p>
+            <button type="button" class="button secondary compact-btn" id="open-lightbox-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right: 6px;"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+              Inspect High-Res Screenshot
+            </button>
           </div>
-          <div class="device-frame-wrapper">
-            <div class="device-frame-mockup">
-              <div class="device-bezel">
-                <div class="device-notch"></div>
-                <div class="device-screen">
-                  <img src="screenshots/Screenshot_20260725_075052.png" alt="Kern Workspace & File Explorer Screen" loading="lazy">
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
 
-        <!-- Card 3: Hemingway Analyzer -->
-        <article class="showcase-card" data-reveal data-reveal-delay="300">
-          <div class="card-header">
-            <span class="card-tagline">Hemingway Analyzer</span>
-            <h3 class="card-title">On-demand readability metrics</h3>
-            <p class="card-description">Evaluate sentence structure, target grade levels, and complexity without impacting typing speed.</p>
-          </div>
-          <div class="device-frame-wrapper">
-            <div class="device-frame-mockup">
-              <div class="device-bezel">
-                <div class="device-notch"></div>
-                <div class="device-screen">
-                  <img src="screenshots/Screenshot_20260725_075141.png" alt="Kern Hemingway Readability Metrics Screen" loading="lazy">
-                </div>
+          <div class="gallery-image-frame" id="gallery-image-frame">
+            <div class="device-bezel compact-bezel">
+              <div class="device-notch"></div>
+              <div class="device-screen">
+                <img id="gallery-img" src="screenshots/Screenshot_20260725_075131.png" alt="Kern Live Preview Editor Screen" loading="lazy">
               </div>
             </div>
           </div>
-        </article>
+        </div>
+      </div>
 
-        <!-- Card 4: Themes & Modes -->
-        <article class="showcase-card" data-reveal data-reveal-delay="100">
-          <div class="card-header">
-            <span class="card-tagline">Cream & Charcoal Themes</span>
-            <h3 class="card-title">Tailored view modes</h3>
-            <p class="card-description">Choose between light cream, dark charcoal, and custom syntax color palettes suited for day or night.</p>
-          </div>
-          <div class="device-frame-wrapper">
-            <div class="device-frame-mockup">
-              <div class="device-bezel">
-                <div class="device-notch"></div>
-                <div class="device-screen">
-                  <img src="screenshots/Screenshot_20260725_075155.png" alt="Kern Appearance & Theme Settings Screen" loading="lazy">
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Card 5: Sticky Selection -->
-        <article class="showcase-card" data-reveal data-reveal-delay="200">
-          <div class="card-header">
-            <span class="card-tagline">Sticky Selection Control</span>
-            <h3 class="card-title">Stack formatting seamlessly</h3>
-            <p class="card-description">Keep text selection handles active after applying Markdown styling to quickly combine bold, italic, or code tokens.</p>
-          </div>
-          <div class="device-frame-wrapper">
-            <div class="device-frame-mockup">
-              <div class="device-bezel">
-                <div class="device-notch"></div>
-                <div class="device-screen">
-                  <img src="screenshots/Screenshot_20260725_075203.png" alt="Kern Behavior Settings Screen" loading="lazy">
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Card 6: Open Source & About -->
-        <article class="showcase-card" data-reveal data-reveal-delay="300">
-          <div class="card-header">
-            <span class="card-tagline">100% Open Source</span>
-            <h3 class="card-title">Transparent & local-first</h3>
-            <p class="card-description">Built with modern Jetpack Compose & Material 3 with zero proprietary lock-in or background data harvesting.</p>
-          </div>
-          <div class="device-frame-wrapper">
-            <div class="device-frame-mockup">
-              <div class="device-bezel">
-                <div class="device-notch"></div>
-                <div class="device-screen">
-                  <img src="screenshots/Screenshot_20260725_075208.png" alt="Kern About and Open Source Screen" loading="lazy">
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
+      <!-- Lightbox Modal -->
+      <div class="lightbox-modal" id="lightbox-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="lightbox-caption">
+        <div class="lightbox-backdrop" id="lightbox-backdrop"></div>
+        <div class="lightbox-content">
+          <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Close screenshot preview">✕</button>
+          <img id="lightbox-img" src="" alt="Full Resolution Screenshot">
+          <p id="lightbox-caption" class="lightbox-caption"></p>
+        </div>
       </div>
     </section>
 
@@ -320,23 +361,19 @@
       menuToggle.setAttribute('aria-expanded', open);
     });
 
-    // --- Native Scroll Animation Engine ---
+    // --- Native Scroll Animation & Parallax Engine ---
     const headerWrapper = document.getElementById('header-wrapper');
-    const heroDevice = document.getElementById('hero-device');
 
-    // 1. Sticky Header scroll trigger
     window.addEventListener('scroll', () => {
       if (window.scrollY > 20) {
         headerWrapper.classList.add('is-scrolled');
       } else {
         headerWrapper.classList.remove('is-scrolled');
       }
-
-      // 2. Background parallax grid drift
       document.body.style.setProperty('--parallax-y', `${window.scrollY * 0.08}px`);
     }, { passive: true });
 
-    // 3. IntersectionObserver for staggered scroll reveals
+    // Staggered scroll reveals
     const revealObserver = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
@@ -346,6 +383,242 @@
     }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
 
     document.querySelectorAll('[data-reveal]').forEach((el) => revealObserver.observe(el));
+
+    // --- Scroll-Driven Interactive Editor Demo Engine ---
+    const demoPhone = document.getElementById('demo-phone');
+    const demoTypingTarget = document.getElementById('demo-typing-target');
+    const demoRenderTarget = document.getElementById('demo-render-target');
+    const demoPillText = document.getElementById('demo-pill-text');
+    const demoDrawer = document.getElementById('demo-drawer');
+    const demoDrawerBtn = document.getElementById('demo-drawer-btn');
+    const demoFilename = document.getElementById('demo-filename');
+
+    const demoStepsData = [
+      {
+        raw: "# Instant Live Preview\n\nWriting with **Kern** renders styled Markdown formatting as you type with zero lag.",
+        rendered: "<h1>Instant Live Preview</h1><p>Writing with <strong>Kern</strong> renders styled Markdown formatting as you type with zero lag.</p>",
+        pill: "Grade 5 · 14 WPM",
+        theme: "cream",
+        drawerOpen: false,
+        filename: "draft.md"
+      },
+      {
+        raw: "## Readability Metrics\n\nKern evaluates sentence complexity and grade level on demand to keep writing clear.",
+        rendered: "<h2>Readability Metrics</h2><p><span class=\"hemingway-highlight\">Kern evaluates sentence complexity and grade level on demand</span> to keep writing clear.</p>",
+        pill: "Grade 8 · Hard Sentence Highlighted",
+        theme: "cream",
+        drawerOpen: false,
+        filename: "readability.md"
+      },
+      {
+        raw: "> Tailored Themes\n\nSwitch seamlessly between **Warm Cream** daytime themes and **Charcoal Dark** night modes.",
+        rendered: "Quote: <blockquote><p>Tailored Themes</p></blockquote><p>Switch seamlessly between <strong>Warm Cream</strong> daytime themes and <strong>Charcoal Dark</strong> night modes.</p>",
+        pill: "Dark Theme · 1.6x Line Height",
+        theme: "dark",
+        drawerOpen: false,
+        filename: "themes.md"
+      },
+      {
+        raw: "# Local Storage & SAF\n\nOpen any directory on your device via Android Storage Access Framework.",
+        rendered: "<h1>Local Storage & SAF</h1><p>Open any directory on your device via Android Storage Access Framework.</p>",
+        pill: "Local SAF · /Documents/Notes",
+        theme: "cream",
+        drawerOpen: true,
+        filename: "draft.md"
+      }
+    ];
+
+    let currentTypingTimer = null;
+    let activeDemoStep = -1;
+
+    function activateDemoStep(stepIndex) {
+      if (activeDemoStep === stepIndex) return;
+      activeDemoStep = stepIndex;
+
+      const stepData = demoStepsData[stepIndex];
+      if (!stepData) return;
+
+      // Update active step UI state
+      document.querySelectorAll('.scroll-step').forEach((el, idx) => {
+        if (idx === stepIndex) el.classList.add('is-active');
+        else el.classList.remove('is-active');
+      });
+
+      // Update phone theme attribute
+      demoPhone.setAttribute('data-demo-theme', stepData.theme);
+
+      // Update top pill text
+      demoPillText.textContent = stepData.pill;
+
+      // Update filename breadcrumb
+      demoFilename.textContent = stepData.filename;
+
+      // Toggle local drawer
+      if (stepData.drawerOpen) {
+        demoDrawer.classList.add('is-open');
+      } else {
+        demoDrawer.classList.remove('is-open');
+      }
+
+      // Snappy Typewriter Animation
+      if (currentTypingTimer) clearInterval(currentTypingTimer);
+      
+      let charIdx = 0;
+      const fullRaw = stepData.raw;
+      demoTypingTarget.textContent = "";
+      demoRenderTarget.innerHTML = "";
+
+      currentTypingTimer = setInterval(() => {
+        charIdx += 2;
+        if (charIdx >= fullRaw.length) {
+          charIdx = fullRaw.length;
+          clearInterval(currentTypingTimer);
+          demoRenderTarget.innerHTML = stepData.rendered;
+        }
+        demoTypingTarget.textContent = fullRaw.slice(0, charIdx);
+        if (charIdx >= Math.floor(fullRaw.length * 0.35)) {
+          demoRenderTarget.innerHTML = stepData.rendered;
+        }
+      }, 20);
+    }
+
+    // Scroll step intersection observer
+    const stepObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const stepIdx = parseInt(entry.target.getAttribute('data-step') || '0', 10);
+          activateDemoStep(stepIdx);
+        }
+      });
+    }, { threshold: 0.45, rootMargin: "-10% 0px -20% 0px" });
+
+    document.querySelectorAll('.scroll-step').forEach((step) => stepObserver.observe(step));
+
+    // Drawer manual toggle listener
+    if (demoDrawerBtn) {
+      demoDrawerBtn.addEventListener('click', () => {
+        demoDrawer.classList.toggle('is-open');
+      });
+    }
+
+    // --- Compact Screenshot Gallery Switcher & Lightbox ---
+    const galleryData = [
+      {
+        tagline: "Live Preview Editor",
+        title: "Write and see formatting in real time",
+        desc: "Markdown syntax tokens reveal themselves inline when focused and render smoothly when editing completes.",
+        img: "screenshots/Screenshot_20260725_075131.png",
+        alt: "Kern Live Preview Editor Screen"
+      },
+      {
+        tagline: "Project Workspace",
+        title: "Local folder navigation & tree view",
+        desc: "Organize files locally on your device with breadcrumb paths and immediate folder exploration.",
+        img: "screenshots/Screenshot_20260725_075052.png",
+        alt: "Kern Workspace & File Explorer Screen"
+      },
+      {
+        tagline: "Hemingway Analyzer",
+        title: "On-demand readability metrics",
+        desc: "Evaluate sentence structure, target grade levels, and complexity without impacting typing speed.",
+        img: "screenshots/Screenshot_20260725_075141.png",
+        alt: "Kern Hemingway Readability Metrics Screen"
+      },
+      {
+        tagline: "Cream & Charcoal Themes",
+        title: "Tailored view modes for day & night",
+        desc: "Choose between light cream, dark charcoal, and custom syntax color palettes suited for any environment.",
+        img: "screenshots/Screenshot_20260725_075155.png",
+        alt: "Kern Appearance & Theme Settings Screen"
+      },
+      {
+        tagline: "Sticky Selection Control",
+        title: "Stack formatting seamlessly",
+        desc: "Keep text selection handles active after applying Markdown styling to quickly combine bold, italic, or code tokens.",
+        img: "screenshots/Screenshot_20260725_075203.png",
+        alt: "Kern Behavior Settings Screen"
+      },
+      {
+        tagline: "100% Open Source",
+        title: "Transparent & local-first code",
+        desc: "Built with modern Jetpack Compose & Material 3 with zero proprietary lock-in or background data harvesting.",
+        img: "screenshots/Screenshot_20260725_075208.png",
+        alt: "Kern About and Open Source Screen"
+      }
+    ];
+
+    let activeGalleryIdx = 0;
+    const galleryTabs = document.querySelectorAll('.gallery-tab');
+    const galleryTagline = document.getElementById('gallery-tagline');
+    const galleryTitle = document.getElementById('gallery-title');
+    const galleryDesc = document.getElementById('gallery-desc');
+    const galleryImg = document.getElementById('gallery-img');
+    const galleryFrame = document.getElementById('gallery-image-frame');
+
+    function switchGalleryTab(index) {
+      if (index < 0 || index >= galleryData.length) return;
+      activeGalleryIdx = index;
+      
+      galleryTabs.forEach((tab, i) => {
+        const isSel = (i === index);
+        tab.classList.toggle('active', isSel);
+        tab.setAttribute('aria-selected', isSel ? 'true' : 'false');
+      });
+
+      const data = galleryData[index];
+      galleryTagline.textContent = data.tagline;
+      galleryTitle.textContent = data.title;
+      galleryDesc.textContent = data.desc;
+      
+      if (galleryFrame) {
+        galleryFrame.style.opacity = '0.3';
+        setTimeout(() => {
+          galleryImg.src = data.img;
+          galleryImg.alt = data.alt;
+          galleryFrame.style.opacity = '1';
+        }, 120);
+      }
+    }
+
+    galleryTabs.forEach((tab, idx) => {
+      tab.addEventListener('click', () => switchGalleryTab(idx));
+    });
+
+    // Lightbox Handlers
+    const lightboxModal = document.getElementById('lightbox-modal');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const lightboxCaption = document.getElementById('lightbox-caption');
+    const openLightboxBtn = document.getElementById('open-lightbox-btn');
+    const closeLightboxBtn = document.getElementById('lightbox-close');
+    const lightboxBackdrop = document.getElementById('lightbox-backdrop');
+
+    if (openLightboxBtn) {
+      openLightboxBtn.addEventListener('click', () => {
+        const data = galleryData[activeGalleryIdx];
+        lightboxImg.src = data.img;
+        lightboxImg.alt = data.alt;
+        lightboxCaption.textContent = `${data.title} — ${data.desc}`;
+        lightboxModal.setAttribute('aria-hidden', 'false');
+        lightboxModal.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+      });
+    }
+
+    function closeLightbox() {
+      if (!lightboxModal) return;
+      lightboxModal.setAttribute('aria-hidden', 'true');
+      lightboxModal.classList.remove('is-open');
+      document.body.style.overflow = '';
+    }
+
+    if (closeLightboxBtn) closeLightboxBtn.addEventListener('click', closeLightbox);
+    if (lightboxBackdrop) lightboxBackdrop.addEventListener('click', closeLightbox);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && lightboxModal && lightboxModal.classList.contains('is-open')) {
+        closeLightbox();
+      }
+    });
   </script>
 </body>
 </html>
