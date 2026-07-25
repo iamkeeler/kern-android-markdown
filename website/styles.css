@@ -3,32 +3,56 @@
 :root {
   --canvas: #FCFBFA;
   --surface: #F4F3F0;
+  --paper-sheet: #FFFFFF;
   --ink: #1A1A18;
   --muted: #7C7A75;
-  --border: rgba(124, 122, 117, 0.22);
+  --border: #E5E3DD;
   --accent: #2E5BFF;
   --accent-hover: #1A46E6;
   --icon-bg: #4A4A4D;
   --icon-fg: #ECEAE6;
-  --shadow: 0 24px 80px rgba(26, 26, 24, 0.08);
+  --shadow: 0 16px 48px rgba(26, 26, 24, 0.08);
+  --paper-shadow: 
+    0 1px 2px rgba(26, 26, 24, 0.04),
+    0 4px 0 0 var(--canvas),
+    0 5px 0 0 var(--border),
+    0 9px 0 0 var(--canvas),
+    0 10px 0 0 var(--border),
+    0 16px 40px rgba(26, 26, 24, 0.09);
+  --page-lift: 
+    0 1px 3px rgba(26, 26, 24, 0.05),
+    0 8px 24px rgba(26, 26, 24, 0.06),
+    0 0 0 1px var(--border);
   --grid-line: rgba(26, 26, 24, 0.028);
   --max: 1120px;
-  --radius-lg: 30px;
-  --radius-md: 16px;
-  --radius-sm: 8px;
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 6px;
 }
 
 [data-theme="dark"] {
   --canvas: #121212;
-  --surface: #1E1E1E;
+  --surface: #1C1C1C;
+  --paper-sheet: #222222;
   --ink: #E3E3E3;
   --muted: #9E9C96;
-  --border: rgba(255, 255, 255, 0.12);
+  --border: #2E2E2C;
   --accent: #5E81FF;
   --accent-hover: #7D9BFF;
   --icon-bg: #2E2E32;
   --icon-fg: #E3E3E3;
-  --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --paper-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 4px 0 0 var(--canvas),
+    0 5px 0 0 var(--border),
+    0 9px 0 0 var(--canvas),
+    0 10px 0 0 var(--border),
+    0 16px 40px rgba(0, 0, 0, 0.4);
+  --page-lift: 
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 0 1px var(--border);
   --grid-line: rgba(255, 255, 255, 0.03);
 }
 
@@ -113,20 +137,14 @@ a {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: transparent;
-  transition: background-color 300ms ease, border-color 300ms ease, box-shadow 300ms ease, backdrop-filter 300ms ease;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--border);
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .site-header-wrapper.is-scrolled {
-  background: rgba(252, 251, 250, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-}
-
-[data-theme="dark"] .site-header-wrapper.is-scrolled {
-  background: rgba(18, 18, 18, 0.88);
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgba(26, 26, 24, 0.05), 0 1px 2px rgba(26, 26, 24, 0.08);
 }
 
 /* Header & Navigation */
@@ -358,11 +376,11 @@ h3 {
 /* Device Frame & Live Workspace Showcase */
 .device-frame {
   border: 1px solid var(--border);
-  border-radius: 36px;
+  border-radius: var(--radius-md);
   padding: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  transform: perspective(1000px) rotateX(6deg) scale(0.96) translateY(20px);
+  background: var(--paper-sheet);
+  box-shadow: var(--paper-shadow);
+  transform: perspective(1000px) rotateX(4deg) scale(0.97) translateY(16px);
   transform-origin: center top;
   transition: border-color 200ms ease, background-color 200ms ease, transform 600ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 600ms ease;
   will-change: transform;
@@ -371,7 +389,7 @@ h3 {
 .device-frame.is-visible,
 .device-frame:hover {
   transform: perspective(1000px) rotateX(0deg) scale(1) translateY(0);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--paper-shadow), 0 20px 48px rgba(26, 26, 24, 0.12);
 }
 
 /* Native Scroll Reveal Utility Cues */
@@ -677,8 +695,17 @@ h3 {
   grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1fr) auto;
   gap: 32px;
   align-items: center;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 40px;
+  box-shadow: var(--page-lift);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.privacy-band:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--page-lift), 0 12px 32px rgba(26, 26, 24, 0.08);
 }
 
 .privacy-band p {
@@ -711,10 +738,14 @@ h3 {
   max-width: 820px;
 }
 
-.prose-block,
-.contact-card {
-  padding: 32px 0;
-  border-top: 1px solid var(--border);
+.contact-card,
+.prose-block {
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--page-lift);
+  margin-top: 24px;
 }
 
 .contact-card .small-label {
