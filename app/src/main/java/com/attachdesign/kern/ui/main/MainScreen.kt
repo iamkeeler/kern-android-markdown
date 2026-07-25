@@ -381,7 +381,6 @@ fun MainScreen(
         )
 
         state.activeQuote?.let { quote ->
-            Spacer(Modifier.height(theme.dimensions.spacingSmall))
             Text(
                 text = "“${quote.text}” — ${quote.author}, ${quote.year}",
                 fontSize = theme.typography.small,
@@ -389,7 +388,7 @@ fun MainScreen(
                 fontWeight = FontWeight.Normal,
                 color = theme.textMuted,
                 lineHeight = theme.typography.subtitle,
-                modifier = Modifier.padding(bottom = theme.dimensions.spacingSmall)
+                modifier = Modifier.padding(vertical = theme.dimensions.spacingMedium)
             )
         }
 
@@ -468,7 +467,8 @@ fun MainScreen(
                         Text(
                             text = "←",
                             color = theme.accent,
-                            fontSize = theme.typography.bodyLarge,
+                            fontSize = theme.typography.small,
+                            fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clickable { vm.navigateUp() }
@@ -1146,6 +1146,14 @@ private fun EmptyStateHint(
         modifier = Modifier.fillMaxWidth().padding(top = theme.dimensions.iconHuge),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Text(
+            text = "[ empty ]",
+            color = theme.textMuted.copy(alpha = 0.5f),
+            fontSize = theme.typography.tiny,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = (theme.typography.tiny.value * 0.1f).sp,
+            modifier = Modifier.padding(bottom = theme.dimensions.spacingSmall)
+        )
         Text(title, color = theme.textPrimary, fontFamily = appFont,
             fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(theme.dimensions.spacingSmall))
