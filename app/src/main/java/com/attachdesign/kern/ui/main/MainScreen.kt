@@ -267,7 +267,7 @@ fun MainScreen(
                             IconButton(
                                 onClick = { vm.navigateBack() },
                                 enabled = state.canNavigateBack,
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
@@ -280,7 +280,7 @@ fun MainScreen(
                             IconButton(
                                 onClick = { vm.navigateForward() },
                                 enabled = state.canNavigateForward,
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
@@ -294,7 +294,7 @@ fun MainScreen(
                             val docIconColor = if (targetProj != null) Color.White else disabledColor
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .size(48.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(docBgColor),
                                 contentAlignment = Alignment.Center
@@ -316,7 +316,7 @@ fun MainScreen(
                             IconButton(
                                 onClick = { targetProj?.let { createFolderDialogTargetProject = it } },
                                 enabled = targetProj != null,
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.CreateNewFolder,
@@ -331,7 +331,7 @@ fun MainScreen(
                                     isSearchActive = !isSearchActive
                                     if (!isSearchActive) searchQuery = ""
                                 },
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.Search,
@@ -666,8 +666,16 @@ fun MainScreen(
                     if (sortedProjects.isEmpty()) {
                         EmptyStateHint(
                             title = "No workspaces",
-                            body = "Tap [+ workspace] above to add a local folder.",
-                            theme = theme
+                            body = "Tap [+ workspace] above or button below to add a folder.",
+                            theme = theme,
+                            actionLabel = "+ Add Workspace",
+                            onAction = {
+                                if (showWorkspaceIntro) {
+                                    isIntroDialogOpen = true
+                                } else {
+                                    openDocumentTreeLauncher.launch(null)
+                                }
+                            }
                         )
                     } else {
                         LazyColumn(
@@ -702,7 +710,9 @@ fun MainScreen(
                         EmptyStateHint(
                             title = "Folder is empty",
                             body = "Tap [+ file] or [+ folder] to add content.",
-                            theme = theme
+                            theme = theme,
+                            actionLabel = "+ New Document",
+                            onAction = { targetProj?.let { createFileDialogTargetProject = it } }
                         )
                     } else {
                         LazyColumn(
@@ -1134,7 +1144,9 @@ private fun ProjectSectionHeader(
 private fun EmptyStateHint(
     title: String,
     body: String,
-    theme: com.attachdesign.kern.ui.theme.AppColorTheme
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
 ) {
     val appFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
@@ -1158,6 +1170,22 @@ private fun EmptyStateHint(
             fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(theme.dimensions.spacingSmall))
         Text(body, color = theme.textMuted, fontSize = theme.typography.small, textAlign = TextAlign.Center)
+
+        if (!actionLabel.isNullOrEmpty() && onAction != null) {
+            Spacer(Modifier.height(theme.dimensions.spacingLarge))
+            OutlinedButton(
+                onClick = onAction,
+                border = BorderStroke(1.dp, theme.accent),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = theme.accent)
+            ) {
+                Text(
+                    text = actionLabel,
+                    fontSize = theme.typography.small,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
 

@@ -562,6 +562,8 @@ fun EditorCanvas(
                 blockType = paragraph.blockType,
                 viewMode = state.viewMode,
                 fontSizeScale = state.editorFontSizeScale,
+                paragraphIndex = index,
+                totalParagraphs = state.paragraphs.items.size,
                 onEnterPressed = { cursor ->
                     val text = value.text
                     val first = text.substring(0, cursor)
@@ -763,6 +765,8 @@ fun ParagraphField(
     blockType: MarkdownBlockType,
     viewMode: ViewMode,
     fontSizeScale: Float = 1.0f,
+    paragraphIndex: Int = 0,
+    totalParagraphs: Int = 1,
     onEnterPressed: (Int) -> Unit,
     onBackspacePressed: () -> Unit,
     onChecklistToggle: () -> Unit = {}
@@ -858,6 +862,9 @@ fun ParagraphField(
                         visualTransformation = visualTransformation,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .semantics {
+                                contentDescription = "Block ${paragraphIndex + 1} of ${totalParagraphs}: ${blockType.name.lowercase().replace('_', ' ')}"
+                            }
                             .bringIntoViewRequester(bringIntoViewRequester)
                             .focusRequester(focusRequester)
                             .onFocusChanged { onFocusChanged(it.isFocused) }
