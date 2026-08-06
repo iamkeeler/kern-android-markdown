@@ -818,7 +818,7 @@ fun SettingsTabsContent(
                              fontFamily = appFont, fontWeight = FontWeight.Medium,
                              modifier = Modifier.clickable {
                                  try {
-                                     uriHandler.openUri("https://github.com/iamkeeler/AndroidMD-App")
+                                     uriHandler.openUri("https://github.com/iamkeeler/kern-android-markdown")
                                  } catch (e: Exception) {
                                      e.printStackTrace()
                                  }

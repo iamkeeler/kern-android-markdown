@@ -79,7 +79,7 @@ If authenticated with `gh` and you have admin rights:
 ```bash
 gh api \
   --method PUT \
-  repos/iamkeeler/AndroidMD-App/branches/main/protection \
+  repos/iamkeeler/kern-android-markdown/branches/main/protection \
   --input - <<'JSON'
 {
   "required_status_checks": {

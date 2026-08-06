@@ -1,7 +1,7 @@
 # Release-readiness review
 
 Date: 2026-07-10
-Project: `AndroidMD-App` / app name `Kern`
+Project: `kern-android-markdown` / app name `Kern`
 Package: `com.attachdesign.kern`
 
 ## Automated verification run

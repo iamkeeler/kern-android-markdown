@@ -1,7 +1,7 @@
 # Security scrub report
 
 Date: 2026-07-11
-Project: Kern / AndroidMD-App
+Project: Kern / kern-android-markdown
 
 ## Summary
 
@@ -17,7 +17,7 @@ The normal repository history was rewritten to remove `app/google-services.json`
 ## Actions taken
 
 1. Removed a verified GitHub personal access token from the local git remote URL in `.git/config`.
-   - The remote now uses `https://github.com/iamkeeler/AndroidMD-App.git` with no embedded token.
+   - The remote now uses `https://github.com/iamkeeler/kern-android-markdown.git` with no embedded token.
    - This token was found in local git config, not in committed git history.
 2. Stopped tracking `app/google-services.json`.
 3. Added `app/google-services.json` to `.gitignore`.
