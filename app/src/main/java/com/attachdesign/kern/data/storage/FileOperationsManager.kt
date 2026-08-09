@@ -281,6 +281,7 @@ class FileOperationsManager(
                     }
                     val chooser = Intent.createChooser(shareIntent, "Share ${node.name}").apply {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(chooser)
                 }

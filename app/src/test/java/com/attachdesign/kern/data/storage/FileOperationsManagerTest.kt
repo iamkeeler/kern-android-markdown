@@ -7,7 +7,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -29,6 +33,7 @@ class FileOperationsManagerTest {
 
     @Before
     fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
         context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(
             context,
@@ -48,7 +53,9 @@ class FileOperationsManagerTest {
         if (sandboxDir.exists()) {
             sandboxDir.deleteRecursively()
         }
+        Dispatchers.resetMain()
     }
+
 
     @Test
     fun testDuplicateFile() = runTest {

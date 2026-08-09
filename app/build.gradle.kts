@@ -194,3 +194,11 @@ tasks.register("incrementVersionPatch") {
     }
 }
 
+tasks.withType<Test> {
+    testLogging {
+        events("started", "passed", "skipped", "failed")
+        showStandardStreams = true
+    }
+}
+
+
