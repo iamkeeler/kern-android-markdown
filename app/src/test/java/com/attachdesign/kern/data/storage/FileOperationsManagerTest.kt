@@ -7,14 +7,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
-import kotlinx.coroutines.Dispatchers
+import com.attachdesign.kern.test.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -23,6 +21,9 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34])
 class FileOperationsManagerTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var context: Context
     private lateinit var database: AppDatabase
@@ -33,7 +34,6 @@ class FileOperationsManagerTest {
 
     @Before
     fun setUp() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
         context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(
             context,
@@ -53,7 +53,6 @@ class FileOperationsManagerTest {
         if (sandboxDir.exists()) {
             sandboxDir.deleteRecursively()
         }
-        Dispatchers.resetMain()
     }
 
 

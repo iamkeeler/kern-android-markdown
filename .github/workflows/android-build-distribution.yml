@@ -13,6 +13,7 @@ jobs:
   build:
     name: Build & Distribute APK
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
@@ -84,12 +85,8 @@ jobs:
           echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
 
       # Run unit tests to ensure stability before distributing
-      - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --no-daemon
-
-      # Build the Debug APK (signed automatically with standard debug keystore)
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Test and build Debug APK
+        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon
 
       # Extract Firebase App ID dynamically from google-services.json to prevent secret missing errors
       - name: Extract Firebase App ID

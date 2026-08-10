@@ -34,6 +34,7 @@ jobs:
   upload:
     name: Build signed AAB and upload to Google Play
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -92,11 +93,8 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
 
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon
-
-      - name: Run Android lint
-        run: ./gradlew lintDebug --no-daemon
+      - name: Test, lint, and build signed release bundle
+        run: ./gradlew testDebugUnitTest lintDebug bundleRelease --no-daemon
 
       - name: Fail on Android lint errors
         run: |
@@ -104,9 +102,6 @@ jobs:
             echo "Android lint reported errors. Fix them before release."
             exit 1
           fi
-
-      - name: Build signed release bundle
-        run: ./gradlew bundleRelease --no-daemon
 
       - name: Upload signed AAB artifact
         uses: actions/upload-artifact@v4

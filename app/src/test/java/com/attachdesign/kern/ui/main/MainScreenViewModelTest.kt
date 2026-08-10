@@ -1,5 +1,6 @@
 package com.attachdesign.kern.ui.main
 
+import androidx.lifecycle.ViewModel
 import app.cash.turbine.test
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileDao
@@ -9,29 +10,37 @@ import com.attachdesign.kern.data.local.QuoteDao
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.data.storage.FileOperationsManager
+import com.attachdesign.kern.test.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+
+private fun ViewModel.clearForTest() {
+    val clearMethod = ViewModel::class.java.getDeclaredMethod("clear\$lifecycle_viewmodel")
+    clearMethod.isAccessible = true
+    clearMethod.invoke(this)
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
     private lateinit var db: AppDatabase
     private lateinit var projectDao: ProjectDao
@@ -44,8 +53,6 @@ class MainScreenViewModelTest {
 
     @Before
     fun setup() {
-        Dispatchers.setMain(testDispatcher)
-
         db = mockk()
         projectDao = mockk()
         fileDao = mockk()
@@ -77,7 +84,9 @@ class MainScreenViewModelTest {
 
     @After
     fun tearDown() {
-        Dispatchers.resetMain()
+        if (::viewModel.isInitialized) {
+            viewModel.clearForTest()
+        }
     }
 
     @Test
@@ -218,6 +227,7 @@ class MainScreenViewModelTest {
         }
         testScheduler.advanceUntilIdle()
         assertEquals(false, testVm.explorerState.value.isLoading)
+        testVm.clearForTest()
         job.cancel()
     }
 

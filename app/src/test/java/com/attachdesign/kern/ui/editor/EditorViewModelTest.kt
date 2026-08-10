@@ -8,22 +8,21 @@ import com.attachdesign.kern.data.local.ProjectDao
 import com.attachdesign.kern.data.local.SettingDao
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.FileOperationsManager
+import com.attachdesign.kern.test.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.cancel
@@ -32,6 +31,9 @@ import kotlinx.coroutines.cancel
 class EditorViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
     private lateinit var db: AppDatabase
     private lateinit var projectDao: ProjectDao
@@ -45,7 +47,6 @@ class EditorViewModelTest {
 
     @Before
     fun setup() {
-        Dispatchers.setMain(testDispatcher)
         io.mockk.mockkStatic(android.graphics.Color::class)
         every { android.graphics.Color.parseColor(any()) } returns 0
 
@@ -75,7 +76,6 @@ class EditorViewModelTest {
     @After
     fun tearDown() {
         viewModel.viewModelScope.cancel()
-        Dispatchers.resetMain()
         io.mockk.unmockkAll()
     }
 
