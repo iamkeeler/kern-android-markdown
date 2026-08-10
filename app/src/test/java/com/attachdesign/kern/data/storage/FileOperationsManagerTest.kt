@@ -41,8 +41,8 @@ class FileOperationsManagerTest {
         ).allowMainThreadQueries().build()
         storageManager = StorageManager(context)
         fileOpsManager = FileOperationsManager(database, storageManager, context)
-        sandboxDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), "Kern/sandbox")
         project = ProjectEntity(id = 1, name = "TestProject", path = "TestProjectDir", isExternal = false, isSelected = true)
+        sandboxDir = storageManager.getAbsoluteFile(project, "").parentFile!!
         
         database.projectDao().insertProject(project)
     }
