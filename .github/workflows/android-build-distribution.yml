@@ -5,6 +5,7 @@ on:
     tags:
       - "test"
       - "release"
+  workflow_dispatch:
 
 permissions:
   contents: write
