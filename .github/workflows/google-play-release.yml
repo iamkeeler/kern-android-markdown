@@ -25,7 +25,7 @@ on:
           - completed
   push:
     tags:
-      - 'v*'
+      - 'release'
 
 permissions:
   contents: read

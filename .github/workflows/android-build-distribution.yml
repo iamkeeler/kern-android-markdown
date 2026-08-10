@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "test"
-      - "release"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,7 +13,6 @@ jobs:
     name: Build & Distribute APK
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
       - name: Checkout Repository
