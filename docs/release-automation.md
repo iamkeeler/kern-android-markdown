@@ -1,18 +1,25 @@
 # Android release automation
 
-This project now has two release-oriented GitHub Actions workflows:
+This project now has four release-oriented GitHub Actions workflows:
 
 1. `.github/workflows/release-readiness.yml`
-   - Runs on PRs to `main`, pushes to `main`, and manual dispatch.
+   - Runs manually from GitHub Actions.
    - Runs unit tests, Android lint, debug APK packaging, and unsigned release APK packaging.
-   - Uploads lint reports and the unsigned release APK as artifacts.
+   - Uploads lint reports and the unsigned release APK as workflow artifacts.
 
 2. `.github/workflows/google-play-release.yml`
-   - Runs manually or when a `v*` tag is pushed.
-   - Builds a signed release Android App Bundle (`.aab`).
+   - Runs manually or when a `release` or `v*` tag is pushed.
+   - Builds a signed release APK and Android App Bundle (`.aab`).
    - Uploads the bundle to Google Play using the selected track/status.
+   - Attaches the signed APK and AAB to the tagged GitHub Release.
 
-3. `.github/workflows/deploy-website-ftp.yml`
+3. `.github/workflows/android-build-distribution.yml`
+   - Runs when the `test` tag is pushed.
+   - Builds a debug APK and sends it to Firebase App Distribution.
+   - Uploads the APK as a workflow artifact.
+   - Attaches the APK to the `test` GitHub prerelease for direct downloads.
+
+4. `.github/workflows/deploy-website-ftp.yml`
    - Runs manually or when a `website-v*` tag is pushed.
    - Uploads the static `website/` directory to the configured FTPS server.
 
@@ -73,9 +80,15 @@ git tag v0.1.11
 git push origin v0.1.11
 ```
 
-3. The Google Play release workflow builds and uploads the signed `.aab`.
+3. The Google Play release workflow builds and uploads the signed `.aab`, then attaches the signed APK and AAB to the GitHub Release for the tag.
    - The workflow refuses a manual `production` + `completed` dispatch so an accidental click cannot publish directly to production. Use draft/in-progress production upload or promote manually in Play Console when ready.
 4. Start with internal testing before alpha/beta/production.
+
+GitHub download locations:
+
+- Test builds: the `test` prerelease assets.
+- Public release builds: the APK asset on the matching `v*` or `release` GitHub Release.
+- Manual workflow runs: the Actions run’s `signed-release-apk` and `signed-release-aab` artifacts.
 
 ## Website deployment
 

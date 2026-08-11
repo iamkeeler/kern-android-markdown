@@ -86,6 +86,13 @@ jobs:
       - name: Test and build Debug APK
         run: ./gradlew testDebugUnitTest assembleDebug --no-daemon
 
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kern-test-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
       # Extract Firebase App ID dynamically from google-services.json to prevent secret missing errors
       - name: Extract Firebase App ID
         run: |
@@ -101,3 +108,14 @@ jobs:
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           groups: main-testers
           file: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Attach debug APK to test prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test
+          name: Kern test build
+          prerelease: true
+          make_latest: false
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          files: app/build/outputs/apk/debug/app-debug.apk

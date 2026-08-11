@@ -26,9 +26,10 @@ on:
   push:
     tags:
       - 'release'
+      - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   upload:
@@ -93,8 +94,8 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
 
-      - name: Test, lint, and build signed release bundle
-        run: ./gradlew testDebugUnitTest lintDebug bundleRelease --no-daemon
+      - name: Test, lint, and build signed release APK and bundle
+        run: ./gradlew testDebugUnitTest lintDebug assembleRelease bundleRelease --no-daemon
 
       - name: Fail on Android lint errors
         run: |
@@ -109,6 +110,25 @@ jobs:
           name: signed-release-aab
           path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
+
+      - name: Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Attach signed APK and AAB to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Kern ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload to Google Play
         uses: r0adkll/upload-google-play@v1

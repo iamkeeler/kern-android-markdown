@@ -71,6 +71,8 @@ GitHub Actions handles release checks, Android App Bundle builds, Google Play up
 - `.github/workflows/deploy-website-ftp.yml` — website deployment
 - `docs/release-automation.md` — required secrets and release steps
 
+Tagged builds are also available directly from GitHub Releases. Test builds are published as prerelease APKs; tagged release builds include the signed APK and AAB.
+
 Sensitive files and credentials belong in GitHub Actions secrets. Never commit Firebase configuration, keystores, service-account files, tokens, or local properties.
 
 ## Contributing
