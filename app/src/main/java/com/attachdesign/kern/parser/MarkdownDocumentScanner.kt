@@ -41,7 +41,11 @@ object MarkdownDocumentScanner {
                 LineKind.FENCE -> consumeFence(lines, start)
                 LineKind.TABLE -> consumeWhile(lines, start, LineKind.TABLE)
                 LineKind.PARAGRAPH -> consumeWhile(lines, start, LineKind.PARAGRAPH)
-                else -> start + 1
+                LineKind.STRUCTURAL -> if (MarkdownParser.isListLine(line.content)) {
+                    consumeListItem(lines, start)
+                } else {
+                    start + 1
+                }
             }
 
             val raw = buildString {
@@ -77,6 +81,18 @@ object MarkdownDocumentScanner {
     private fun consumeWhile(lines: List<SourceLine>, start: Int, kind: LineKind): Int {
         var index = start + 1
         while (index < lines.size && lines[index].content.isNotBlank() && classify(lines[index].content) == kind) {
+            index++
+        }
+        return index
+    }
+
+    private fun consumeListItem(lines: List<SourceLine>, start: Int): Int {
+        val markerIndent = lines[start].content.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+        var index = start + 1
+        while (index < lines.size && lines[index].content.isNotBlank()) {
+            val line = lines[index].content
+            val continuationIndent = line.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            if (classify(line) != LineKind.PARAGRAPH || continuationIndent <= markerIndent) break
             index++
         }
         return index

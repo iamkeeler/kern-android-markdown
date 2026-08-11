@@ -92,6 +92,12 @@ class EditorViewModel(
 
     val syncEngine = SyncEngine(db.fileDao(), viewModelScope)
 
+    suspend fun resolveMarkdownImage(target: String): String? {
+        val state = _uiState.value
+        val project = state.activeProject ?: return null
+        return storageManager.resolveMarkdownImage(project, state.activeFilePath, target)
+    }
+
     // Store TextFieldValues for each paragraph to retain selection/cursor state
     private val _paragraphTextFieldValues = MutableStateFlow<Map<Int, TextFieldValue>>(emptyMap())
     val paragraphTextFieldValues: StateFlow<Map<Int, TextFieldValue>> = _paragraphTextFieldValues.asStateFlow()

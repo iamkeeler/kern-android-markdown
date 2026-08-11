@@ -147,8 +147,13 @@ object MarkdownParser {
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("```")) {
             blockType = MarkdownBlockType.CODE_BLOCK
-            val openingLineEnd = rawText.indexOf('\n')
-            val contentStartIndex = if (openingLineEnd == -1) 3 else openingLineEnd + 1
+            val openingLineEnd = rawText.indexOfFirst { it == '\r' || it == '\n' }
+            val openingEndingLength = when {
+                openingLineEnd == -1 -> 0
+                rawText[openingLineEnd] == '\r' && rawText.getOrNull(openingLineEnd + 1) == '\n' -> 2
+                else -> 1
+            }
+            val contentStartIndex = if (openingLineEnd == -1) 3 else openingLineEnd + openingEndingLength
             val closeIdx = rawText.lastIndexOf("```").takeIf { it >= contentStartIndex } ?: -1
             if (closeIdx != -1) {
                 val cEnd = closeIdx + 3

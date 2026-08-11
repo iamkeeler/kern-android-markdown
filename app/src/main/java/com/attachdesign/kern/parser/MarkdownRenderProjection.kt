@@ -39,7 +39,13 @@ object MarkdownRenderer {
                 }
                 token.type == MarkdownElementType.TOKEN_LIST_BULLET && block.blockType == MarkdownBlockType.UNORDERED_LIST -> {
                     rendered.append("•")
-                    if (block.rawText.substring(token.start, token.end).lastOrNull()?.isWhitespace() == true) rendered.append(' ')
+                    val hasTrailingSpace = block.rawText.substring(token.start, token.end).lastOrNull()?.isWhitespace() == true
+                    if (hasTrailingSpace) rendered.append(' ')
+                    val renderedMarkerLength = if (hasTrailingSpace) 2 else 1
+                    val retainedLength = minOf(renderedMarkerLength, token.end - token.start)
+                    if (token.start + retainedLength < token.end) {
+                        removedRanges += IndexRange(token.start + retainedLength, token.end)
+                    }
                 }
                 else -> removedRanges += IndexRange(token.start, token.end)
             }

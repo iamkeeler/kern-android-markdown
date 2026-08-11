@@ -21,7 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 
@@ -52,6 +54,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -536,7 +541,6 @@ fun EditorCanvas(
 ) {
     val theme = state.activeTheme
     val lazyListState = rememberLazyListState()
-    val documentScrollState = rememberScrollState()
 
     LaunchedEffect(state.focusedParagraphIndex) {
         if (state.focusedParagraphIndex != -1) {
@@ -552,22 +556,29 @@ fun EditorCanvas(
                 .fillMaxSize()
                 .widthIn(max = theme.dimensions.maxTextLineWidth)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(documentScrollState)
-                    .padding(bottom = bottomPadding)
+            LazyColumn(
+                state = lazyListState,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = bottomPadding),
+                verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
             ) {
-                state.paragraphs.items.forEachIndexed { index, _ ->
-                    EditorParagraph(
-                        state = state,
-                        textFieldValues = textFieldValues,
-                        viewModel = viewModel,
-                        index = index,
-                        documentSelectionManaged = true
-                    )
-                    if (index < state.paragraphs.items.lastIndex) {
-                        Spacer(modifier = Modifier.height(theme.dimensions.spacingMedium))
+                itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, item ->
+                    Column {
+                        EditorParagraph(
+                            state = state,
+                            textFieldValues = textFieldValues,
+                            viewModel = viewModel,
+                            index = index,
+                            documentSelectionManaged = true
+                        )
+                        if (item.block.separatorAfter.isNotEmpty()) {
+                            Text(
+                                text = item.block.separatorAfter,
+                                color = Color.Transparent,
+                                fontSize = 1.sp,
+                                lineHeight = 1.sp
+                            )
+                        }
                     }
                 }
             }
@@ -628,6 +639,8 @@ private fun EditorParagraph(
         paragraphIndex = index,
         totalParagraphs = state.paragraphs.items.size,
         documentSelectionManaged = documentSelectionManaged,
+        resolveImageModel = viewModel::resolveMarkdownImage,
+        imageResolutionKey = "${state.activeProject?.id}:${state.activeFilePath}",
         onEnterPressed = { cursor ->
             val first = value.text.substring(0, cursor)
             val second = value.text.substring(cursor)
@@ -827,6 +840,8 @@ fun ParagraphField(
     paragraphIndex: Int = 0,
     totalParagraphs: Int = 1,
     documentSelectionManaged: Boolean = false,
+    resolveImageModel: suspend (String) -> String? = { it },
+    imageResolutionKey: String = "",
     onEnterPressed: (Int) -> Unit,
     onBackspacePressed: () -> Unit,
     onChecklistToggle: () -> Unit = {}
@@ -918,8 +933,11 @@ fun ParagraphField(
                 }
             } else if (viewMode == ViewMode.RENDERED && !isFocused && fullImage != null) {
                 val image = fullImage
+                val imageModel by produceState<String?>(image.extra, image.extra, imageResolutionKey) {
+                    this.value = image.extra?.let { resolveImageModel(it) } ?: image.extra
+                }
                 SubcomposeAsyncImage(
-                    model = image.extra,
+                    model = imageModel,
                     contentDescription = value.text.substring(image.start, image.end),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
@@ -946,17 +964,25 @@ fun ParagraphField(
                 val renderedText = remember(value.text, visualTransformation) {
                     visualTransformation.filter(AnnotatedString(value.text)).text
                 }
-                BlockSelectionBoundary(documentSelectionManaged) {
-                    Text(
-                        text = renderedText,
-                        style = textStyle,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onFocusChanged(true) }
-                            .semantics {
-                                contentDescription = "Block ${paragraphIndex + 1} of ${totalParagraphs}: ${blockType.name.lowercase().replace('_', ' ')}"
-                            }
-                    )
+                Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    BlockSelectionBoundary(documentSelectionManaged) {
+                        RenderedMarkdownText(
+                            rawText = value.text,
+                            renderedText = renderedText,
+                            textStyle = textStyle,
+                            resolveImageModel = resolveImageModel,
+                            imageResolutionKey = imageResolutionKey,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onFocusChanged(true) }
+                                .semantics {
+                                    contentDescription = "Block ${paragraphIndex + 1} of ${totalParagraphs}: ${blockType.name.lowercase().replace('_', ' ')}"
+                                }
+                        )
+                    }
+                    if (blockType == MarkdownBlockType.TASK_LIST) {
+                        ChecklistToggleOverlay(onChecklistToggle)
+                    }
                 }
             } else {
                 Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -992,21 +1018,6 @@ fun ParagraphField(
                             imeAction = ImeAction.Default
                         )
                     )
-
-                    if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.TASK_LIST) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .width(28.dp)
-                                .fillMaxHeight()
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = onChecklistToggle
-                                )
-                                .semantics { contentDescription = "Toggle task list checkmark" }
-                        )
-                    }
                 }
             }
         }
@@ -1024,6 +1035,84 @@ fun ParagraphField(
             bringIntoViewRequester.bringIntoView()
         }
     }
+}
+
+@Composable
+private fun RenderedMarkdownText(
+    rawText: String,
+    renderedText: AnnotatedString,
+    textStyle: TextStyle,
+    resolveImageModel: suspend (String) -> String?,
+    imageResolutionKey: String,
+    modifier: Modifier = Modifier
+) {
+    val imageSpans = remember(rawText) {
+        MarkdownRenderer.render(MarkdownParser.parseParagraph(rawText)).spans
+            .filter { it.type == MarkdownElementType.IMAGE && !it.extra.isNullOrBlank() }
+    }
+    if (imageSpans.isEmpty()) {
+        Text(text = renderedText, style = textStyle, modifier = modifier)
+        return
+    }
+
+    val inlineContent = remember(imageSpans, textStyle.fontSize) {
+        imageSpans.mapIndexed { index, span ->
+            val id = "markdown-image-$index"
+            id to InlineTextContent(
+                placeholder = Placeholder(
+                    width = textStyle.fontSize * 2.5f,
+                    height = textStyle.fontSize * 1.6f,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
+                )
+            ) {
+                val imageModel by produceState<String?>(span.extra, span.extra, imageResolutionKey) {
+                    this.value = span.extra?.let { resolveImageModel(it) } ?: span.extra
+                }
+                SubcomposeAsyncImage(
+                    model = imageModel,
+                    contentDescription = renderedText.text.substring(span.start, span.end),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }.toMap()
+    }
+    val textWithImages = remember(renderedText, imageSpans) {
+        buildAnnotatedString {
+            var cursor = 0
+            imageSpans.forEachIndexed { index, span ->
+                if (cursor < span.start) append(renderedText.subSequence(cursor, span.start))
+                appendInlineContent(
+                    id = "markdown-image-$index",
+                    alternateText = renderedText.text.substring(span.start, span.end)
+                )
+                cursor = span.end
+            }
+            if (cursor < renderedText.length) append(renderedText.subSequence(cursor, renderedText.length))
+        }
+    }
+    Text(
+        text = textWithImages,
+        inlineContent = inlineContent,
+        style = textStyle,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun BoxScope.ChecklistToggleOverlay(onChecklistToggle: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .align(Alignment.CenterStart)
+            .width(28.dp)
+            .fillMaxHeight()
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                onClick = onChecklistToggle
+            )
+            .semantics { contentDescription = "Toggle task list checkmark" }
+    )
 }
 
 private fun fullBlockImage(rawText: String) = MarkdownParser.parseParagraph(rawText).elements

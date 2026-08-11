@@ -1,22 +1,24 @@
 package com.attachdesign.kern.ui.editor
 
 import android.content.ClipboardManager
+import android.os.SystemClock
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.lifecycle.viewModelScope
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
@@ -24,6 +26,7 @@ import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.FileOperationsManager
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -41,7 +44,7 @@ class EditorScreenTest {
   private val project = ProjectEntity(
       id = 1L,
       name = "Test Project",
-      path = "test_project",
+      path = "test_project_${System.nanoTime()}",
       isExternal = false,
       isSelected = true
   )
@@ -90,7 +93,15 @@ class EditorScreenTest {
 
   @After
   fun tearDown() {
-    db.close()
+    if (::viewModel.isInitialized) viewModel.viewModelScope.cancel()
+    if (::db.isInitialized) db.close()
+  }
+
+  private fun waitForDocument(text: String) {
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      viewModel.uiState.value.paragraphs.items.any { text in it.block.rawText }
+    }
+    composeTestRule.waitForIdle()
   }
 
   @Test
@@ -104,6 +115,7 @@ class EditorScreenTest {
           modifier = Modifier.fillMaxSize()
       )
     }
+    waitForDocument("Introduction")
 
     // Verify file name in breadcrumb header and initial text contents loaded
     composeTestRule.onNodeWithText("test_file.md").assertIsDisplayed()
@@ -122,6 +134,7 @@ class EditorScreenTest {
           modifier = Modifier.fillMaxSize()
       )
     }
+    waitForDocument("Introduction")
 
     // Toggle sidebar to show Settings options
     composeTestRule.onNodeWithContentDescription("Toggle consolidated settings sidebar").performClick()
@@ -150,6 +163,7 @@ class EditorScreenTest {
           modifier = Modifier.fillMaxSize()
       )
     }
+    waitForDocument("custom paragraph")
 
     // Focus on second paragraph block
     composeTestRule.onNodeWithText("This is a custom paragraph block with bold text.").performClick()
@@ -174,6 +188,7 @@ class EditorScreenTest {
           modifier = Modifier.fillMaxSize()
       )
     }
+    waitForDocument("Introduction")
 
     // Toggle readability metrics popup/sidebar
     composeTestRule.onNodeWithContentDescription("Toggle readability metrics popup").performClick()
@@ -203,13 +218,14 @@ class EditorScreenTest {
           modifier = Modifier.fillMaxSize()
       )
     }
+    waitForDocument("Buy groceries")
 
     // Verify task lists are rendered with correct checkmarks
     composeTestRule.onNodeWithText("☐ Buy groceries").assertIsDisplayed()
     composeTestRule.onNodeWithText("☑ Read book").assertIsDisplayed()
 
     // Click on the toggle checkmark area
-    composeTestRule.onNodeWithContentDescription("Toggle task list checkmark").performClick()
+    composeTestRule.onAllNodesWithContentDescription("Toggle task list checkmark")[0].performClick()
 
     // Verify that the first item visually transitions to checked state
     composeTestRule.onNodeWithText("☑ Buy groceries").assertIsDisplayed()
@@ -235,6 +251,7 @@ class EditorScreenTest {
           modifier = Modifier.fillMaxSize()
       )
     }
+    waitForDocument("Before ![Diagram]")
 
     composeTestRule.onNodeWithContentDescription("Diagram").assertIsDisplayed()
   }
@@ -255,6 +272,7 @@ class EditorScreenTest {
           modifier = Modifier.fillMaxSize()
       )
     }
+    waitForDocument("First paragraph")
 
     val firstBounds = composeTestRule.onNodeWithText("First paragraph").fetchSemanticsNode().boundsInRoot
     val secondBounds = composeTestRule.onNodeWithText("Second paragraph").fetchSemanticsNode().boundsInRoot
@@ -264,12 +282,15 @@ class EditorScreenTest {
       moveTo(Offset(secondBounds.right - 1f, secondBounds.center.y))
       up()
     }
-    composeTestRule.onRoot().performKeyInput {
-      keyDown(Key.CtrlLeft)
-      keyDown(Key.C)
-      keyUp(Key.C)
-      keyUp(Key.CtrlLeft)
-    }
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val eventTime = SystemClock.uptimeMillis()
+    instrumentation.sendKeySync(
+        KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_C, 0, KeyEvent.META_CTRL_ON)
+    )
+    instrumentation.sendKeySync(
+        KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_C, 0, KeyEvent.META_CTRL_ON)
+    )
+    instrumentation.waitForIdleSync()
 
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val clipboard = context.getSystemService(ClipboardManager::class.java)

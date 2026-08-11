@@ -8,8 +8,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.os.Environment
 import java.io.File
+import com.attachdesign.kern.parser.MarkdownResourcePathResolver
 
 class StorageManager(private val context: Context) {
+
+    suspend fun resolveMarkdownImage(
+        project: ProjectEntity,
+        currentFilePath: String,
+        target: String
+    ): String? = withContext(Dispatchers.IO) {
+        val resolved = MarkdownResourcePathResolver.resolve(currentFilePath, target) ?: return@withContext null
+        if (resolved == target && Uri.parse(target).scheme != null) return@withContext target
+        if (project.path.startsWith("content://")) {
+            getDocumentFile(project, resolved)?.uri?.toString()
+        } else {
+            getAbsoluteFile(project, resolved).takeIf { it.exists() && it.isFile }?.toURI()?.toString()
+        }
+    }
 
     private fun getDocumentFile(project: ProjectEntity, relativePath: String): DocumentFile? {
         val treeUri = Uri.parse(project.path)
