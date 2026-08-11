@@ -6,23 +6,32 @@ Status: draft for internal testing / first public listing
 
 ## Short description
 
-A calm local-first markdown reader and writing workspace for Android.
+Write and preview Markdown locally with a calm, focused Android editor.
 
 ## Full description
 
-Kern is a focused markdown workspace for Android, built for people who want local documents, readable typography, and a quiet writing surface.
+Kern is a focused Markdown editor and reader for Android, designed for writing, reviewing, and organizing local documents.
 
-Open project folders, move through markdown files, and write in a clean editor that keeps the document at the center. Kern is designed around warm surfaces, clear structure, and low-distraction editing instead of heavy note-taking systems or cloud-first workflows.
+Write with live preview as Markdown formatting appears while you type. Tap into any passage to work directly with the underlying syntax, without switching between separate editing and preview screens.
 
-Current focus:
+With Kern you can:
 
-- local markdown reading and editing
-- project folder navigation
-- document-first workspace layout
-- responsive editing performance
-- calm typography and minimal interface chrome
+- Read and edit Markdown files on your Android device
+- Open and manage local folders through Android’s file picker
+- Navigate documents with a project file tree and breadcrumbs
+- Use live preview for headings, emphasis, lists, links, code, and other Markdown formatting
+- Apply formatting with the selection toolbar
+- Check readability metrics, reading grade level, word count, and sentence complexity
+- Choose rendered, syntax-focused, or raw editing views
+- Adjust themes, editor typography, and text size
+- Share, rename, duplicate, move, and delete documents
+- Use a spacious split-pane workspace on tablets and larger Android screens
 
-Kern is in early release. The app is best for testers who are comfortable with markdown files and local Android file workflows.
+Kern is local-first. It does not require a Kern account or a Kern-hosted document cloud. Files remain in the storage location you choose through Android’s file access system.
+
+The interface is built around readable typography, clear document structure, and minimal distractions—whether you are writing notes, drafting articles, reviewing documentation, or working with a Markdown-based project.
+
+Kern is open source and built for Android.
 
 ## Feature bullets
 

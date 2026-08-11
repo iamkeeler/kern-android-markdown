@@ -47,7 +47,6 @@ See:
 
 ```text
 design.md
-agents.md
 ```
 
 ## Branch and pull request workflow

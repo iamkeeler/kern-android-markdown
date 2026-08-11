@@ -1,18 +1,17 @@
 # Kern Landing Website
 
-A focused, local-first static landing website for Kern — a Markdown reader and writing workspace for Android.
+A focused static website for Kern, an open-source Markdown editor for Android.
 
 ## Features
 
-- **Interactive Markdown Workspace**: Interactive live editor showcase with document switching (`draft.md`, `research.md`, `outline.md`) and real-time Markdown rendering directly in the hero device frame.
-- **Theme Support**: Seamless dark/light theme switching with automatic `prefers-color-scheme` OS detection and local storage persistence.
-- **Brand Alignment**: Custom design tokens mirroring the app design language from `design.md` (warm `#FCFBFA` canvas, dark `#121212` canvas, charcoal text, utility blue accents).
-- **SEO & Social Sharing**: Complete Open Graph, Twitter Cards, canonical links, and structured JSON-LD schema.
-- **Accessibility & Responsive Navigation**: Mobile drawer menu, high contrast themes, and skip-to-content keyboard accessibility.
+- **Product page**: A single Markdown editor screenshot in a device frame, with links to GitHub and Google Play.
+- **Theme support**: Light and dark themes with saved user preference.
+- **SEO and sharing**: Open Graph, Twitter Cards, canonical links, and SoftwareApplication JSON-LD.
+- **Accessibility**: Skip-to-content link and responsive navigation.
 
 ## File Inventory
 
-- `index.html` — Main landing page featuring interactive workspace showcase
+- `index.html` — Main landing page
 - `privacy.html` — Privacy policy and data posture statement
 - `contact.html` — Contact info, project links, and security reporting
 - `styles.css` — Central visual system and theme variable declarations

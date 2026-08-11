@@ -278,6 +278,17 @@ a {
   padding: 64px 0 96px;
 }
 
+.hero-device {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 660px;
+}
+
+.hero-device .device-bezel {
+  width: min(100%, 330px);
+}
+
 .eyebrow,
 .small-label {
   margin: 0 0 12px;
@@ -1546,5 +1557,4 @@ h3 {
     font-size: 12px;
   }
 }
-
 
