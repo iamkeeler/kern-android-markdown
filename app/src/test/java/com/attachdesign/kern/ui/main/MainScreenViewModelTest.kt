@@ -166,6 +166,29 @@ class MainScreenViewModelTest {
     }
 
     @Test
+    fun `createFile preserves current path when target project is supplied`() = runTest {
+        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
+        coEvery { projectDao.getSelectedProject() } returns proj
+        coEvery { fileDao.insertFile(any()) } returns 1L
+        coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
+        coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
+
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+        viewModel.navigateToSegment(proj, "subfolder")
+
+        viewModel.createFile("nested", proj)
+        advanceUntilIdle()
+
+        coVerify {
+            storageManager.createFile(proj, "subfolder/nested.md")
+            fileDao.insertFile(match {
+                it.relativePath == "subfolder/nested.md" &&
+                it.name == "nested.md"
+            })
+        }
+    }
+
+    @Test
     fun `createFile sets sync state to SYNCED for external projects`() = runTest {
         // Setup
         val proj = ProjectEntity(id = 1L, name = "External", path = "ext", isExternal = true, isSelected = true)
