@@ -298,9 +298,8 @@ viewModelScope.launch(Dispatchers.IO) {
             statsRepository.addWordsRead(wordCount.toLong())
             analyticsTracker.logWordsRead(wordCount.toLong())
 
-            val rawBlocks = MarkdownParser.splitDocument(content)
-            val parsedBlocks = rawBlocks.map { raw ->
-                ImmutableParagraphBlock(MarkdownParser.parseParagraph(raw))
+            val parsedBlocks = MarkdownParser.parseDocument(content).map { block ->
+                ImmutableParagraphBlock(block)
             }.toImmutableList()
 
             // Initialize TextFieldValues
@@ -375,7 +374,10 @@ viewModelScope.launch(Dispatchers.IO) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
         
-        val newBlock = MarkdownParser.parseParagraph(content)
+        val previous = items[index].block
+        val separator = separatorFor(previous.rawText, content)
+        items[index] = ImmutableParagraphBlock(previous.copy(separatorAfter = separator))
+        val newBlock = MarkdownParser.parseParagraph(content, separatorAfter = previous.separatorAfter)
         val newIndex = index + 1
         items.add(newIndex, ImmutableParagraphBlock(newBlock))
         
@@ -434,7 +436,7 @@ viewModelScope.launch(Dispatchers.IO) {
             val continuation = MarkdownEditorEngine.checkContinuation(firstPart)
             if (continuation.isContinuation) {
                 if (continuation.isExit) {
-                    val updatedBlock = MarkdownParser.parseParagraph(continuation.newCurrentText, items[index].block.id)
+                    val updatedBlock = reparse(items[index].block, continuation.newCurrentText)
                     items[index] = ImmutableParagraphBlock(updatedBlock)
 
                     _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -447,7 +449,7 @@ viewModelScope.launch(Dispatchers.IO) {
 
                     insertParagraphAfter(index, secondPart)
                 } else {
-                    val updatedBlock = MarkdownParser.parseParagraph(continuation.newCurrentText, items[index].block.id)
+                    val updatedBlock = reparse(items[index].block, continuation.newCurrentText)
                     items[index] = ImmutableParagraphBlock(updatedBlock)
 
                     _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -465,7 +467,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
 
             // Normal split behavior if not a bullet list/blockquote/etc.
-            val updatedBlock = MarkdownParser.parseParagraph(firstPart, items[index].block.id)
+            val updatedBlock = reparse(items[index].block, firstPart)
             items[index] = ImmutableParagraphBlock(updatedBlock)
 
             _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -513,7 +515,7 @@ viewModelScope.launch(Dispatchers.IO) {
         }
 
         // Perform O(1) parse differential update
-        val updatedBlock = MarkdownParser.parseParagraph(finalValue.text, items[index].block.id)
+        val updatedBlock = reparse(items[index].block, finalValue.text)
         items[index] = ImmutableParagraphBlock(updatedBlock)
 
         _uiState.value = currentState.copy(
@@ -559,7 +561,7 @@ viewModelScope.launch(Dispatchers.IO) {
             (originalValue.selection.end + newSelectionOffset).coerceIn(0, newText.length)
         )
 
-        val updatedBlock = MarkdownParser.parseParagraph(newText, items[index].block.id)
+        val updatedBlock = reparse(items[index].block, newText)
         items[index] = ImmutableParagraphBlock(updatedBlock)
 
         _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -593,7 +595,7 @@ viewModelScope.launch(Dispatchers.IO) {
             (originalValue.selection.end + newSelectionOffset).coerceIn(0, newText.length)
         )
 
-        val updatedBlock = MarkdownParser.parseParagraph(newText, items[index].block.id)
+        val updatedBlock = reparse(items[index].block, newText)
         items[index] = ImmutableParagraphBlock(updatedBlock)
 
         _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -646,7 +648,7 @@ viewModelScope.launch(Dispatchers.IO) {
             (originalValue.selection.end + diff).coerceIn(0, newText.length)
         )
 
-        val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+        val updatedBlock = reparse(items[index].block, newText)
         items[index] = ImmutableParagraphBlock(updatedBlock)
 
         _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -685,7 +687,7 @@ viewModelScope.launch(Dispatchers.IO) {
             (originalValue.selection.end + diff).coerceIn(0, newText.length)
         )
 
-        val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+        val updatedBlock = reparse(items[index].block, newText)
         items[index] = ImmutableParagraphBlock(updatedBlock)
 
         _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -712,7 +714,7 @@ viewModelScope.launch(Dispatchers.IO) {
             (originalValue.selection.end + 4).coerceIn(0, newText.length)
         )
 
-        val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+        val updatedBlock = reparse(items[index].block, newText)
         items[index] = ImmutableParagraphBlock(updatedBlock)
 
         _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -749,7 +751,7 @@ viewModelScope.launch(Dispatchers.IO) {
                 (originalValue.selection.end - spacesToRemove).coerceIn(0, newText.length)
             )
 
-            val updatedBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(newText, items[index].block.id)
+            val updatedBlock = reparse(items[index].block, newText)
             items[index] = ImmutableParagraphBlock(updatedBlock)
 
             _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
@@ -767,7 +769,10 @@ viewModelScope.launch(Dispatchers.IO) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
         
-        val newBlock = MarkdownParser.parseParagraph(content)
+        val previous = items[index].block
+        val separator = separatorFor(previous.rawText, content)
+        items[index] = ImmutableParagraphBlock(previous.copy(separatorAfter = separator))
+        val newBlock = MarkdownParser.parseParagraph(content, separatorAfter = previous.separatorAfter)
         val newIndex = index + 1
         items.add(newIndex, ImmutableParagraphBlock(newBlock))
         
@@ -802,9 +807,14 @@ viewModelScope.launch(Dispatchers.IO) {
         // Concatenate text
         val mergedText = prevText + currentText
         val prevBlock = items[index - 1].block
+        val currentBlock = items[index].block
         
         // Update previous paragraph block
-        val updatedPrevBlock = MarkdownParser.parseParagraph(mergedText, prevBlock.id)
+        val updatedPrevBlock = MarkdownParser.parseParagraph(
+            mergedText,
+            prevBlock.id,
+            separatorAfter = currentBlock.separatorAfter
+        )
         items[index - 1] = ImmutableParagraphBlock(updatedPrevBlock)
         
         // Remove current paragraph
@@ -854,8 +864,8 @@ viewModelScope.launch(Dispatchers.IO) {
         val filePath = state.activeFilePath
         if (filePath.isEmpty()) return@withContext
 
-        val rawBlocks = state.paragraphs.items.map { it.block.rawText }
-        val documentContent = MarkdownParser.joinDocument(rawBlocks)
+        val blocks = state.paragraphs.items.map { it.block }
+        val documentContent = MarkdownParser.joinParsedDocument(blocks)
         storageManager.writeFile(project, filePath, documentContent)
 
         // Calculate metrics for DB metadata update
@@ -895,8 +905,8 @@ viewModelScope.launch(Dispatchers.IO) {
         if (mode == SidebarMode.METRICS) {
             // Readability analysis triggers *only* when sidebar is opened in METRICS mode
             viewModelScope.launch(Dispatchers.Default) {
-                val rawBlocks = _uiState.value.paragraphs.items.map { it.block.rawText }
-                val documentContent = MarkdownParser.joinDocument(rawBlocks)
+                val blocks = _uiState.value.paragraphs.items.map { it.block }
+                val documentContent = MarkdownParser.joinParsedDocument(blocks)
                 runHemingwayAnalysis(documentContent)
             }
         }
@@ -909,8 +919,8 @@ viewModelScope.launch(Dispatchers.IO) {
 
         if (willOpen) {
             viewModelScope.launch(Dispatchers.Default) {
-                val rawBlocks = _uiState.value.paragraphs.items.map { it.block.rawText }
-                val documentContent = MarkdownParser.joinDocument(rawBlocks)
+                val blocks = _uiState.value.paragraphs.items.map { it.block }
+                val documentContent = MarkdownParser.joinParsedDocument(blocks)
                 runHemingwayAnalysis(documentContent)
             }
         }
@@ -1244,6 +1254,12 @@ viewModelScope.launch(Dispatchers.IO) {
         }
         return maxOf(1, count)
     }
+
+    private fun reparse(block: com.attachdesign.kern.parser.ParagraphBlock, rawText: String) =
+        MarkdownParser.parseParagraph(rawText, block.id, block.separatorAfter)
+
+    private fun separatorFor(previousText: String, nextText: String): String =
+        if (MarkdownParser.isListLine(previousText) && MarkdownParser.isListLine(nextText)) "\n" else "\n\n"
 
     private fun addLog(message: String) {
         // Simple internal logging

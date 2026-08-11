@@ -98,6 +98,8 @@ dependencies {
   // Compose
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)
+  implementation(libs.coil.compose)
+  implementation(libs.coil.network.okhttp)
   implementation("androidx.compose.material3:material3:1.5.0-alpha01")
   implementation("androidx.compose.material:material-icons-core")
   // Tooling
@@ -200,5 +202,4 @@ tasks.withType<Test> {
         showStandardStreams = true
     }
 }
-
 

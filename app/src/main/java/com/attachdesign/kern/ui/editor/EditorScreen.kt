@@ -22,6 +22,7 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material.icons.Icons
@@ -57,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -64,11 +66,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import kotlinx.collections.immutable.toImmutableList
+import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.SubcomposeAsyncImageContent
 
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import com.attachdesign.kern.parser.MarkdownParser
+import com.attachdesign.kern.parser.MarkdownRenderer
 import com.attachdesign.kern.parser.MarkdownElementType
 import com.attachdesign.kern.parser.IndexRange
 import com.attachdesign.kern.parser.IndexTransformationMatrix
@@ -209,9 +214,9 @@ fun EditorScreen(
                             },
                             onBackClick = onBackClick,
                             onCopyClick = {
-                                val fullText = uiState.paragraphs.items.joinToString("\n\n") { it.block.rawText }
+                                val fullText = MarkdownRenderer.copyDocument(uiState.paragraphs.items.map { it.block })
                                 clipboardManager.setText(AnnotatedString(fullText))
-                                Toast.makeText(context, "Copied to Clipboard", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Copied rendered text", Toast.LENGTH_SHORT).show()
                             },
                             onMetricsToggle = {
                                 viewModel.toggleReadabilityPopup()
@@ -231,6 +236,11 @@ fun EditorScreen(
                                     }
                                     "Share" -> {
                                         viewModel.shareCurrentFile()
+                                    }
+                                    "Copy Markdown" -> {
+                                        val markdown = MarkdownParser.joinParsedDocument(uiState.paragraphs.items.map { it.block })
+                                        clipboardManager.setText(AnnotatedString(markdown))
+                                        Toast.makeText(context, "Copied Markdown source", Toast.LENGTH_SHORT).show()
                                     }
                                     "Rename" -> {
                                         showRenameDialog = true
@@ -501,6 +511,7 @@ fun EditorHeader(
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; onMoreOptionsAction("Settings") })
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
+                    DropdownMenuItem(text = { Text("Copy Markdown") }, onClick = { showMenu = false; onMoreOptionsAction("Copy Markdown") })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showMenu = false; onMoreOptionsAction("Rename") })
                     DropdownMenuItem(text = { Text("Duplicate") }, onClick = { showMenu = false; onMoreOptionsAction("Duplicate") })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false; onMoreOptionsAction("Delete") })
@@ -838,12 +849,13 @@ fun ParagraphField(
                 .fillMaxWidth()
                 .then(contentModifier)
         ) {
+            val fullImage = remember(value.text) { fullBlockImage(value.text) }
             if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.HORIZONTAL_RULE) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(32.dp)
-                        .clickable { focusRequester.requestFocus() },
+                        .clickable { onFocusChanged(true) },
                     contentAlignment = Alignment.Center
                 ) {
                     HorizontalDivider(
@@ -853,12 +865,56 @@ fun ParagraphField(
                     )
                 }
             } else if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.TABLE) {
-                Box(
+                SelectionContainer {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onFocusChanged(true) }
+                    ) {
+                        TableRender(rawText = value.text, theme = theme)
+                    }
+                }
+            } else if (viewMode == ViewMode.RENDERED && !isFocused && fullImage != null) {
+                val image = fullImage
+                SubcomposeAsyncImage(
+                    model = image.extra,
+                    contentDescription = value.text.substring(image.start, image.end),
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { focusRequester.requestFocus() }
+                        .heightIn(max = 400.dp)
+                        .clickable { onFocusChanged(true) }
                 ) {
-                    TableRender(rawText = value.text, theme = theme)
+                    val imageState by painter.state.collectAsState()
+                    when (imageState) {
+                        is coil3.compose.AsyncImagePainter.State.Success -> SubcomposeAsyncImageContent()
+                        is coil3.compose.AsyncImagePainter.State.Loading -> Box(
+                            modifier = Modifier.fillMaxWidth().height(160.dp),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator() }
+                        else -> SelectionContainer {
+                            Text(
+                                text = value.text.substring(image.start, image.end),
+                                style = textStyle.copy(color = theme.textMuted, fontStyle = FontStyle.Italic)
+                            )
+                        }
+                    }
+                }
+            } else if (viewMode == ViewMode.RENDERED && !isFocused) {
+                val renderedText = remember(value.text, visualTransformation) {
+                    visualTransformation.filter(AnnotatedString(value.text)).text
+                }
+                SelectionContainer {
+                    Text(
+                        text = renderedText,
+                        style = textStyle,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onFocusChanged(true) }
+                            .semantics {
+                                contentDescription = "Block ${paragraphIndex + 1} of ${totalParagraphs}: ${blockType.name.lowercase().replace('_', ' ')}"
+                            }
+                    )
                 }
             } else {
                 Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -927,6 +983,13 @@ fun ParagraphField(
         }
     }
 }
+
+private fun fullBlockImage(rawText: String) = MarkdownParser.parseParagraph(rawText).elements
+    .firstOrNull { element ->
+        element.type == MarkdownElementType.IMAGE &&
+            element.constructStart == 0 &&
+            element.constructEnd == rawText.length
+    }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1314,4 +1377,3 @@ class CircularRevealShape(
         return androidx.compose.ui.graphics.Outline.Generic(path)
     }
 }
-

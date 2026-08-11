@@ -15,6 +15,7 @@ import com.attachdesign.kern.parser.MarkdownElementType
 import com.attachdesign.kern.parser.MarkdownParser
 import com.attachdesign.kern.parser.IndexTransformationMatrix
 import com.attachdesign.kern.parser.IndexRange
+import com.attachdesign.kern.parser.MarkdownRenderer
 
 import androidx.compose.ui.text.TextRange
 
@@ -50,7 +51,12 @@ class MarkdownVisualTransformation(
                 TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
             }
             ViewMode.RENDERED -> {
-                val (strippedText, matrix) = stripTokens(paragraph)
+                val (strippedText, matrix) = if (isFocused) {
+                    stripTokens(paragraph)
+                } else {
+                    val projection = MarkdownRenderer.render(paragraph)
+                    projection.text to projection.indexMatrix
+                }
                 val builder = AnnotatedString.Builder(strippedText)
                 applyRenderedStyles(paragraph, builder, matrix)
 

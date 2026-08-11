@@ -53,57 +53,7 @@ object MarkdownParser {
      * Splits the raw document string into individual paragraph blocks.
      * Respects code blocks (i.e., double newlines within fenced code blocks do not cause splits).
      */
-    fun splitDocument(text: String): List<String> {
-        if (text.isEmpty()) return listOf("")
-        
-        val blocks = mutableListOf<String>()
-        val currentBlock = StringBuilder()
-        var inCodeBlock = false
-        
-        // Normalize line endings
-        val lines = text.replace("\r\n", "\n").split("\n")
-        var consecutiveEmptyLines = 0
-
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.startsWith("```")) {
-                inCodeBlock = !inCodeBlock
-            }
-            
-            if (!inCodeBlock && line.isEmpty()) {
-                consecutiveEmptyLines++
-                if (consecutiveEmptyLines == 1) {
-                    if (currentBlock.isNotEmpty()) {
-                        blocks.add(currentBlock.toString())
-                        currentBlock.clear()
-                    } else {
-                        // Empty block (e.g. at the beginning or empty paragraph)
-                        blocks.add("")
-                    }
-                }
-            } else {
-                consecutiveEmptyLines = 0
-                if (!inCodeBlock && isListLine(line)) {
-                    if (currentBlock.isNotEmpty()) {
-                        blocks.add(currentBlock.toString())
-                        currentBlock.clear()
-                    }
-                    currentBlock.append(line)
-                } else {
-                    if (currentBlock.isNotEmpty()) {
-                        currentBlock.append("\n")
-                    }
-                    currentBlock.append(line)
-                }
-            }
-        }
-        
-        if (currentBlock.isNotEmpty() || consecutiveEmptyLines > 0) {
-            blocks.add(currentBlock.toString())
-        }
-        
-        return if (blocks.isEmpty()) listOf("") else blocks
-    }
+    fun splitDocument(text: String): List<String> = MarkdownDocumentScanner.scan(text).map { it.rawText }
 
     /**
      * Merges individual paragraph blocks back into a single document string.
@@ -125,10 +75,18 @@ object MarkdownParser {
         return sb.toString()
     }
 
+    fun parseDocument(text: String): List<ParagraphBlock> = MarkdownDocumentScanner.scan(text)
+
+    fun joinParsedDocument(blocks: List<ParagraphBlock>): String = MarkdownDocumentScanner.join(blocks)
+
     /**
      * Parses a single paragraph string into a ParagraphBlock with AST elements.
      */
-    fun parseParagraph(rawText: String, id: String = UUID.randomUUID().toString()): ParagraphBlock {
+    fun parseParagraph(
+        rawText: String,
+        id: String = UUID.randomUUID().toString(),
+        separatorAfter: String = ""
+    ): ParagraphBlock {
         var blockType = MarkdownBlockType.PARAGRAPH
         var contentStart = 0
         val elements = mutableListOf<MarkdownElement>()
@@ -189,15 +147,17 @@ object MarkdownParser {
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
         } else if (rawText.startsWith("```")) {
             blockType = MarkdownBlockType.CODE_BLOCK
-            val closeIdx = rawText.indexOf("```", 3)
+            val openingLineEnd = rawText.indexOf('\n')
+            val contentStartIndex = if (openingLineEnd == -1) 3 else openingLineEnd + 1
+            val closeIdx = rawText.lastIndexOf("```").takeIf { it >= contentStartIndex } ?: -1
             if (closeIdx != -1) {
                 val cEnd = closeIdx + 3
-                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, 3, constructStart = 0, constructEnd = cEnd))
-                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, 3, closeIdx, constructStart = 0, constructEnd = cEnd))
+                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, contentStartIndex, constructStart = 0, constructEnd = cEnd))
+                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, contentStartIndex, closeIdx, constructStart = 0, constructEnd = cEnd))
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, closeIdx, cEnd, constructStart = 0, constructEnd = cEnd))
             } else {
-                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, 3, constructStart = 0, constructEnd = len))
-                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, 3, len, constructStart = 0, constructEnd = len))
+                elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, contentStartIndex, constructStart = 0, constructEnd = len))
+                elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, contentStartIndex, len, constructStart = 0, constructEnd = len))
             }
         } else if (orderedMatch != null && orderedMatch.range.start == 0) {
             blockType = MarkdownBlockType.ORDERED_LIST
@@ -212,7 +172,7 @@ object MarkdownParser {
             elements.addAll(parseInline(contentText, contentStart))
         }
 
-        return ParagraphBlock(id, rawText, blockType, elements.sortedBy { it.start })
+        return ParagraphBlock(id, rawText, blockType, elements.sortedBy { it.start }, separatorAfter)
     }
 
     /**
@@ -348,7 +308,7 @@ object MarkdownParser {
             // Italic (*text*)
             if (text[i] == '*') {
                 val closeIdx = findNextUnescapedChar(text, '*', i + 1)
-                if (closeIdx != -1) {
+                if (closeIdx > i + 1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
                     val cStart = offset + i
@@ -364,7 +324,7 @@ object MarkdownParser {
             // Italic (_text_)
             if (text[i] == '_') {
                 val closeIdx = findNextUnescapedChar(text, '_', i + 1)
-                if (closeIdx != -1) {
+                if (closeIdx > i + 1) {
                     val innerStart = i + 1
                     val innerEnd = closeIdx
                     val cStart = offset + i

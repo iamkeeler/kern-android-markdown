@@ -42,5 +42,7 @@ data class ParagraphBlock(
     val id: String,
     val rawText: String,
     val blockType: MarkdownBlockType,
-    val elements: List<MarkdownElement>
+    val elements: List<MarkdownElement>,
+    /** Exact source characters between this block and the next block. */
+    val separatorAfter: String = ""
 )
