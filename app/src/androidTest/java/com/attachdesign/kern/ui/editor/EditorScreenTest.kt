@@ -1,13 +1,19 @@
 package com.attachdesign.kern.ui.editor
 
+import android.content.ClipboardManager
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
@@ -16,6 +22,7 @@ import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.storage.StorageManager
+import com.attachdesign.kern.data.storage.FileOperationsManager
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -28,6 +35,7 @@ class EditorScreenTest {
 
   private lateinit var db: AppDatabase
   private lateinit var storageManager: StorageManager
+  private lateinit var fileOpsManager: FileOperationsManager
   private lateinit var viewModel: EditorViewModel
 
   private val project = ProjectEntity(
@@ -56,6 +64,7 @@ class EditorScreenTest {
         .build()
 
     storageManager = StorageManager(context)
+    fileOpsManager = FileOperationsManager(db, storageManager, context)
 
     // Populate database
     db.projectDao().insertProject(project)
@@ -76,7 +85,7 @@ class EditorScreenTest {
       storageManager.writeFile(project, "test_file.md", "# Introduction\n\nThis is a custom paragraph block with **bold text**.")
     }
 
-    viewModel = EditorViewModel(db, storageManager, context)
+    viewModel = EditorViewModel(db, storageManager, fileOpsManager, context)
   }
 
   @After
@@ -204,5 +213,67 @@ class EditorScreenTest {
 
     // Verify that the first item visually transitions to checked state
     composeTestRule.onNodeWithText("☑ Buy groceries").assertIsDisplayed()
+  }
+
+  @Test
+  fun testInlineMarkdownImageCreatesRenderedImageNode() {
+    runBlocking {
+      storageManager.writeFile(
+          project,
+          "test_file.md",
+          "Before ![Diagram](https://example.com/diagram.png) after"
+      )
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+
+    composeTestRule.onNodeWithContentDescription("Diagram").assertIsDisplayed()
+  }
+
+  @Test
+  fun testCrossParagraphSelectionCopiesParagraphBoundary() {
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", "First paragraph\n\nSecond paragraph")
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+
+    val firstBounds = composeTestRule.onNodeWithText("First paragraph").fetchSemanticsNode().boundsInRoot
+    val secondBounds = composeTestRule.onNodeWithText("Second paragraph").fetchSemanticsNode().boundsInRoot
+    composeTestRule.onRoot().performTouchInput {
+      down(Offset(firstBounds.left + 1f, firstBounds.center.y))
+      advanceEventTime(800)
+      moveTo(Offset(secondBounds.right - 1f, secondBounds.center.y))
+      up()
+    }
+    composeTestRule.onRoot().performKeyInput {
+      keyDown(Key.CtrlLeft)
+      keyDown(Key.C)
+      keyUp(Key.C)
+      keyUp(Key.CtrlLeft)
+    }
+
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val clipboard = context.getSystemService(ClipboardManager::class.java)
+    val copied = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+    org.junit.Assert.assertEquals("First paragraph\n\nSecond paragraph", copied)
   }
 }

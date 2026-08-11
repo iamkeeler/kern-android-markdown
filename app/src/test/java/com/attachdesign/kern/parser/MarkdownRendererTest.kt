@@ -76,6 +76,23 @@ class MarkdownRendererTest {
         assertEquals(raw, MarkdownRenderer.render(MarkdownParser.parseParagraph(raw)).text)
     }
 
+    @Test
+    fun `formatting spans remain aligned after a wide bullet marker`() {
+        val rendered = MarkdownRenderer.render(MarkdownParser.parseParagraph("-    **Bold** text"))
+
+        assertEquals("• Bold text", rendered.text)
+        assertEquals("Bold", rendered.textFor(MarkdownElementType.BOLD))
+    }
+
+    @Test
+    fun `fenced code supports carriage return line endings`() {
+        val rendered = MarkdownRenderer.render(
+            MarkdownParser.parseParagraph("```kotlin\rval answer = 42\r```")
+        )
+
+        assertEquals("val answer = 42\r", rendered.text)
+    }
+
     private fun MarkdownRenderProjection.textFor(type: MarkdownElementType): String {
         val span = spans.first { it.type == type }
         return text.substring(span.start, span.end)

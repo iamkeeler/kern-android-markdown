@@ -75,4 +75,16 @@ class MarkdownDocumentScannerTest {
         assertEquals(MarkdownBlockType.TABLE, blocks.first().blockType)
         assertEquals(source, MarkdownParser.joinParsedDocument(blocks))
     }
+
+    @Test
+    fun `list continuation lines remain attached to their item`() {
+        val source = "- First line\n  continued text"
+
+        val blocks = MarkdownParser.parseDocument(source)
+
+        assertEquals(1, blocks.size)
+        assertEquals(MarkdownBlockType.UNORDERED_LIST, blocks.single().blockType)
+        assertEquals("• First line\n  continued text", MarkdownRenderer.render(blocks.single()).text)
+        assertEquals(source, MarkdownParser.joinParsedDocument(blocks))
+    }
 }

@@ -16,6 +16,7 @@ import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.storage.StorageManager
+import com.attachdesign.kern.data.storage.FileOperationsManager
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -29,6 +30,7 @@ class MainScreenTest {
 
   private lateinit var db: AppDatabase
   private lateinit var storageManager: StorageManager
+  private lateinit var fileOpsManager: FileOperationsManager
 
   private val project = ProjectEntity(
       id = 1L,
@@ -46,6 +48,7 @@ class MainScreenTest {
         .build()
 
     storageManager = StorageManager(context)
+    fileOpsManager = FileOperationsManager(db, storageManager, context)
 
     // Seed default settings required for theme loading in MainScreen
     db.settingDao().insertSetting(SettingEntity("selected_theme_id", "0"))
@@ -65,6 +68,7 @@ class MainScreenTest {
           onItemClick = {},
           db = db,
           storageManager = storageManager,
+          fileOpsManager = fileOpsManager,
           modifier = Modifier.fillMaxSize()
       )
     }
@@ -98,6 +102,7 @@ class MainScreenTest {
           onItemClick = {},
           db = db,
           storageManager = storageManager,
+          fileOpsManager = fileOpsManager,
           modifier = Modifier.fillMaxSize()
       )
     }
@@ -122,6 +127,7 @@ class MainScreenTest {
           onItemClick = {},
           db = db,
           storageManager = storageManager,
+          fileOpsManager = fileOpsManager,
           modifier = Modifier.fillMaxSize()
       )
     }
