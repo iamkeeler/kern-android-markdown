@@ -1,58 +1,62 @@
 # Kern
 
-Kern is a focused markdown reader and writing workspace for Android. It is built around local files, fast editing, and a calm document-first interface.
+Kern is an open-source Markdown editor for Android.
 
-The app is currently being prepared for Google Play internal testing and public open-source release.
+Write and edit Markdown on your phone, tablet, or foldable. Kern shows formatted text as you type and works with files in folders you choose.
 
-## What Kern is for
+[Website](https://attach.design/kern/) · [GitHub](https://github.com/iamkeeler/kern-android-markdown) · [Privacy policy](https://attach.design/kern/privacy.html)
 
-- Reading and editing markdown documents on Android
-- Working with local project folders through Android's Storage Access Framework
-- Keeping a file tree and editor workspace close together on larger screens
-- Maintaining a quiet, typography-forward writing surface
+![Kern editing a Markdown document](website/screenshots/framed/phone-01-live-preview-1080x1920.png)
 
-## Status
+## Why Kern
 
-Kern is pre-release software. The current engineering focus is:
+- **Live Markdown preview** — See headings, emphasis, lists, links, and code while you write.
+- **Local files** — Open and edit files through Android’s file access system.
+- **Readable editing** — Use clear typography, adjustable text size, themes, and focused editing views.
+- **Writing tools** — Check word counts, reading grade level, sentence complexity, and other document metrics.
+- **Large-screen layouts** — Use a file tree beside the editor on tablets and foldables.
+- **Open source** — Read the code, follow development, and suggest changes on GitHub.
 
-- Google Play release automation
-- open-source repository cleanup
-- privacy and security review
-- Play Store listing and website preparation
-- release-quality lint and architecture cleanup
+## Privacy
+
+Kern does not host your documents or require an account. You choose where your files are stored.
+
+Kern uses Firebase Analytics and Crashlytics. Its own analytics events record document opens, shares, and word and character counts. They do not include document titles, document text, or file paths. See the [privacy policy](https://attach.design/kern/privacy.html) for details.
+
+## Project status
+
+Kern is in active development. The Android app and website are being prepared for the first public Google Play release.
+
+The current release work includes:
+
+- final app and editor testing
+- Play Store metadata and screenshots
+- privacy and Data Safety review
+- signed Android App Bundle releases
 
 ## Build locally
 
 ### Requirements
 
 - JDK 17
-- Android SDK / command-line tools
 - Android SDK Platform 36
 - Android Build Tools 36.0.0 or newer
 
-### Firebase config
-
-The real Firebase config is intentionally not tracked in git.
-
-For local development, copy the template and replace the placeholder values:
+The real Firebase configuration is not tracked. Create a local configuration from the public template:
 
 ```bash
 cp app/google-services.json.example app/google-services.json
 ```
 
-For CI, store the real file as a base64 GitHub Actions secret named:
+Replace the placeholder values with your Firebase project configuration.
 
-```text
-GOOGLE_SERVICES_JSON_BASE64
-```
-
-### Verify
+Run the test suite, lint, and release build:
 
 ```bash
 ./gradlew test lint bundleRelease
 ```
 
-Expected release artifact:
+The release bundle is written to:
 
 ```text
 app/build/outputs/bundle/release/app-release.aab
@@ -60,66 +64,33 @@ app/build/outputs/bundle/release/app-release.aab
 
 ## Release automation
 
-Release automation lives in:
+GitHub Actions handles release checks, Android App Bundle builds, Google Play uploads, and website deployment.
 
-- `.github/workflows/release-readiness.yml`
-- `.github/workflows/google-play-release.yml`
-- `.github/workflows/deploy-website-ftp.yml`
-- `docs/release-automation.md`
+- `.github/workflows/release-readiness.yml` — tests, lint, and build checks
+- `.github/workflows/google-play-release.yml` — signed Play releases
+- `.github/workflows/deploy-website-ftp.yml` — website deployment
+- `docs/release-automation.md` — required secrets and release steps
 
-The Google Play workflow requires repository secrets for Firebase config, Play Console upload credentials, and release signing credentials.
-
-Website deployment uses FTPS and runs when a `website-v*` tag is pushed. It requires these GitHub Actions secrets:
-
-```text
-WEBSITE_FTP_SERVER
-WEBSITE_FTP_USERNAME
-WEBSITE_FTP_PASSWORD
-```
-
-## Repository workflow
-
-Kern uses a protected-main workflow: work in branches, open pull requests, and merge to `main` only after release-readiness checks pass.
-
-See:
-
-```text
-docs/repository-governance.md
-```
-
-## Security and open-source readiness
-
-See:
-
-```text
-docs/security-scrub-report.md
-```
-
-Important: normal branch/tag history has been scrubbed, but GitHub hidden pull-request refs may require GitHub Support cleanup before making the existing GitHub repository public.
-
-## Design direction
-
-Kern uses a restrained, document-first visual system:
-
-- warm off-white canvas
-- charcoal ink text
-- muted steel metadata
-- utility blue action accents
-- spacious 8dp rhythm
-- minimal surfaces and typography-led hierarchy
-
-See `design.md` for detailed interface rules.
+Sensitive files and credentials belong in GitHub Actions secrets. Never commit Firebase configuration, keystores, service-account files, tokens, or local properties.
 
 ## Contributing
 
-Kern is not yet broadly open for outside contributions. The initial public release will prioritize small, focused issues after the Play Store preparation work is complete.
+Start with a focused issue or pull request. Good first contributions include bug fixes, documentation, tests, accessibility improvements, and release hardening.
 
-See `CONTRIBUTING.md` for development expectations.
+Before opening a pull request, run:
+
+```bash
+./gradlew test lint bundleRelease
+```
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for architecture and workflow rules.
 
 ## Security
 
-Please do not open public issues for security problems. See `SECURITY.md`.
+Do not report security vulnerabilities in public issues. Email [gary@attach.design](mailto:gary@attach.design) with the affected version, steps to reproduce, and possible impact.
+
+See [SECURITY.md](SECURITY.md) for the full reporting policy.
 
 ## License
 
-Apache License 2.0. See `LICENSE`.
+Kern is released under the [Apache License 2.0](LICENSE).
