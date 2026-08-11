@@ -536,6 +536,7 @@ fun EditorCanvas(
 ) {
     val theme = state.activeTheme
     val lazyListState = rememberLazyListState()
+    val documentScrollState = rememberScrollState()
 
     LaunchedEffect(state.focusedParagraphIndex) {
         if (state.focusedParagraphIndex != -1) {
@@ -545,62 +546,102 @@ fun EditorCanvas(
 
     val bottomPadding = if (isToolbarMinimized) theme.dimensions.spacingMassive else theme.dimensions.editorBottomPadding
 
-    LazyColumn(
-        state = lazyListState,
-        modifier = Modifier
-            .fillMaxSize()
-            .widthIn(max = theme.dimensions.maxTextLineWidth), // Cap max text width
-        contentPadding = PaddingValues(bottom = bottomPadding),
-        verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-    ) {
-        itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, wrapper ->
-            val paragraph = wrapper.block
-            val value = textFieldValues[index] ?: TextFieldValue(paragraph.rawText)
-            val isFocused = state.focusedParagraphIndex == index
-
-            val visualTransformation = remember(paragraph.rawText, isFocused, value.selection, state.viewMode, state.activeTheme) {
-                MarkdownVisualTransformation(
-                    isFocused = isFocused,
-                    selection = value.selection,
-                    viewMode = state.viewMode,
-                    tokenColor = state.activeTheme.textMuted,
-                    codeBackgroundColor = state.activeTheme.codeBackground
+    if (state.viewMode == ViewMode.RENDERED && state.focusedParagraphIndex == -1) {
+        SelectionContainer(
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = theme.dimensions.maxTextLineWidth)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(documentScrollState)
+                    .padding(bottom = bottomPadding)
+            ) {
+                state.paragraphs.items.forEachIndexed { index, _ ->
+                    EditorParagraph(
+                        state = state,
+                        textFieldValues = textFieldValues,
+                        viewModel = viewModel,
+                        index = index,
+                        documentSelectionManaged = true
+                    )
+                    if (index < state.paragraphs.items.lastIndex) {
+                        Spacer(modifier = Modifier.height(theme.dimensions.spacingMedium))
+                    }
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = theme.dimensions.maxTextLineWidth),
+            contentPadding = PaddingValues(bottom = bottomPadding),
+            verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
+        ) {
+            itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, _ ->
+                EditorParagraph(
+                    state = state,
+                    textFieldValues = textFieldValues,
+                    viewModel = viewModel,
+                    index = index,
+                    documentSelectionManaged = false
                 )
             }
-
-            ParagraphField(
-                value = value,
-                onValueChange = { viewModel.updateParagraph(index, it) },
-                isFocused = isFocused,
-                onFocusChanged = { focused ->
-                    if (focused) viewModel.setParagraphFocus(index)
-                },
-                visualTransformation = visualTransformation,
-                theme = state.activeTheme,
-                blockType = paragraph.blockType,
-                viewMode = state.viewMode,
-                fontSizeScale = state.editorFontSizeScale,
-                paragraphIndex = index,
-                totalParagraphs = state.paragraphs.items.size,
-                onEnterPressed = { cursor ->
-                    val text = value.text
-                    val first = text.substring(0, cursor)
-                    val second = text.substring(cursor)
-                    val newValue = TextFieldValue(
-                        text = first + "\n" + second,
-                        selection = androidx.compose.ui.text.TextRange(cursor + 1)
-                    )
-                    viewModel.updateParagraph(index, newValue)
-                },
-                onBackspacePressed = {
-                    viewModel.mergeParagraphWithPrevious(index)
-                },
-                onChecklistToggle = {
-                    viewModel.toggleChecklist(index)
-                }
-            )
         }
     }
+}
+
+@Composable
+private fun EditorParagraph(
+    state: EditorUiState,
+    textFieldValues: Map<Int, TextFieldValue>,
+    viewModel: EditorViewModel,
+    index: Int,
+    documentSelectionManaged: Boolean
+) {
+    val paragraph = state.paragraphs.items[index].block
+    val value = textFieldValues[index] ?: TextFieldValue(paragraph.rawText)
+    val isFocused = state.focusedParagraphIndex == index
+    val visualTransformation = remember(paragraph.rawText, isFocused, value.selection, state.viewMode, state.activeTheme) {
+        MarkdownVisualTransformation(
+            isFocused = isFocused,
+            selection = value.selection,
+            viewMode = state.viewMode,
+            tokenColor = state.activeTheme.textMuted,
+            codeBackgroundColor = state.activeTheme.codeBackground
+        )
+    }
+
+    ParagraphField(
+        value = value,
+        onValueChange = { viewModel.updateParagraph(index, it) },
+        isFocused = isFocused,
+        onFocusChanged = { focused -> if (focused) viewModel.setParagraphFocus(index) },
+        visualTransformation = visualTransformation,
+        theme = state.activeTheme,
+        blockType = paragraph.blockType,
+        viewMode = state.viewMode,
+        fontSizeScale = state.editorFontSizeScale,
+        paragraphIndex = index,
+        totalParagraphs = state.paragraphs.items.size,
+        documentSelectionManaged = documentSelectionManaged,
+        onEnterPressed = { cursor ->
+            val first = value.text.substring(0, cursor)
+            val second = value.text.substring(cursor)
+            viewModel.updateParagraph(
+                index,
+                TextFieldValue(
+                    text = first + "\n" + second,
+                    selection = androidx.compose.ui.text.TextRange(cursor + 1)
+                )
+            )
+        },
+        onBackspacePressed = { viewModel.mergeParagraphWithPrevious(index) },
+        onChecklistToggle = { viewModel.toggleChecklist(index) }
+    )
 }
 
 fun splitTableLine(line: String): List<String> {
@@ -785,6 +826,7 @@ fun ParagraphField(
     fontSizeScale: Float = 1.0f,
     paragraphIndex: Int = 0,
     totalParagraphs: Int = 1,
+    documentSelectionManaged: Boolean = false,
     onEnterPressed: (Int) -> Unit,
     onBackspacePressed: () -> Unit,
     onChecklistToggle: () -> Unit = {}
@@ -865,7 +907,7 @@ fun ParagraphField(
                     )
                 }
             } else if (viewMode == ViewMode.RENDERED && !isFocused && blockType == MarkdownBlockType.TABLE) {
-                SelectionContainer {
+                BlockSelectionBoundary(documentSelectionManaged) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -892,7 +934,7 @@ fun ParagraphField(
                             modifier = Modifier.fillMaxWidth().height(160.dp),
                             contentAlignment = Alignment.Center
                         ) { CircularProgressIndicator() }
-                        else -> SelectionContainer {
+                        else -> BlockSelectionBoundary(documentSelectionManaged) {
                             Text(
                                 text = value.text.substring(image.start, image.end),
                                 style = textStyle.copy(color = theme.textMuted, fontStyle = FontStyle.Italic)
@@ -904,7 +946,7 @@ fun ParagraphField(
                 val renderedText = remember(value.text, visualTransformation) {
                     visualTransformation.filter(AnnotatedString(value.text)).text
                 }
-                SelectionContainer {
+                BlockSelectionBoundary(documentSelectionManaged) {
                     Text(
                         text = renderedText,
                         style = textStyle,
@@ -990,6 +1032,14 @@ private fun fullBlockImage(rawText: String) = MarkdownParser.parseParagraph(rawT
             element.constructStart == 0 &&
             element.constructEnd == rawText.length
     }
+
+@Composable
+private fun BlockSelectionBoundary(
+    documentSelectionManaged: Boolean,
+    content: @Composable () -> Unit
+) {
+    if (documentSelectionManaged) content() else SelectionContainer(content = content)
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
