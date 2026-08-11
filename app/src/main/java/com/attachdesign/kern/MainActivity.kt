@@ -16,6 +16,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
+import com.attachdesign.kern.data.analytics.TelemetryCollection
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.IncomingFileImportPolicy
 import com.attachdesign.kern.theme.ModernAndroidMarkdownEditorTheme
@@ -46,6 +49,20 @@ class MainActivity : ComponentActivity() {
       }
       if (db.settingDao().getSetting("view_mode") == null) {
         db.settingDao().insertSetting(SettingEntity("view_mode", "RENDERED"))
+      }
+      if (db.settingDao().getSetting(TelemetryCollection.SETTING_KEY) == null) {
+        db.settingDao().insertSetting(
+          SettingEntity(TelemetryCollection.SETTING_KEY, TelemetryCollection.DEFAULT_ENABLED.toString())
+        )
+      }
+    }
+
+    lifecycleScope.launch(Dispatchers.IO) {
+      db.settingDao().getSettingFlow(TelemetryCollection.SETTING_KEY).collect { setting ->
+        val enabled = setting?.value?.toBooleanStrictOrNull() ?: TelemetryCollection.DEFAULT_ENABLED
+        TelemetryCollection.setEnabled(enabled)
+        runCatching { FirebaseAnalytics.getInstance(applicationContext).setAnalyticsCollectionEnabled(enabled) }
+        runCatching { FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(enabled) }
       }
     }
 

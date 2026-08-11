@@ -22,6 +22,7 @@ import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.local.ThemeEntity
 import com.attachdesign.kern.data.stats.StatsRepository
+import com.attachdesign.kern.data.analytics.TelemetryCollection
 import com.attachdesign.kern.domain.stats.UserStats
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.theme.AppThemeJson
@@ -58,6 +59,7 @@ fun SettingsTabsContent(
     val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
     val sentenceCapitalizationSetting by db.settingDao().getSettingFlow("sentence_capitalization").collectAsState(initial = null)
     val showWorkspaceIntroSetting by db.settingDao().getSettingFlow("show_workspace_intro").collectAsState(initial = null)
+    val telemetryCollectionSetting by db.settingDao().getSettingFlow(TelemetryCollection.SETTING_KEY).collectAsState(initial = null)
 
     val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
     val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsState(initial = null)
@@ -74,6 +76,7 @@ fun SettingsTabsContent(
     val currentLaunchNewFile       = launchNewFileSetting?.value?.toBoolean() ?: true
     val currentSentenceCapitalization = sentenceCapitalizationSetting?.value?.toBoolean() ?: true
     val currentShowWorkspaceIntro  = showWorkspaceIntroSetting?.value?.toBoolean() ?: true
+    val currentTelemetryCollection = telemetryCollectionSetting?.value?.toBoolean() ?: TelemetryCollection.DEFAULT_ENABLED
 
     val currentAutoHeader          = autoHeaderSetting?.value?.toBoolean() ?: true
     val currentAutoComplete        = autoCompleteSetting?.value?.toBoolean() ?: true
@@ -725,6 +728,72 @@ fun SettingsTabsContent(
                      Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                 }
                 4 -> { // About tab
+                     Text(
+                         text = "PRIVACY",
+                         color = theme.textMuted,
+                         fontSize = theme.typography.tiny,
+                         fontFamily = FontFamily.Monospace,
+                         fontWeight = FontWeight.Bold,
+                         letterSpacing = 1.2.sp
+                     )
+                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
+                     Row(
+                         modifier = Modifier
+                             .fillMaxWidth()
+                             .clickable {
+                                 val enabled = !currentTelemetryCollection
+                                 TelemetryCollection.setEnabled(enabled)
+                                 coroutineScope.launch(Dispatchers.IO) {
+                                     db.settingDao().insertSetting(
+                                         SettingEntity(TelemetryCollection.SETTING_KEY, enabled.toString())
+                                     )
+                                 }
+                             }
+                             .padding(vertical = theme.dimensions.spacingMedium),
+                         verticalAlignment = Alignment.CenterVertically,
+                         horizontalArrangement = Arrangement.SpaceBetween
+                     ) {
+                         Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
+                             Text(
+                                 text = "Help Improve Kern",
+                                 color = theme.textPrimary,
+                                 fontSize = theme.typography.body,
+                                 fontFamily = appFont,
+                                 fontWeight = FontWeight.Medium
+                             )
+                             Text(
+                                 text = "Share anonymous analytics and crash logs to help improve the app.",
+                                 color = theme.textMuted,
+                                 fontSize = theme.typography.tiny,
+                                 lineHeight = theme.typography.bodyLarge
+                             )
+                         }
+                         Switch(
+                             checked = currentTelemetryCollection,
+                             onCheckedChange = { enabled ->
+                                 TelemetryCollection.setEnabled(enabled)
+                                 coroutineScope.launch(Dispatchers.IO) {
+                                     db.settingDao().insertSetting(
+                                         SettingEntity(TelemetryCollection.SETTING_KEY, enabled.toString())
+                                     )
+                                 }
+                             },
+                             colors = SwitchDefaults.colors(
+                                 checkedThumbColor = theme.accent,
+                                 checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                             )
+                         )
+                     }
+                     Text(
+                         text = "This is on by default. The data is anonymized and only used to improve Kern. You can turn it off at any time.",
+                         color = theme.textMuted,
+                         fontSize = theme.typography.tiny,
+                         fontFamily = appFont,
+                         lineHeight = theme.typography.bodyLarge
+                     )
+                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                      Row(
                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingMedium),
                          horizontalArrangement = Arrangement.SpaceBetween,
@@ -1278,4 +1347,3 @@ private fun MetricStatTile(
         )
     }
 }
-

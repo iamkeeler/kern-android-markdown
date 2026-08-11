@@ -9,7 +9,9 @@ class AnalyticsTracker(context: Context) {
 
     init {
         try {
-            firebaseAnalytics = FirebaseAnalytics.getInstance(context.applicationContext)
+            firebaseAnalytics = FirebaseAnalytics.getInstance(context.applicationContext).also {
+                it.setAnalyticsCollectionEnabled(TelemetryCollection.isEnabled())
+            }
         } catch (_: Exception) {
             // Safe fallback if Firebase is not initialized or running in unit tests
         }
@@ -48,6 +50,7 @@ class AnalyticsTracker(context: Context) {
     }
 
     private fun logEvent(name: String, params: Bundle?) {
+        if (!TelemetryCollection.isEnabled()) return
         try {
             firebaseAnalytics?.logEvent(name, params)
         } catch (_: Exception) {

@@ -85,6 +85,7 @@ dependencies {
   // Firebase
   implementation(platform(libs.firebase.bom))
   implementation(libs.firebase.analytics)
+  implementation(libs.firebase.crashlytics)
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
@@ -202,4 +203,3 @@ tasks.withType<Test> {
         showStandardStreams = true
     }
 }
-
