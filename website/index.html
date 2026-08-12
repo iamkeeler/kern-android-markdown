@@ -121,6 +121,80 @@
       </div>
     </section>
 
+    <section class="screenshots-section section-shell" aria-labelledby="screenshots-title">
+      <div class="section-heading" data-reveal>
+        <p class="eyebrow">In the app</p>
+        <h2 id="screenshots-title">A focused workspace, wherever you write.</h2>
+      </div>
+      <div class="screenshots-grid">
+        <article class="screenshot-card" data-reveal data-reveal-delay="100">
+          <div class="screenshot-device">
+            <div class="device-bezel">
+              <div class="device-notch"></div>
+              <div class="device-screen">
+                <img src="screenshots/framed/phone-02-workspace-1080x1920.png" alt="Kern workspace with files and an open Markdown document" loading="lazy">
+              </div>
+            </div>
+          </div>
+          <h3>Files and editor, kept close.</h3>
+          <p>Move between project files and your document without leaving the writing surface.</p>
+        </article>
+
+        <article class="screenshot-card" data-reveal data-reveal-delay="200">
+          <div class="screenshot-device">
+            <div class="device-bezel">
+              <div class="device-notch"></div>
+              <div class="device-screen">
+                <img src="screenshots/framed/phone-03-hemingway-1080x1920.png" alt="Kern document with readability highlights" loading="lazy">
+              </div>
+            </div>
+          </div>
+          <h3>Readable by design.</h3>
+          <p>See the shape of your writing with calm typography and useful readability signals.</p>
+        </article>
+
+        <article class="screenshot-card" data-reveal data-reveal-delay="300">
+          <div class="screenshot-device">
+            <div class="device-bezel">
+              <div class="device-notch"></div>
+              <div class="device-screen">
+                <img src="screenshots/framed/phone-04-themes-1080x1920.png" alt="Kern theme and typography controls" loading="lazy">
+              </div>
+            </div>
+          </div>
+          <h3>Make the page yours.</h3>
+          <p>Adjust themes and typography until the document feels right for the way you work.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="syntax-demo section-shell" aria-labelledby="syntax-demo-title">
+      <div class="section-heading" data-reveal>
+        <p class="eyebrow">Live review</p>
+        <h2 id="syntax-demo-title">See the Markdown behind the formatting.</h2>
+        <p class="section-subtext">Move over the preview to reveal the source syntax in place, just like Kern on Android.</p>
+      </div>
+
+      <div class="syntax-demo-frame" data-reveal data-reveal-delay="100">
+        <div class="syntax-demo-bar">
+          <span class="syntax-demo-file">Welcome.md</span>
+          <span class="syntax-demo-hint">Hover or focus any line</span>
+        </div>
+        <article class="syntax-preview" aria-label="Interactive Markdown preview">
+          <h1 class="markdown-hover-target" data-markdown-source="# Welcome to Kern" tabindex="0">Welcome to Kern</h1>
+          <p class="markdown-hover-target" data-markdown-source="Write in **Markdown** and see the result as you go." tabindex="0">Write in <strong>Markdown</strong> and see the result as you go.</p>
+          <h2 class="markdown-hover-target" data-markdown-source="## A calm writing space" tabindex="0">A calm writing space</h2>
+          <ul>
+            <li class="markdown-hover-target" data-markdown-source="- Local files, kept close" tabindex="0">Local files, kept close</li>
+            <li class="markdown-hover-target" data-markdown-source="- Live preview while you write" tabindex="0">Live preview while you write</li>
+            <li class="markdown-hover-target" data-markdown-source="- Markdown syntax when you need it" tabindex="0">Markdown syntax when you need it</li>
+          </ul>
+          <blockquote class="markdown-hover-target" data-markdown-source="> Write clearly. Keep your files close." tabindex="0">Write clearly. Keep your files close.</blockquote>
+          <p class="markdown-hover-target" data-markdown-source="[Read more about Kern](https://github.com/iamkeeler/kern-android-markdown)" tabindex="0"><a href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">Read more about Kern</a></p>
+        </article>
+      </div>
+    </section>
+
     <section class="privacy-band section-shell" data-reveal>
       <div>
         <p class="eyebrow">Privacy</p>
@@ -133,7 +207,7 @@
     <section class="contact section-shell" aria-labelledby="contact-title" data-reveal>
       <p class="eyebrow">Support</p>
       <h2 id="contact-title">Questions or feedback?</h2>
-      <p>Email <a class="text-link" href="mailto:gary@attach.design">gary@attach.design</a> or open an issue on <a class="text-link" href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">GitHub</a>.</p>
+      <p class="markdown-hover-ignore">Email <a class="text-link" href="mailto:gary@attach.design">gary@attach.design</a> or open an issue on <a class="text-link" href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">GitHub</a>.</p>
     </section>
   </main>
 
@@ -187,6 +261,8 @@
     }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
 
     document.querySelectorAll('[data-reveal]').forEach((element) => revealObserver.observe(element));
+
   </script>
+  <script src="markdown-hover.js"></script>
 </body>
 </html>
