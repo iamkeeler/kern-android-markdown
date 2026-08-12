@@ -43,11 +43,7 @@ Pure markdown/text processing code must not depend on:
 
 The UI/platform layer owns Compose state, Android storage bindings, and operating-system integration.
 
-See:
-
-```text
-design.md
-```
+See the [coding standards](contributor-guides/coding-standards.md), [design guide](contributor-guides/design-guide.md), and [product requirements](contributor-guides/product-requirements.md).
 
 ## Branch and pull request workflow
 
