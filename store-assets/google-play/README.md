@@ -1,6 +1,6 @@
 # Google Play store graphics — Kern
 
-Draft graphics generated for launch readiness.
+Store graphics built from the launcher artwork and real app captures.
 
 ## Generated assets
 
@@ -8,10 +8,10 @@ Draft graphics generated for launch readiness.
 |---|---:|---|
 | `app-icon-512.png` | 512×512 | Google Play app icon upload candidate |
 | `feature-graphic-1024x500.png` | 1024×500 | Google Play feature graphic |
-| `phone-01-local-markdown-1080x1920.png` | 1080×1920 | Phone screenshot candidate |
-| `phone-02-focused-editor-1080x1920.png` | 1080×1920 | Phone screenshot candidate |
-| `phone-03-file-tree-1080x1920.png` | 1080×1920 | Phone screenshot candidate |
-| `phone-04-privacy-1080x1920.png` | 1080×1920 | Phone screenshot candidate |
+| `phone-01-local-markdown-1080x1920.png` | 1080×1920 | Real files screen capture |
+| `phone-02-focused-editor-1080x1920.png` | 1080×1920 | Real editor screen capture |
+| `phone-03-file-tree-1080x1920.png` | 1080×1920 | Real readability screen capture |
+| `phone-04-privacy-1080x1920.png` | 1080×1920 | Real appearance settings capture |
 | `social-preview-1200x630.png` | 1200×630 | Website/social preview image |
 
 ## Source
@@ -36,6 +36,12 @@ The graphics follow the Kern visual system from [`contributor-guides/design-guid
 - utility blue: `#2E5BFF`
 - restrained typography-first composition
 
-## Review notes
+## Capture notes
 
-These are launch-readiness draft graphics. Before final public Play submission, replace or supplement them with real screenshots from a release-equivalent build if Google Play review requires exact in-app screenshots rather than designed store panels.
+The phone assets are cropped from the real 1080×2400 device captures in
+`website/screenshots/`. Cropping removes emulator status/navigation chrome and
+produces the Play-recommended 1080×1920 portrait ratio without altering app UI.
+
+Tablet screenshots are not synthesized from phone captures. Capture real
+tablet UI from a release-equivalent build before adding 7-inch or 10-inch
+listing assets.
