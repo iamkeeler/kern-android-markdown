@@ -1,7 +1,12 @@
 package com.attachdesign.kern.data.storage
 
 import android.content.Context
+import android.content.ContentResolver
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import com.attachdesign.kern.data.local.ProjectEntity
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
@@ -71,6 +76,35 @@ class StorageManagerTest {
         val folderNodes = storageManager.listDirectory(project, "folder1")
         assertEquals(1, folderNodes.size)
         assertTrue(folderNodes.any { it.name == "file2.md" && !it.isDirectory })
+    }
+
+    @Test
+    fun listDirectory_returnsEmptyWhenLinkedFolderPermissionIsRevoked() = runTest {
+        val deniedResolver = mockk<ContentResolver>()
+        val deniedContext = mockk<Context>(relaxed = true)
+        every { deniedContext.contentResolver } returns deniedResolver
+        every {
+            deniedResolver.query(any<Uri>(), any(), any(), any(), any())
+        } throws SecurityException("Permission denied")
+
+        val linkedProject = ProjectEntity(
+            name = "Revoked folder",
+            path = "content://com.example.documents/tree/revoked",
+            isExternal = true,
+            isSelected = true
+        )
+
+        val files = StorageManager(deniedContext).listDirectory(linkedProject, "")
+
+        assertTrue(files.isEmpty())
+    }
+
+    @Test
+    fun documentToVfsNodeOrNull_skipsDocumentsWithoutNames() {
+        val document = mockk<DocumentFile>()
+        every { document.name } returns null
+
+        assertNull(document.toVfsNodeOrNull(""))
     }
 
     @Test

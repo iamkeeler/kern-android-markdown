@@ -158,17 +158,20 @@ class StorageManager(private val context: Context) {
      */
     suspend fun listDirectory(project: ProjectEntity, relativePath: String): List<VfsNode> = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
-            val doc = getDocumentFile(project, relativePath) ?: return@withContext emptyList()
-            if (!doc.isDirectory) return@withContext emptyList()
-            val files = doc.listFiles()
-            return@withContext files.map { file ->
-                val fileRelPath = if (relativePath.isEmpty()) file.name!! else "$relativePath/${file.name}"
-                if (file.isDirectory) {
-                    VfsNode.Directory(file.name ?: "", fileRelPath)
+            return@withContext try {
+                val doc = getDocumentFile(project, relativePath)
+                if (doc == null || !doc.isDirectory) {
+                    emptyList()
                 } else {
-                    VfsNode.File(file.name ?: "", fileRelPath, file.length(), file.lastModified())
+                    doc.listFiles()
+                        .mapNotNull { file -> file.toVfsNodeOrNull(relativePath) }
+                        .sortedWith(compareBy({ !it.isDirectory }, { it.name }))
                 }
-            }.sortedWith(compareBy({ !it.isDirectory }, { it.name }))
+            } catch (_: SecurityException) {
+                // Persisted SAF grants can be revoked outside the app. Treat an
+                // inaccessible linked folder as empty so app startup can continue.
+                emptyList()
+            }
         }
 
         val projectRoot = getProjectRootFile(project)
@@ -377,5 +380,15 @@ class StorageManager(private val context: Context) {
         return context.assets.open(fileName).use { inputStream ->
             inputStream.bufferedReader().use { it.readText() }
         }
+    }
+}
+
+internal fun DocumentFile.toVfsNodeOrNull(relativePath: String): VfsNode? {
+    val documentName = name?.takeIf { it.isNotBlank() } ?: return null
+    val fileRelativePath = if (relativePath.isEmpty()) documentName else "$relativePath/$documentName"
+    return if (isDirectory) {
+        VfsNode.Directory(documentName, fileRelativePath)
+    } else {
+        VfsNode.File(documentName, fileRelativePath, length(), lastModified())
     }
 }
