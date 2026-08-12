@@ -1,38 +1,25 @@
 # Kern
 
-Kern is an open-source Markdown editor for Android.
+Kern is an open-source Markdown editor for Android. Write on your phone, tablet, or foldable with live formatting, local files, and a quiet document-first workspace.
 
-Write and edit Markdown on your phone, tablet, or foldable. Kern shows formatted text as you type and works with files in folders you choose.
+<img src="store-assets/google-play/app-icon-512.png" alt="Kern app icon" width="96">
 
-[Website](https://attach.design/kern/) · [GitHub](https://github.com/iamkeeler/kern-android-markdown) · [Privacy policy](https://attach.design/kern/privacy.html)
-
-![Kern editing a Markdown document](website/screenshots/framed/phone-01-live-preview-1080x1920.png)
+[https://kern.attach.design.](https://kern.attach.design.) · [GitHub](https://github.com/iamkeeler/kern-android-markdown) · [Privacy policy](https://kern.attach.design/privacy.html)
 
 ## Why Kern
 
-- **Live Markdown preview** — See headings, emphasis, lists, links, and code while you write.
+- **Live Markdown preview** — See headings, emphasis, lists, links, and code as you write.
 - **Local files** — Open and edit files through Android’s file access system.
 - **Readable editing** — Use clear typography, adjustable text size, themes, and focused editing views.
 - **Writing tools** — Check word counts, reading grade level, sentence complexity, and other document metrics.
 - **Large-screen layouts** — Use a file tree beside the editor on tablets and foldables.
 - **Open source** — Read the code, follow development, and suggest changes on GitHub.
 
-## Privacy
+## See it in action
 
-Kern does not host your documents or require an account. You choose where your files are stored.
+![Kern editing a Markdown document](website/screenshots/framed/phone-01-live-preview-1080x1920.png)
 
-Kern uses Firebase Analytics and Crashlytics. Its own analytics events record document opens, shares, and word and character counts. They do not include document titles, document text, or file paths. See the [privacy policy](https://attach.design/kern/privacy.html) for details.
-
-## Project status
-
-Kern is in active development. The Android app and website are being prepared for the first public Google Play release.
-
-The current release work includes:
-
-- final app and editor testing
-- Play Store metadata and screenshots
-- privacy and Data Safety review
-- signed Android App Bundle releases
+More screenshots and source assets are in [`website/screenshots/`](website/screenshots/) and [`store-assets/`](store-assets/).
 
 ## Build locally
 
@@ -48,50 +35,49 @@ The real Firebase configuration is not tracked. Create a local configuration fro
 cp app/google-services.json.example app/google-services.json
 ```
 
-Replace the placeholder values with your Firebase project configuration.
-
-Run the test suite, lint, and release build:
+Replace the placeholder values with your Firebase project configuration, then run:
 
 ```bash
 ./gradlew test lint bundleRelease
 ```
 
-The release bundle is written to:
+The release bundle is written to `app/build/outputs/bundle/release/app-release.aab`.
 
-```text
-app/build/outputs/bundle/release/app-release.aab
-```
+## CI/CD pipeline
 
-## Release automation
+GitHub Actions provides checks, tester distribution, releases, and website deployment:
 
-GitHub Actions handles release checks, Android App Bundle builds, Google Play uploads, and website deployment.
+1. **Release Readiness** (`release-readiness.yml`) can be run manually. It restores a safe Firebase template when no secret is supplied, runs unit tests and lint, packages an unsigned release APK, and uploads lint reports and the APK as artifacts.
+2. **Test distribution** (`android-build-distribution.yml`) runs when the `test` tag is pushed. It increments the patch version, builds a debug APK, sends it to Firebase App Distribution for the `main-testers` group, and attaches the APK to the `test` GitHub prerelease.
+3. **Google Play Release** (`google-play-release.yml`) runs manually or for `release`/`v*` tags. It restores signing material from GitHub secrets, verifies tests and lint, builds signed APK/AAB files, attaches them to the GitHub Release, and uploads the AAB to the selected Play track. Production completion is intentionally blocked in the workflow.
+4. **Website deployment** (`deploy-website-ftp.yml`) runs manually or for `website-v*`, `website/*`, and `website-*` tags. It verifies the static site, then deploys `website/` over FTP.
 
-- `.github/workflows/release-readiness.yml` — tests, lint, and build checks
-- `.github/workflows/google-play-release.yml` — signed Play releases
-- `.github/workflows/deploy-website-ftp.yml` — website deployment
-- `docs/release-automation.md` — required secrets and release steps
+Release credentials belong in GitHub Actions secrets. Never commit Firebase configuration, keystores, service-account files, tokens, or local properties. See [`docs/release-automation.md`](docs/release-automation.md) for the secret list and release procedure.
 
-Tagged builds are also available directly from GitHub Releases. Test builds are published as prerelease APKs; tagged release builds include the signed APK and AAB.
+## Assets
 
-Sensitive files and credentials belong in GitHub Actions secrets. Never commit Firebase configuration, keystores, service-account files, tokens, or local properties.
+- [`store-assets/google-play/`](store-assets/google-play/) — app icon, feature graphic, store screenshots, and contact sheet.
+- [`website/screenshots/`](website/screenshots/) — website screenshots, including framed README images.
+- [`tools/generate_store_graphics.py`](tools/generate_store_graphics.py) — generates store graphics.
+- [`tools/generate_framed_screenshots.py`](tools/generate_framed_screenshots.py) — creates framed screenshots for the website and README.
+
+## Privacy
+
+Kern does not host your documents or require an account. You choose where your files are stored. Kern uses Firebase Analytics and Crashlytics; its own analytics events do not include document titles, document text, or file paths. See the [privacy policy](https://kern.attach.design/privacy.html).
 
 ## Contributing
 
 Start with a focused issue or pull request. Good first contributions include bug fixes, documentation, tests, accessibility improvements, and release hardening.
 
-Before opening a pull request, run:
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow, and [`contributor-guides/`](contributor-guides/) for the shared design, product, coding, and web standards.
 
-```bash
-./gradlew test lint bundleRelease
-```
+## Project status
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for architecture and workflow rules.
+Kern is in active development. The Android app and website are being prepared for the first public Google Play release.
 
 ## Security
 
-Do not report security vulnerabilities in public issues. Email [gary@attach.design](mailto:gary@attach.design) with the affected version, steps to reproduce, and possible impact.
-
-See [SECURITY.md](SECURITY.md) for the full reporting policy.
+Do not report security vulnerabilities in public issues. Email [gary@attach.design](mailto:gary@attach.design) with the affected version, steps to reproduce, and possible impact. See [`SECURITY.md`](SECURITY.md) for the reporting policy.
 
 ## License
 

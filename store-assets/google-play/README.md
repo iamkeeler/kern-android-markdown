@@ -26,7 +26,7 @@ Note: the Hermes Python/PIL environment is currently broken for image generation
 
 ## Visual system
 
-The graphics follow the Kern visual system from `design.md`:
+The graphics follow the Kern visual system from [`contributor-guides/design-guide.md`](../../contributor-guides/design-guide.md):
 
 - canvas: `#FCFBFA`
 - surface: `#F4F3F0`
