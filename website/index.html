@@ -7,7 +7,7 @@
   <meta name="description" content="Kern is an open-source Markdown editor for Android. Write, preview, and manage files from folders you choose.">
   <link rel="canonical" href="https://attach.design/kern/">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <meta name="theme-color" content="#FCFBFA">
+  <meta name="theme-color" content="#F7F3EB">
   <meta name="application-name" content="Kern">
   <meta name="robots" content="index, follow">
 
@@ -48,7 +48,7 @@
   <div class="site-header-wrapper" id="header-wrapper">
     <header class="site-header">
       <a class="brand" href="index.html" aria-label="Kern Home">
-        <span class="mark" aria-hidden="true">K</span>
+        <img class="mark" src="favicon.svg" alt="" aria-hidden="true">
         <span>Kern</span>
       </a>
 
@@ -84,14 +84,21 @@
         <p class="eyebrow" data-reveal data-reveal-delay="100">Open source</p>
         <h1 data-reveal data-reveal-delay="200">An Android Markdown editor with live preview.</h1>
         <p class="lede" data-reveal data-reveal-delay="300">Write and edit Markdown on Android. Kern shows formatted text as you type and opens files from folders you choose.</p>
-        <div class="actions" data-reveal data-reveal-delay="400">
-          <a class="button primary" href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">View on GitHub</a>
-          <a class="button secondary" href="https://play.google.com/store/apps/details?id=com.attachdesign.kern" target="_blank" rel="noopener">Get it on Google Play</a>
+        <div class="actions-home" id="actions-home">
+          <div class="actions" id="persistent-actions" data-reveal data-reveal-delay="400">
+            <a class="button primary" href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">View on GitHub</a>
+            <a class="button secondary" href="https://play.google.com/store/apps/details?id=com.attachdesign.kern" target="_blank" rel="noopener">Get it on Google Play</a>
+            <button class="actions-collapse" id="actions-collapse" type="button" aria-label="Collapse download actions" aria-expanded="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m7 10 5 5 5-5"></path>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="hero-device" data-reveal data-reveal-delay="200">
-        <div class="device-bezel compact-bezel">
+        <div class="device-bezel">
           <div class="device-notch"></div>
           <div class="device-screen">
             <img src="screenshots/Screenshot_20260725_075131.png" alt="Kern editing Welcome.md with rendered Markdown formatting and the live formatting toolbar">
@@ -100,98 +107,81 @@
       </div>
     </section>
 
-    <section id="overview" class="features section-shell" aria-labelledby="overview-title">
-      <div class="section-heading" data-reveal>
-        <p class="eyebrow">What Kern does</p>
-        <h2 id="overview-title">Write clearly. Keep your files close.</h2>
-      </div>
-      <div class="feature-list">
-        <div class="feature-item" data-reveal data-reveal-delay="100">
-          <h3>Live Markdown preview</h3>
-          <p>Write in Markdown and see headings, emphasis, lists, and code take shape as you type.</p>
+    <section id="overview" class="features" aria-labelledby="overview-title">
+      <div class="section-shell">
+        <div class="section-heading" data-reveal>
+          <p class="eyebrow">What Kern does</p>
+          <h2 id="overview-title">Write clearly. Keep your files close.</h2>
         </div>
-        <div class="feature-item" data-reveal data-reveal-delay="200">
-          <h3>Local files</h3>
-          <p>Open and edit files from folders you select through Android’s file access system.</p>
-        </div>
-        <div class="feature-item" data-reveal data-reveal-delay="300">
-          <h3>Open source</h3>
-          <p>Read the code, follow development, and send feedback on GitHub.</p>
+        <div class="feature-list">
+          <div class="feature-item" data-reveal data-reveal-delay="100">
+            <h3>Live Markdown preview</h3>
+            <p>Write in Markdown and see headings, emphasis, lists, and code take shape as you type.</p>
+          </div>
+          <div class="feature-item" data-reveal data-reveal-delay="200">
+            <h3>Local files</h3>
+            <p>Open and edit files from folders you select through Android’s file access system.</p>
+          </div>
+          <div class="feature-item" data-reveal data-reveal-delay="300">
+            <h3>Open source</h3>
+            <p>Read the code, follow development, and send feedback on GitHub.</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="screenshots-section section-shell" aria-labelledby="screenshots-title">
+    <section class="details-section section-shell" aria-labelledby="details-title">
       <div class="section-heading" data-reveal>
         <p class="eyebrow">In the app</p>
-        <h2 id="screenshots-title">A focused workspace, wherever you write.</h2>
+        <h2 id="details-title">A focused workspace, wherever you write.</h2>
       </div>
-      <div class="screenshots-grid">
-        <article class="screenshot-card" data-reveal data-reveal-delay="100">
-          <div class="screenshot-device">
-            <div class="device-bezel">
-              <div class="device-notch"></div>
-              <div class="device-screen">
-                <img src="screenshots/framed/phone-02-workspace-1080x1920.png" alt="Kern workspace with files and an open Markdown document" loading="lazy">
-              </div>
-            </div>
-          </div>
+      <div class="details-grid">
+        <article class="detail-card" data-reveal data-reveal-delay="100">
+          <p class="detail-number">01</p>
           <h3>Files and editor, kept close.</h3>
           <p>Move between project files and your document without leaving the writing surface.</p>
         </article>
 
-        <article class="screenshot-card" data-reveal data-reveal-delay="200">
-          <div class="screenshot-device">
-            <div class="device-bezel">
-              <div class="device-notch"></div>
-              <div class="device-screen">
-                <img src="screenshots/framed/phone-03-hemingway-1080x1920.png" alt="Kern document with readability highlights" loading="lazy">
-              </div>
-            </div>
-          </div>
+        <article class="detail-card" data-reveal data-reveal-delay="200">
+          <p class="detail-number">02</p>
           <h3>Readable by design.</h3>
           <p>See the shape of your writing with calm typography and useful readability signals.</p>
         </article>
 
-        <article class="screenshot-card" data-reveal data-reveal-delay="300">
-          <div class="screenshot-device">
-            <div class="device-bezel">
-              <div class="device-notch"></div>
-              <div class="device-screen">
-                <img src="screenshots/framed/phone-04-themes-1080x1920.png" alt="Kern theme and typography controls" loading="lazy">
-              </div>
-            </div>
-          </div>
+        <article class="detail-card" data-reveal data-reveal-delay="300">
+          <p class="detail-number">03</p>
           <h3>Make the page yours.</h3>
           <p>Adjust themes and typography until the document feels right for the way you work.</p>
         </article>
       </div>
     </section>
 
-    <section class="syntax-demo section-shell" aria-labelledby="syntax-demo-title">
-      <div class="section-heading" data-reveal>
-        <p class="eyebrow">Live review</p>
-        <h2 id="syntax-demo-title">See the Markdown behind the formatting.</h2>
-        <p class="section-subtext">Move over the preview to reveal the source syntax in place, just like Kern on Android.</p>
-      </div>
-
-      <div class="syntax-demo-frame" data-reveal data-reveal-delay="100">
-        <div class="syntax-demo-bar">
-          <span class="syntax-demo-file">Welcome.md</span>
-          <span class="syntax-demo-hint">Hover or focus any line</span>
+    <section class="syntax-demo" aria-labelledby="syntax-demo-title">
+      <div class="section-shell">
+        <div class="section-heading" data-reveal>
+          <p class="eyebrow">Live review</p>
+          <h2 id="syntax-demo-title">See the Markdown behind the formatting.</h2>
+          <p class="section-subtext">Move over the preview to reveal the source syntax in place, just like Kern on Android.</p>
         </div>
-        <article class="syntax-preview" aria-label="Interactive Markdown preview">
-          <h1 class="markdown-hover-target" data-markdown-source="# Welcome to Kern" tabindex="0">Welcome to Kern</h1>
-          <p class="markdown-hover-target" data-markdown-source="Write in **Markdown** and see the result as you go." tabindex="0">Write in <strong>Markdown</strong> and see the result as you go.</p>
-          <h2 class="markdown-hover-target" data-markdown-source="## A calm writing space" tabindex="0">A calm writing space</h2>
-          <ul>
-            <li class="markdown-hover-target" data-markdown-source="- Local files, kept close" tabindex="0">Local files, kept close</li>
-            <li class="markdown-hover-target" data-markdown-source="- Live preview while you write" tabindex="0">Live preview while you write</li>
-            <li class="markdown-hover-target" data-markdown-source="- Markdown syntax when you need it" tabindex="0">Markdown syntax when you need it</li>
-          </ul>
-          <blockquote class="markdown-hover-target" data-markdown-source="> Write clearly. Keep your files close." tabindex="0">Write clearly. Keep your files close.</blockquote>
-          <p class="markdown-hover-target" data-markdown-source="[Read more about Kern](https://github.com/iamkeeler/kern-android-markdown)" tabindex="0"><a href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">Read more about Kern</a></p>
-        </article>
+
+        <div class="syntax-demo-frame" data-reveal data-reveal-delay="100">
+          <div class="syntax-demo-bar">
+            <span class="syntax-demo-file">Welcome.md</span>
+            <span class="syntax-demo-hint">Hover or focus any line</span>
+          </div>
+          <article class="syntax-preview" aria-label="Interactive Markdown preview">
+            <h1 class="markdown-hover-target" data-markdown-source="# Welcome to Kern" tabindex="0">Welcome to Kern</h1>
+            <p class="markdown-hover-target" data-markdown-source="Write in **Markdown** and see the result as you go." tabindex="0">Write in <strong>Markdown</strong> and see the result as you go.</p>
+            <h2 class="markdown-hover-target" data-markdown-source="## A calm writing space" tabindex="0">A calm writing space</h2>
+            <ul>
+              <li class="markdown-hover-target" data-markdown-source="- Local files, kept close" tabindex="0">Local files, kept close</li>
+              <li class="markdown-hover-target" data-markdown-source="- Live preview while you write" tabindex="0">Live preview while you write</li>
+              <li class="markdown-hover-target" data-markdown-source="- Markdown syntax when you need it" tabindex="0">Markdown syntax when you need it</li>
+            </ul>
+            <blockquote class="markdown-hover-target" data-markdown-source="> Write clearly. Keep your files close." tabindex="0">Write clearly. Keep your files close.</blockquote>
+            <p class="markdown-hover-target" data-markdown-source="[Read more about Kern](https://github.com/iamkeeler/kern-android-markdown)" tabindex="0"><a href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">Read more about Kern</a></p>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -205,20 +195,25 @@
     </section>
 
     <section class="contact section-shell" aria-labelledby="contact-title" data-reveal>
-      <p class="eyebrow">Support</p>
-      <h2 id="contact-title">Questions or feedback?</h2>
-      <p class="markdown-hover-ignore">Email <a class="text-link" href="mailto:gary@attach.design">gary@attach.design</a> or open an issue on <a class="text-link" href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">GitHub</a>.</p>
+      <div class="contact-copy">
+        <p class="eyebrow">Support</p>
+        <h2 id="contact-title">Questions or feedback?</h2>
+        <p class="markdown-hover-ignore">Email <a class="text-link" href="mailto:gary@attach.design">gary@attach.design</a> or open an issue on <a class="text-link" href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">GitHub</a>.</p>
+      </div>
+      <div class="actions-anchor" id="actions-anchor"></div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <span>© 2026 Gary Keeler</span>
-    <span>
-      <a href="index.html">Home</a> ·
-      <a href="privacy.html">Privacy</a> ·
-      <a href="contact.html">Contact</a> ·
-      <a href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">GitHub</a>
-    </span>
+    <div class="site-footer-inner section-shell">
+      <span>© 2026 Gary Keeler</span>
+      <span>
+        <a href="index.html">Home</a> ·
+        <a href="privacy.html">Privacy</a> ·
+        <a href="contact.html">Contact</a> ·
+        <a href="https://github.com/iamkeeler/kern-android-markdown" target="_blank" rel="noopener">GitHub</a>
+      </span>
+    </div>
   </footer>
 
   <script>
@@ -261,6 +256,96 @@
     }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
 
     document.querySelectorAll('[data-reveal]').forEach((element) => revealObserver.observe(element));
+
+    const heroDevice = document.querySelector('.hero-device');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const persistentActions = document.getElementById('persistent-actions');
+    const actionsCollapse = document.getElementById('actions-collapse');
+    const actionsHome = document.getElementById('actions-home');
+    const actionsAnchor = document.getElementById('actions-anchor');
+    let actionsState = 'home';
+    let actionsAnimation;
+    let actionsFrame;
+    let parallaxFrame;
+
+    function moveActions(nextState) {
+      if (!persistentActions || nextState === actionsState) return;
+      const previousState = actionsState;
+      const first = persistentActions.getBoundingClientRect();
+
+      if (nextState === 'docked') {
+        actionsAnchor.append(persistentActions);
+        persistentActions.classList.remove('is-floating');
+        persistentActions.classList.add('is-docked');
+      } else if (nextState === 'floating') {
+        document.body.append(persistentActions);
+        persistentActions.classList.add('is-floating');
+        persistentActions.classList.remove('is-docked');
+      } else {
+        actionsHome.append(persistentActions);
+        persistentActions.classList.remove('is-floating');
+        persistentActions.classList.remove('is-docked');
+      }
+
+      actionsState = nextState;
+      const last = persistentActions.getBoundingClientRect();
+
+      if (actionsAnimation) actionsAnimation.cancel();
+      if (reduceMotion.matches || previousState === 'docked' || nextState === 'docked') return;
+
+      const deltaX = first.left - last.left;
+      const deltaY = first.top - last.top;
+      actionsAnimation = persistentActions.animate([
+        { transform: `translate(${deltaX}px, ${deltaY}px)` },
+        { transform: 'translate(0, 0)' }
+      ], {
+        duration: 920,
+        easing: 'cubic-bezier(0.22, 0.62, 0.24, 1)',
+        fill: 'none'
+      });
+    }
+
+    function updatePersistentActions() {
+      actionsFrame = null;
+      if (!persistentActions || !actionsAnchor) return;
+
+      const anchorTop = actionsAnchor.getBoundingClientRect().top;
+      const dockingLine = window.innerHeight - persistentActions.offsetHeight - 24;
+
+      if (anchorTop <= dockingLine) moveActions('docked');
+      else if (window.scrollY > 80) moveActions('floating');
+      else moveActions('home');
+    }
+
+    function updateHeroParallax() {
+      if (!heroDevice) return;
+      if (reduceMotion.matches || window.matchMedia('(max-width: 880px)').matches) {
+        heroDevice.style.setProperty('--hero-parallax', '0px');
+        return;
+      }
+      const offset = Math.max(-16, Math.min(0, -window.scrollY * 0.04));
+      heroDevice.style.setProperty('--hero-parallax', `${offset}px`);
+      parallaxFrame = null;
+    }
+
+    window.addEventListener('scroll', () => {
+      if (!parallaxFrame) parallaxFrame = window.requestAnimationFrame(updateHeroParallax);
+      if (!actionsFrame) actionsFrame = window.requestAnimationFrame(updatePersistentActions);
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+      if (!actionsFrame) actionsFrame = window.requestAnimationFrame(updatePersistentActions);
+    });
+
+    actionsCollapse.addEventListener('click', () => {
+      const collapsed = persistentActions.classList.toggle('is-collapsed');
+      actionsCollapse.setAttribute('aria-expanded', String(!collapsed));
+      actionsCollapse.setAttribute('aria-label', collapsed ? 'Expand download actions' : 'Collapse download actions');
+      if (!actionsFrame) actionsFrame = window.requestAnimationFrame(updatePersistentActions);
+    });
+
+    updateHeroParallax();
+    updatePersistentActions();
 
   </script>
   <script src="markdown-hover.js"></script>
