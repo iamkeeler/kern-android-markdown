@@ -42,6 +42,7 @@ jobs:
             --json_key_data "$SUPPLY_JSON_KEY_DATA" \
             --metadata_path fastlane/metadata/android \
             --track internal \
+            --version_code "$(grep '^version.code=' gradle.properties | cut -d= -f2)" \
             --release_status draft \
             --skip_upload_aab true \
             --skip_upload_apk true \
