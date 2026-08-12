@@ -1,0 +1,48 @@
+name: Google Play Listing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  listing:
+    name: Upload Play listing metadata and graphics
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Prepare Play listing graphics
+        run: |
+          listing_dir="fastlane/metadata/android/en-US/images"
+          mkdir -p "$listing_dir/phoneScreenshots"
+          cp store-assets/google-play/app-icon-512.png "$listing_dir/icon.png"
+          cp store-assets/google-play/feature-graphic-1024x500.png "$listing_dir/featureGraphic.png"
+          cp store-assets/google-play/phone-01-local-markdown-1080x1920.png "$listing_dir/phoneScreenshots/01-local-markdown.png"
+          cp store-assets/google-play/phone-02-focused-editor-1080x1920.png "$listing_dir/phoneScreenshots/02-focused-editor.png"
+          cp store-assets/google-play/phone-03-file-tree-1080x1920.png "$listing_dir/phoneScreenshots/03-file-tree.png"
+          cp store-assets/google-play/phone-04-privacy-1080x1920.png "$listing_dir/phoneScreenshots/04-privacy.png"
+
+      - name: Upload listing to Google Play as a draft
+        env:
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          bundle exec fastlane supply \
+            --package_name com.attachdesign.kern \
+            --json_key_data "$SUPPLY_JSON_KEY_DATA" \
+            --metadata_path fastlane/metadata/android \
+            --track internal \
+            --release_status draft \
+            --skip_upload_aab true \
+            --skip_upload_apk true \
+            --skip_upload_changelogs true
