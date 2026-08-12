@@ -17,16 +17,21 @@ Firebase Analytics will remain enabled for launch analytics. The Play Data Safet
 
 The source app does not declare dangerous runtime permissions such as camera, microphone, contacts, location, or storage permissions.
 
-The release merged manifest currently includes Firebase Analytics / Google Play Services permissions and services from dependencies:
+The release merged manifest includes the following permissions required by the app and its Firebase telemetry dependencies:
 
 ```text
 android.permission.INTERNET
 android.permission.ACCESS_NETWORK_STATE
 android.permission.WAKE_LOCK
-com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE
-com.google.android.gms.permission.AD_ID
-android.permission.ACCESS_ADSERVICES_ATTRIBUTION
-android.permission.ACCESS_ADSERVICES_AD_ID
+```
+
+Firebase Analytics transitively declares advertising and install-attribution permissions, but the app removes them during manifest merging because Kern is not an advertising app:
+
+```text
+com.google.android.gms.permission.AD_ID          removed
+android.permission.ACCESS_ADSERVICES_ATTRIBUTION removed
+android.permission.ACCESS_ADSERVICES_AD_ID       removed
+com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE removed
 ```
 
 `app/build.gradle.kts` includes:
@@ -54,7 +59,7 @@ Check the exact Firebase configuration before final submission, but likely categ
 |---|---:|---|
 | App activity | Yes | App interactions / events if Firebase Analytics is active |
 | App info and performance | Yes | Crash/performance/diagnostic-adjacent technical data may be collected by Google SDKs depending on enabled services |
-| Device or other IDs | Yes | Merged manifest includes `AD_ID` / ad services ID permissions |
+| Device or other IDs | Review Firebase's actual collection/configuration | The release manifest does not declare advertising ID or AdServices ID permissions; Firebase may still use app/device identifiers for telemetry |
 | Files and docs | No | Kern is local-first; do not upload user markdown content unless a future feature changes this |
 | Location | No | No location permission found |
 | Contacts | No | No contacts permission found |
@@ -89,15 +94,18 @@ If Firebase Analytics is enabled by default with no in-app opt-out, answer as **
 cat app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml
 ```
 
-Then check the merged manifest for:
+Then check the merged manifest for the retained permissions and confirm the advertising-related permissions are absent:
 
 ```text
 uses-permission
 firebase
-analytics
-AD_ID
+ACCESS_NETWORK_STATE
+WAKE_LOCK
+AD_ID (must be absent)
+ACCESS_ADSERVICES (must be absent)
+BIND_GET_INSTALL_REFERRER_SERVICE (must be absent)
 ```
 
 ## Current recommendation
 
-Keep Firebase Analytics for launch analytics, disclose the collection in Play Data Safety, and keep the privacy copy clear that analytics does not upload markdown document contents.
+Keep Firebase Analytics for launch analytics, disclose the collection in Play Data Safety, and keep the privacy copy clear that analytics does not upload markdown document contents. Do not answer the Play Console advertising ID question "Yes" based solely on Firebase's transitive manifest declaration; verify the final merged release manifest first.
