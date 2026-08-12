@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate draft Google Play store graphics for Kern.
+"""Generate Google Play graphics from Kern's real app assets.
 
-Outputs are intentionally static and brand-system based so they can be
-reviewed before final device screenshots are captured.
+Store screenshots and the feature graphic use only captured app UI. The Play
+icon is derived from the launcher artwork shipped in the Android application.
 """
 
 from pathlib import Path
@@ -164,16 +164,26 @@ def make_feature():
     w,h = 1024,500
     img = Image.new("RGBA", (w,h), CANVAS)
     d = ImageDraw.Draw(img)
-    draw_grid(img,w,h)
-    kern_mark(d, 86, 78, 74)
-    d.text((140,52), "Kern", font=BOLD(34), fill=INK)
-    d.text((72,142), "MARKDOWN FOR ANDROID", font=BOLD(18), fill=MUTED, spacing=4)
-    d.text((72,184), "A calm workspace", font=BOLD(58), fill=INK)
-    d.text((72,252), "for local writing.", font=BOLD(58), fill=INK)
-    draw_wrapped(d, "Read, organize, and edit markdown files with a quiet document-first Android interface.", (74,338), SANS(24), MUTED, 420, 34)
-    rounded(d, (74,420,245,466), 23, ACCENT)
-    d.text((101,432), "Local-first", font=BOLD(20), fill=WHITE)
-    editor_card(img, 590, 52, 360, 392, "single")
+    icon = launcher_icon(112)
+    img.alpha_composite(icon, (64, 62))
+    d.text((64, 210), "Kern", font=SERIF_BOLD(68), fill=INK)
+    d.text((66, 296), "Markdown that", font=BOLD(42), fill=INK)
+    d.text((66, 348), "stays readable.", font=BOLD(42), fill=INK)
+
+    captures = [
+        ROOT / "website/screenshots/Screenshot_20260725_075052.png",
+        ROOT / "website/screenshots/Screenshot_20260725_075131.png",
+        ROOT / "website/screenshots/Screenshot_20260725_075141.png",
+    ]
+    for index, source in enumerate(captures):
+        shot = crop_phone_capture(source).resize((202, 359), Image.Resampling.LANCZOS)
+        mask = Image.new("L", shot.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, shot.width, shot.height), 22, fill=255)
+        shot.putalpha(mask)
+        x = 400 + index * 194
+        y = 70 + (index % 2) * 28
+        add_shadow(img, (x + 8, y + 12, x + shot.width + 8, y + shot.height + 12), 22, 18, 34)
+        img.alpha_composite(shot, (x, y))
     img.convert("RGB").save(OUT / "feature-graphic-1024x500.png", quality=95)
 
 def phone_frame(base, x, y, w, h, title, subtitle, body_lines=None, split=False):
@@ -226,57 +236,76 @@ def make_screenshot(path, eyebrow, headline, body, phone_mode, body_lines=None, 
     img.convert("RGB").save(OUT / path, quality=95)
 
 def make_screenshots():
-    make_screenshot(
-        "phone-01-local-markdown-1080x1920.png",
-        "Local markdown",
-        "Write where\nyour files live.",
-        "Open project folders and keep your markdown workspace grounded in Android file flows.",
-        ("Project notes", "notes › draft.md"),
-        body_lines=[("# Draft", "h"), ("Local files stay local.", "p"), ("- outline\n- research\n- next section", "code")]
-    )
-    make_screenshot(
-        "phone-02-focused-editor-1080x1920.png",
-        "Focused editor",
-        "Quiet text,\nclear structure.",
-        "A restrained writing surface keeps typography and document rhythm in front.",
-        ("Editor", "draft.md"),
-        body_lines=[("Quiet text, fast structure", "h"), ("Kern treats markdown as a working document, not a formatting trick.", "p"), ("## Next section", "code")]
-    )
-    make_screenshot(
-        "phone-03-file-tree-1080x1920.png",
-        "Project view",
-        "Files and editor,\nkept close.",
-        "Move between documents without turning your notes into a heavy cloud workspace.",
-        ("Workspace", "Project › notes"),
-        split=True
-    )
-    make_screenshot(
-        "phone-04-privacy-1080x1920.png",
-        "Privacy posture",
-        "Your writing\nstays yours.",
-        "Kern is local-first. Firebase Analytics is used for launch analytics, not for uploading markdown contents.",
-        ("Privacy", "Local-first workspace"),
-        body_lines=[("Local documents", "h"), ("Markdown content is not uploaded to Kern-operated servers.", "p"), ("analytics ≠ document upload", "code")]
-    )
+    captures = [
+        ("phone-01-local-markdown-1080x1920.png", "Screenshot_20260725_075052.png"),
+        ("phone-02-focused-editor-1080x1920.png", "Screenshot_20260725_075131.png"),
+        ("phone-03-file-tree-1080x1920.png", "Screenshot_20260725_075141.png"),
+        ("phone-04-privacy-1080x1920.png", "Screenshot_20260725_075155.png"),
+    ]
+    source_dir = ROOT / "website" / "screenshots"
+    for destination, source in captures:
+        crop_phone_capture(source_dir / source).convert("RGB").save(OUT / destination, optimize=True)
 
 def make_icon():
-    size=512
-    img=Image.new("RGBA",(size,size),CREAM)
-    d=ImageDraw.Draw(img)
-    kern_mark(d,size//2,size//2,360)
-    img.convert("RGB").save(OUT / "app-icon-512.png", quality=95)
+    launcher_icon(512).save(OUT / "app-icon-512.png", optimize=True)
+
+def launcher_icon(size):
+    """Return the exact launcher artwork shipped with the app, resized."""
+    source = Image.open(ROOT / "app/src/main/res/drawable/ic_launcher_full_fg.png").convert("RGBA")
+    alpha = source.getchannel("A")
+    bounds = alpha.getbbox()
+    if not bounds:
+        raise ValueError("Launcher artwork has no visible pixels")
+    return source.crop(bounds).resize((size, size), Image.Resampling.LANCZOS)
+
+def crop_phone_capture(path):
+    """Remove emulator chrome while preserving only captured in-app pixels."""
+    source = Image.open(path).convert("RGBA")
+    if source.size != (1080, 2400):
+        raise ValueError(f"Unexpected phone capture size for {path}: {source.size}")
+    return source.crop((0, 120, 1080, 2040))
+
+def make_contact_sheet():
+    assets = [
+        OUT / "app-icon-512.png",
+        OUT / "feature-graphic-1024x500.png",
+        OUT / "phone-01-local-markdown-1080x1920.png",
+        OUT / "phone-02-focused-editor-1080x1920.png",
+        OUT / "phone-03-file-tree-1080x1920.png",
+        OUT / "phone-04-privacy-1080x1920.png",
+    ]
+    sheet = Image.new("RGB", (1280, 1180), "#E8E6E1")
+    icon = Image.open(assets[0]).convert("RGB").resize((240, 240), Image.Resampling.LANCZOS)
+    feature = Image.open(assets[1]).convert("RGB").resize((512, 250), Image.Resampling.LANCZOS)
+    sheet.paste(icon, (32, 32))
+    sheet.paste(feature, (304, 32))
+    for index, path in enumerate(assets[2:]):
+        shot = Image.open(path).convert("RGB").resize((270, 480), Image.Resampling.LANCZOS)
+        sheet.paste(shot, (32 + index * 302, 330))
+    sheet.save(OUT / "contact-sheet.png", optimize=True)
 
 def make_social_preview():
     w,h=1200,630
     img=Image.new("RGBA",(w,h),CANVAS)
     d=ImageDraw.Draw(img)
-    draw_grid(img,w,h,70)
-    kern_mark(d, 105, 105, 88)
-    d.text((168,70), "Kern", font=BOLD(48), fill=INK)
-    d.text((90,198), "A calm markdown workspace", font=BOLD(72), fill=INK)
-    d.text((90,286), "for Android.", font=BOLD(72), fill=INK)
-    draw_wrapped(d, "Local files, readable typography, and a quiet editor for focused writing.", (94,410), SANS(32), MUTED, 710, 44)
-    editor_card(img, 820, 118, 300, 360, "single")
+    img.alpha_composite(launcher_icon(116), (72, 68))
+    d.text((72, 234), "Kern", font=SERIF_BOLD(76), fill=INK)
+    d.text((74, 334), "Markdown that", font=BOLD(48), fill=INK)
+    d.text((74, 392), "stays readable.", font=BOLD(48), fill=INK)
+    captures = [
+        ROOT / "website/screenshots/Screenshot_20260725_075052.png",
+        ROOT / "website/screenshots/Screenshot_20260725_075131.png",
+        ROOT / "website/screenshots/Screenshot_20260725_075141.png",
+    ]
+    for index, source in enumerate(captures):
+        shot = crop_phone_capture(source).resize((236, 420), Image.Resampling.LANCZOS)
+        mask = Image.new("L", shot.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, shot.width, shot.height), 24, fill=255)
+        shot.putalpha(mask)
+        x = 480 + index * 220
+        y = 74 + (index % 2) * 34
+        add_shadow(img, (x + 8, y + 12, x + shot.width + 8, y + shot.height + 12), 24, 20, 34)
+        img.alpha_composite(shot, (x, y))
     img.convert("RGB").save(OUT / "social-preview-1200x630.png", quality=95)
 
 if __name__ == "__main__":
@@ -284,6 +313,7 @@ if __name__ == "__main__":
     make_icon()
     make_social_preview()
     make_screenshots()
+    make_contact_sheet()
     print(f"Generated assets in {OUT}")
     for p in sorted(OUT.glob("*.png")):
         im=Image.open(p)
