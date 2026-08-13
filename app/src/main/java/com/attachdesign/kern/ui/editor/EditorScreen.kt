@@ -341,33 +341,7 @@ fun EditorScreen(
                                 onMinimizeClick = { isToolbarMinimized = true },
                                 onFormat = { p, s ->
                                     if (activeIndex == -1) return@FloatingFormattingToolbar
-                                    val delimiterStart = p
-                                    val delimiterEnd = s
-                                    val value = textFieldValues[activeIndex] ?: return@FloatingFormattingToolbar
-                                    val selStart = value.selection.start
-                                    val selEnd = value.selection.end
-                                    val text = value.text
-
-                                    val selectedText = text.substring(selStart, selEnd)
-
-                                    if (selStart == selEnd && text.substring(selStart).startsWith(delimiterEnd)) {
-                                        // The user is at the end of the formatting, tapping the format button again should just jump the cursor past the closing delimiter
-                                        viewModel.updateParagraph(activeIndex, TextFieldValue(text, androidx.compose.ui.text.TextRange(selStart + delimiterEnd.length)))
-                                        return@FloatingFormattingToolbar
-                                    }
-
-                                    val formatted = delimiterStart + selectedText + delimiterEnd
-                                    val newText = text.substring(0, selStart) + formatted + text.substring(selEnd)
-
-                                    val newSelection = if (uiState.stickySelection && selStart != selEnd) {
-                                        androidx.compose.ui.text.TextRange(selStart + delimiterStart.length, selStart + delimiterStart.length + selectedText.length)
-                                    } else if (selStart == selEnd) {
-                                        androidx.compose.ui.text.TextRange(selStart + delimiterStart.length)
-                                    } else {
-                                        androidx.compose.ui.text.TextRange(selStart + formatted.length)
-                                    }
-
-                                    viewModel.updateParagraph(activeIndex, TextFieldValue(newText, newSelection))
+                                    viewModel.formatParagraph(activeIndex, p, s)
                                 }
                             )
                         }
