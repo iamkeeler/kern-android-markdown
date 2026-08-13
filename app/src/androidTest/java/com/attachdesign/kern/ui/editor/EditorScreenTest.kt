@@ -345,4 +345,42 @@ class EditorScreenTest {
     val boundsAfterFocus = editor.fetchSemanticsNode().boundsInRoot
     org.junit.Assert.assertEquals(boundsBeforeFocus.top, boundsAfterFocus.top, 1f)
   }
+
+  @Test
+  fun testTypingStressWithRichBlocksPersistsExactText() {
+    val source = buildString {
+      append("![Diagram](https://example.com/diagram.png)\n\n")
+      append("| Name | Value |\n")
+      append("| --- | --- |\n")
+      append("| Alpha | One |\n\n")
+      append("Final paragraph")
+    }
+    val typed = "\n\n" + (1..60).joinToString(" ") { "word$it" } + " 日本語 😀"
+    runBlocking { storageManager.writeFile(project, "test_file.md", source) }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("Final paragraph")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action(source.length, source.length, false)
+    }
+    editor.performTextInput(typed)
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      viewModel.documentTextFieldState.text.toString() == source + typed
+    }
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      runBlocking { storageManager.readFile(project, file.relativePath) } == source + typed
+    }
+    editor.assertIsDisplayed()
+  }
 }

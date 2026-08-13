@@ -13,11 +13,18 @@ This document records user-visible editor behavior that must survive refactors. 
 
 ### Selection crosses paragraph boundaries
 
-- A long press in rendered document mode must use Android's standard selection handles and allow expansion into adjacent paragraphs.
+- Active editing uses one document-level state-based `BasicTextField` and `TextFieldState` so Android's standard selection handles can expand across paragraphs.
 - Copying a selection must preserve document paragraph boundaries without introducing extra blank lines.
 - Do not put a `LazyColumn` or other virtualized layout inside the document `SelectionContainer`; selection behavior for uncomposed text is undefined.
-- A future editable-document architecture must use one document-level text input state so selection can cross paragraph boundaries while editing. Separate `BasicTextField` instances cannot provide native cross-field selection.
 - Regression coverage: `EditorScreenTest.testCrossParagraphSelectionCopiesParagraphBoundary`.
+
+### Document text is the source of truth
+
+- `TextFieldState.text` contains the exact Markdown source and owns selection and IME composition while editing.
+- Parsed paragraphs and presentation ranges are derived, disposable indexes; they must never be joined to overwrite newer field text.
+- `OutputTransformation` may change styling and presentation but must not change persisted Markdown.
+- Images and tables remain visible as Markdown source in the editable field because native text fields cannot host arbitrary block composables without replacing native selection behavior.
+- Regression coverage: `MarkdownDocumentScannerTest`, `MarkdownDocumentPresentationPlannerTest`, and `EditorScreenTest.testTypingStressWithRichBlocksPersistsExactText`.
 
 ### Focus preserves the viewport
 
@@ -29,8 +36,8 @@ This document records user-visible editor behavior that must survive refactors. 
 
 ## Preferred direction
 
-- Prefer Material 3 `TextField` and state-based `TextFieldState` APIs. Keep `BasicTextField` only where the inline-reveal presentation demonstrably requires the undecorated primitive.
-- Move toward one document-level editable text state with an `OutputTransformation` or equivalent presentation layer. Paragraph parsing may remain incremental, but it must not divide native selection and IME composition into unrelated fields.
+- Prefer state-based `TextFieldState`. The editor uses `BasicTextField` because the writing canvas intentionally does not use Material filled or outlined field decorations.
+- Keep one document-level editable state with a parser-backed `OutputTransformation`. Paragraph parsing may remain incremental, but it must not divide native selection and IME composition into unrelated fields.
 - Prefer standard Compose selection, focus, keyboard, accessibility, and gesture behavior. Document and test every unavoidable customization.
 
 ## Regression record format
