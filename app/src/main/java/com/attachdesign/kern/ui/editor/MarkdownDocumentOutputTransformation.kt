@@ -56,7 +56,12 @@ class MarkdownDocumentOutputTransformation(
             MarkdownBlockType.HEADER_6 -> SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = bodySize * 1.15f)
             MarkdownBlockType.CODE_BLOCK -> SpanStyle(
                 fontFamily = FontFamily.Monospace,
+                fontSize = bodySize * 0.94f,
                 background = codeBackgroundColor
+            )
+            MarkdownBlockType.BLOCKQUOTE -> SpanStyle(
+                color = tokenColor,
+                fontStyle = FontStyle.Italic
             )
             else -> return
         }
@@ -74,6 +79,7 @@ class MarkdownDocumentOutputTransformation(
             MarkdownElementType.STRIKETHROUGH -> SpanStyle(textDecoration = TextDecoration.LineThrough)
             MarkdownElementType.INLINE_CODE -> SpanStyle(
                 fontFamily = FontFamily.Monospace,
+                fontSize = bodySize * 0.94f,
                 background = codeBackgroundColor
             )
             MarkdownElementType.LINK -> SpanStyle(

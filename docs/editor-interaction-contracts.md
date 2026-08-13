@@ -31,7 +31,7 @@ This document records user-visible editor behavior that must survive refactors. 
 - Tapping a visible paragraph must focus it without aligning it to the top or replacing the current scroll position.
 - Do not call `scrollToItem` merely because focus changed.
 - Do not request that an entire paragraph be brought into view on every text or selection update. Let the text field keep its cursor visible and use IME/window insets to reserve obscured space.
-- The floating formatting toolbar must be represented by bottom content space so the cursor can remain visible without forced document jumps.
+- The floating formatting toolbar is a compact, translucent overlay. Reserve only enough bottom content space for the cursor to remain visible; do not turn the toolbar into a full-width opaque bottom sheet.
 - Regression coverage: `EditorScreenTest.testFocusingVisibleParagraphPreservesViewport`.
 
 ## Preferred direction

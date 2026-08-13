@@ -611,7 +611,8 @@ private fun DocumentEditorField(
     val bottomPadding = if (isToolbarMinimized) {
         theme.dimensions.spacingMassive
     } else {
-        theme.dimensions.editorBottomPadding
+        // Leave only the space needed for the overlay so normal text remains visible behind it.
+        theme.dimensions.spacingTitan
     }
     val editorFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
@@ -1203,13 +1204,15 @@ fun FloatingFormattingToolbar(
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier.shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
+        modifier = modifier
+            .widthIn(max = 440.dp)
+            .shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
-                .background(theme.surface)
+                .background(theme.surface.copy(alpha = 0.88f))
                 .padding(vertical = theme.dimensions.elevationMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1344,7 +1347,7 @@ fun FloatingFormattingToolbar(
                         .width(24.dp)
                         .background(
                             androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                colors = listOf(Color.Transparent, theme.surface)
+                                colors = listOf(Color.Transparent, theme.surface.copy(alpha = 0.88f))
                             )
                         )
                 )
@@ -1352,7 +1355,7 @@ fun FloatingFormattingToolbar(
 
             Box(
                 modifier = Modifier
-                    .background(theme.surface)
+                    .background(theme.surface.copy(alpha = 0.88f))
                     .padding(end = theme.dimensions.spacingMedium, start = theme.dimensions.spacingSmall),
                 contentAlignment = Alignment.Center
             ) {
