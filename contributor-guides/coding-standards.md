@@ -19,6 +19,7 @@
 
 - Add or update unit tests for parser, storage, sync, metrics, and view-model behavior.
 - Add Compose/instrumented coverage when a user-facing interaction or layout contract changes.
+- For editor changes, preserve and update the contracts in `docs/editor-interaction-contracts.md` and run `EditorScreenTest` on an emulator.
 - Before opening a pull request, run:
 
   ```bash

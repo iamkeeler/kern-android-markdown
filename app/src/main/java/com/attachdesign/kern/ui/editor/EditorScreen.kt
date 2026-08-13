@@ -13,17 +13,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 
@@ -46,6 +42,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -540,40 +537,39 @@ fun EditorCanvas(
     isToolbarMinimized: Boolean = false
 ) {
     val theme = state.activeTheme
-    val lazyListState = rememberLazyListState()
-
-    LaunchedEffect(state.focusedParagraphIndex) {
-        if (state.focusedParagraphIndex != -1) {
-            lazyListState.animateScrollToItem(state.focusedParagraphIndex)
-        }
-    }
+    val documentScrollState = rememberScrollState()
 
     val bottomPadding = if (isToolbarMinimized) theme.dimensions.spacingMassive else theme.dimensions.editorBottomPadding
+    val documentSelectionManaged = state.viewMode == ViewMode.RENDERED && state.focusedParagraphIndex == -1
 
-    if (state.viewMode == ViewMode.RENDERED && state.focusedParagraphIndex == -1) {
-        SelectionContainer(
+    val documentContent: @Composable () -> Unit = {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .widthIn(max = theme.dimensions.maxTextLineWidth)
+                .verticalScroll(documentScrollState)
+                .padding(bottom = bottomPadding),
+            verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
         ) {
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = bottomPadding),
-                verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-            ) {
-                itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, item ->
-                    Column {
-                        EditorParagraph(
-                            state = state,
-                            textFieldValues = textFieldValues,
-                            viewModel = viewModel,
-                            index = index,
-                            documentSelectionManaged = true
-                        )
-                        if (item.block.separatorAfter.isNotEmpty()) {
+            state.paragraphs.items.forEachIndexed { index, item ->
+                Column {
+                    EditorParagraph(
+                        state = state,
+                        textFieldValues = textFieldValues,
+                        viewModel = viewModel,
+                        index = index,
+                        documentSelectionManaged = documentSelectionManaged
+                    )
+                    if (documentSelectionManaged) {
+                        val separatorLineBreaks = item.block.separatorAfter
+                            .split(Regex("\\r\\n|\\r|\\n"))
+                            .size - 1
+                        if (separatorLineBreaks >= 2) {
                             Text(
-                                text = item.block.separatorAfter,
+                                // SelectionContainer inserts a line break between selectable Text
+                                // nodes. Keep an empty selectable node for a blank paragraph and
+                                // only add line breaks beyond the two structural boundaries.
+                                text = "\n".repeat(separatorLineBreaks - 2),
                                 color = Color.Transparent,
                                 fontSize = 1.sp,
                                 lineHeight = 1.sp
@@ -583,25 +579,12 @@ fun EditorCanvas(
                 }
             }
         }
+    }
+
+    if (documentSelectionManaged) {
+        SelectionContainer(content = documentContent)
     } else {
-        LazyColumn(
-            state = lazyListState,
-            modifier = Modifier
-                .fillMaxSize()
-                .widthIn(max = theme.dimensions.maxTextLineWidth),
-            contentPadding = PaddingValues(bottom = bottomPadding),
-            verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-        ) {
-            itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, _ ->
-                EditorParagraph(
-                    state = state,
-                    textFieldValues = textFieldValues,
-                    viewModel = viewModel,
-                    index = index,
-                    documentSelectionManaged = false
-                )
-            }
-        }
+        documentContent()
     }
 }
 
@@ -847,7 +830,6 @@ fun ParagraphField(
     onChecklistToggle: () -> Unit = {}
 ) {
     val focusRequester = remember { FocusRequester() }
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
     val editorFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
@@ -878,22 +860,28 @@ fun ParagraphField(
         else -> Modifier.padding(vertical = theme.dimensions.spacingSmall)
     }
 
+    val blockquoteBorderModifier = if (
+        viewMode != ViewMode.RAW_PLAIN_TEXT && blockType == MarkdownBlockType.BLOCKQUOTE
+    ) {
+        Modifier.drawBehind {
+            val strokeWidth = 4.dp.toPx()
+            drawLine(
+                color = theme.accent,
+                start = androidx.compose.ui.geometry.Offset(strokeWidth / 2f, 0f),
+                end = androidx.compose.ui.geometry.Offset(strokeWidth / 2f, size.height),
+                strokeWidth = strokeWidth
+            )
+        }
+    } else {
+        Modifier
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
+            .then(blockquoteBorderModifier)
             .then(paddingModifier)
     ) {
-        // Render left border for blockquotes
-        if (viewMode != ViewMode.RAW_PLAIN_TEXT && blockType == MarkdownBlockType.BLOCKQUOTE) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .width(4.dp)
-                    .fillMaxHeight()
-                    .background(theme.accent)
-            )
-        }
 
         val contentModifier = if (viewMode != ViewMode.RAW_PLAIN_TEXT && blockType == MarkdownBlockType.BLOCKQUOTE) {
             Modifier.padding(start = theme.dimensions.spacingLarge)
@@ -964,7 +952,7 @@ fun ParagraphField(
                 val renderedText = remember(value.text, visualTransformation) {
                     visualTransformation.filter(AnnotatedString(value.text)).text
                 }
-                Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     BlockSelectionBoundary(documentSelectionManaged) {
                         RenderedMarkdownText(
                             rawText = value.text,
@@ -981,11 +969,13 @@ fun ParagraphField(
                         )
                     }
                     if (blockType == MarkdownBlockType.TASK_LIST) {
-                        ChecklistToggleOverlay(onChecklistToggle)
+                        DisableSelection {
+                            ChecklistToggleOverlay(onChecklistToggle)
+                        }
                     }
                 }
             } else {
-                Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     BasicTextField(
                         value = value,
                         onValueChange = onValueChange,
@@ -996,7 +986,6 @@ fun ParagraphField(
                             .semantics {
                                 contentDescription = "Block ${paragraphIndex + 1} of ${totalParagraphs}: ${blockType.name.lowercase().replace('_', ' ')}"
                             }
-                            .bringIntoViewRequester(bringIntoViewRequester)
                             .focusRequester(focusRequester)
                             .onFocusChanged { onFocusChanged(it.isFocused) }
                             .onPreviewKeyEvent { keyEvent ->
@@ -1030,11 +1019,6 @@ fun ParagraphField(
         }
     }
 
-    LaunchedEffect(isFocused, value.selection, value.text) {
-        if (isFocused) {
-            bringIntoViewRequester.bringIntoView()
-        }
-    }
 }
 
 @Composable
@@ -1103,16 +1087,21 @@ private fun RenderedMarkdownText(
 private fun BoxScope.ChecklistToggleOverlay(onChecklistToggle: () -> Unit) {
     Box(
         modifier = Modifier
-            .align(Alignment.CenterStart)
-            .width(28.dp)
-            .fillMaxHeight()
-            .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null,
-                onClick = onChecklistToggle
-            )
-            .semantics { contentDescription = "Toggle task list checkmark" }
-    )
+            .matchParentSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .width(28.dp)
+                .fillMaxHeight()
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = onChecklistToggle
+                )
+                .semantics { contentDescription = "Toggle task list checkmark" }
+        )
+    }
 }
 
 private fun fullBlockImage(rawText: String) = MarkdownParser.parseParagraph(rawText).elements

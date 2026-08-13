@@ -8,14 +8,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.lifecycle.viewModelScope
@@ -26,7 +30,8 @@ import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.FileOperationsManager
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -93,7 +98,11 @@ class EditorScreenTest {
 
   @After
   fun tearDown() {
-    if (::viewModel.isInitialized) viewModel.viewModelScope.cancel()
+    if (::viewModel.isInitialized) {
+      runBlocking {
+        viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
+      }
+    }
     if (::db.isInitialized) db.close()
   }
 
@@ -136,11 +145,12 @@ class EditorScreenTest {
     }
     waitForDocument("Introduction")
 
-    // Toggle sidebar to show Settings options
-    composeTestRule.onNodeWithContentDescription("Toggle consolidated settings sidebar").performClick()
+    // Open Settings from the header overflow menu.
+    composeTestRule.onNodeWithContentDescription("More Options").performClick()
+    composeTestRule.onNodeWithText("Settings").performClick()
 
     // Assert Settings sidebar pane is displayed
-    composeTestRule.onNodeWithText("View Configurations").assertIsDisplayed()
+    composeTestRule.onNodeWithText("VIEW MODE").assertIsDisplayed()
     
     // Switch to Raw Plain-Text view mode
     composeTestRule.onNodeWithText("Raw Plain-Text").performClick()
@@ -173,7 +183,7 @@ class EditorScreenTest {
     composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
 
     // Toggle minimize/expand toolbar
-    composeTestRule.onNodeWithContentDescription("Minimize toolbar").performClick()
+    composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()
     composeTestRule.onNodeWithContentDescription("Expand formatting toolbar").performClick()
   }
 
@@ -193,10 +203,13 @@ class EditorScreenTest {
     // Toggle readability metrics popup/sidebar
     composeTestRule.onNodeWithContentDescription("Toggle readability metrics popup").performClick()
 
-    // Verify word counts and readability levels are presented on screen
-    composeTestRule.onNodeWithText("Readability Analytics").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Word Count").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Character Count").assertIsDisplayed()
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      viewModel.uiState.value.hemingwayMetrics != null
+    }
+    // Verify word and character metrics are presented in the popup.
+    composeTestRule.onNodeWithText("READABILITY").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Words").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Characters").assertIsDisplayed()
   }
 
   @Test
@@ -225,9 +238,16 @@ class EditorScreenTest {
     composeTestRule.onNodeWithText("☑ Read book").assertIsDisplayed()
 
     // Click on the toggle checkmark area
-    composeTestRule.onAllNodesWithContentDescription("Toggle task list checkmark")[0].performClick()
+    composeTestRule.onAllNodesWithContentDescription("Toggle task list checkmark")[0]
+        .performSemanticsAction(SemanticsActions.OnClick)
 
     // Verify that the first item visually transitions to checked state
+    composeTestRule.waitForIdle()
+    val checklistTexts = viewModel.uiState.value.paragraphs.items.map { it.block.rawText }
+    org.junit.Assert.assertTrue(
+        "The first checklist item was not toggled: $checklistTexts",
+        checklistTexts.firstOrNull()?.startsWith("- [x]") == true
+    )
     composeTestRule.onNodeWithText("☑ Buy groceries").assertIsDisplayed()
   }
 
@@ -296,5 +316,45 @@ class EditorScreenTest {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     val copied = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
     org.junit.Assert.assertEquals("First paragraph\n\nSecond paragraph", copied)
+  }
+
+  @Test
+  fun testFocusingVisibleParagraphPreservesViewport() {
+    val document = (1..30).joinToString("\n\n") { index ->
+      "Paragraph $index has enough text to remain easy to target in the editor."
+    }
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", document)
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("Paragraph 20")
+
+    val targetText = "Paragraph 20 has enough text to remain easy to target in the editor."
+    val target = composeTestRule.onNodeWithText(targetText)
+    target.performScrollTo()
+    composeTestRule.waitForIdle()
+    val topBeforeFocus = target.fetchSemanticsNode().boundsInRoot.top
+    val rootHeight = composeTestRule.onRoot().fetchSemanticsNode().boundsInRoot.height
+
+    target.performClick()
+    composeTestRule.waitForIdle()
+
+    val focusedTarget = composeTestRule.onNodeWithContentDescription("Block 20 of 30: paragraph")
+    focusedTarget.assertIsFocused()
+    val topAfterFocus = focusedTarget.fetchSemanticsNode().boundsInRoot.top
+    org.junit.Assert.assertTrue(
+        "Focusing a paragraph aligned it near the top: $topBeforeFocus to $topAfterFocus",
+        topAfterFocus > rootHeight * 0.35f
+    )
   }
 }

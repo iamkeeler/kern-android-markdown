@@ -21,7 +21,7 @@ android {
     defaultConfig {
         applicationId = "com.attachdesign.kern"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = vCode
         versionName = "$vMajor.$vMinor.$vPatch"
     }
