@@ -640,6 +640,19 @@ private fun DocumentEditorField(
             imeAction = ImeAction.Default
         ),
         cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.accent),
+        outputTransformation = remember(
+            state.viewMode,
+            state.editorFontSizeScale,
+            theme.textMuted,
+            theme.codeBackground
+        ) {
+            MarkdownDocumentOutputTransformation(
+                viewMode = state.viewMode,
+                bodySize = theme.typography.body * state.editorFontSizeScale,
+                tokenColor = theme.textMuted,
+                codeBackgroundColor = theme.codeBackground
+            )
+        },
         scrollState = scrollState
     )
 }
