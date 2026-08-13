@@ -931,10 +931,16 @@ fun SettingsTabsContent(
                          "AndroidX Navigation 3"          to "Apache 2.0 · Google",
                          "Room Persistence Library"       to "Apache 2.0 · Google",
                          "AndroidX Lifecycle & ViewModel" to "Apache 2.0 · Google",
-                         "Firebase Analytics"             to "Apache 2.0 · Google",
+                         "AndroidX Core, Activity & DocumentFile" to "Apache 2.0 · Google",
+                         "AndroidX Test & Espresso"       to "Apache 2.0 · Google",
+                         "Firebase Analytics & Crashlytics" to "Apache 2.0 · Google",
                          "KotlinX Serialization"          to "Apache 2.0 · JetBrains",
                          "KotlinX Collections Immutable"  to "Apache 2.0 · JetBrains",
-                         "Kotlin"                         to "Apache 2.0 · JetBrains"
+                         "Kotlin & Coroutines"            to "Apache 2.0 · JetBrains",
+                         "Coil"                           to "Apache 2.0 · Coil contributors",
+                         "JUnit 4"                        to "EPL 1.0",
+                         "Robolectric"                    to "MIT",
+                         "MockK & Turbine"                to "Apache 2.0"
                      )
                      libraries.forEach { (lib, license) ->
                           Row(

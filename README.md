@@ -51,8 +51,11 @@ GitHub Actions provides checks, tester distribution, releases, and website deplo
 2. **Test distribution** (`android-build-distribution.yml`) runs when the `test` tag is pushed. It increments the patch version, builds a debug APK, sends it to Firebase App Distribution for the `main-testers` group, and attaches the APK to the `test` GitHub prerelease.
 3. **Google Play Release** (`google-play-release.yml`) runs manually or for `release`/`v*` tags. It restores signing material from GitHub secrets, verifies tests and lint, builds signed APK/AAB files, attaches them to the GitHub Release, and uploads the AAB to the selected Play track. Production completion is intentionally blocked in the workflow.
 4. **Website deployment** (`deploy-website-ftp.yml`) runs manually or for `website-v*`, `website/*`, and `website-*` tags. It verifies the static site, then deploys `website/` over FTP.
+5. **Google Play Listing** (`google-play-listing.yml`) runs manually after an internal app upload. It packages the approved English metadata and store graphics with Fastlane, then uploads them to Google Play as a draft on the internal track. It does not upload an app binary or publish to production.
 
 Release credentials belong in GitHub Actions secrets. Never commit Firebase configuration, keystores, service-account files, tokens, or local properties. See [`docs/release-automation.md`](docs/release-automation.md) for the secret list and release procedure.
+
+The listing workflow also requires the Play service account to have **Manage store presence** permission. See [`docs/google-play-listing-automation.md`](docs/google-play-listing-automation.md).
 
 ## Assets
 
@@ -60,6 +63,7 @@ Release credentials belong in GitHub Actions secrets. Never commit Firebase conf
 - [`website/screenshots/`](website/screenshots/) — website screenshots, including framed README images.
 - [`tools/generate_store_graphics.py`](tools/generate_store_graphics.py) — generates store graphics.
 - [`tools/generate_framed_screenshots.py`](tools/generate_framed_screenshots.py) — creates framed screenshots for the website and README.
+- [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) — direct runtime and build dependency license notices.
 
 ## Privacy
 
@@ -81,4 +85,10 @@ Do not report security vulnerabilities in public issues. Email [gary@attach.desi
 
 ## License
 
-Kern is released under the [Apache License 2.0](LICENSE).
+Kern’s original source is released under the [Apache License 2.0](LICENSE). You may use, study, modify, distribute, and sell versions of the code, provided you follow the license terms and preserve required notices. Third-party libraries retain their own licenses; see [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+
+## Trademark and branding
+
+The name **Kern**, the Kern logo, the app icon, and other project marks identify the official project and are not licensed under Apache 2.0. You may use them to make accurate, nominative references to Kern, but you may not imply that a fork, modified app, service, or distribution is official or endorsed by Kern without permission.
+
+Forks and modified distributions should use a distinct name, package identity, icon, and visual branding. The source license allows commercial forks, but it does not grant rights to Kern’s trademarks or branding.
