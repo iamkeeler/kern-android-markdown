@@ -87,4 +87,33 @@ class MarkdownDocumentScannerTest {
         assertEquals("• First line\n  continued text", MarkdownRenderer.render(blocks.single()).text)
         assertEquals(source, MarkdownParser.joinParsedDocument(blocks))
     }
+
+    @Test
+    fun `mixed line endings and trailing whitespace round trip exactly`() {
+        val source = "# Heading  \r\n\r\nParagraph one\n\n- [ ] Task\r\n\r\n"
+
+        val blocks = MarkdownParser.parseDocument(source)
+
+        assertEquals(source, MarkdownParser.joinParsedDocument(blocks))
+    }
+
+    @Test
+    fun `rich non text blocks remain lossless editor source`() {
+        val source = buildString {
+            append("![Diagram](images/diagram.png)\n\n")
+            append("| Name | Value |\n")
+            append("| --- | --- |\n")
+            append("| Alpha | **One** |\n\n")
+            append("```kotlin\n")
+            append("val source = \"# not a heading\"\n")
+            append("```\n")
+        }
+
+        val blocks = MarkdownParser.parseDocument(source)
+
+        assertTrue(blocks.any { block -> block.elements.any { it.type == MarkdownElementType.IMAGE } })
+        assertTrue(blocks.any { it.blockType == MarkdownBlockType.TABLE })
+        assertTrue(blocks.any { it.blockType == MarkdownBlockType.CODE_BLOCK })
+        assertEquals(source, MarkdownParser.joinParsedDocument(blocks))
+    }
 }
