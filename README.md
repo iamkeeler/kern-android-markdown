@@ -6,6 +6,21 @@ Kern is an open-source Markdown editor for Android. Write on your phone, tablet,
 
 [https://kern.attach.design.](https://kern.attach.design.) · [GitHub](https://github.com/iamkeeler/kern-android-markdown) · [Privacy policy](https://kern.attach.design/privacy.html)
 
+## Contents
+
+- [Download builds](#download-builds)
+- [Why Kern](#why-kern)
+- [See it in action](#see-it-in-action)
+- [Build locally](#build-locally)
+- [CI/CD pipeline](#cicd-pipeline)
+- [Assets](#assets)
+- [Privacy](#privacy)
+- [Contributing](#contributing)
+- [Project status](#project-status)
+- [Security](#security)
+- [License](#license)
+- [Trademark and branding](#trademark-and-branding)
+
 ## Download builds
 
 - **Test build:** Download the current Android APK from the [`test` prerelease](https://github.com/iamkeeler/kern-android-markdown/releases/tag/test).
