@@ -130,10 +130,11 @@ object MarkdownParser {
             blockType = MarkdownBlockType.HEADER_1
             contentStart = 2
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 2, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("> ") || rawText == ">") {
+        } else if (rawText.trimStart().startsWith("> ") || rawText.trim() == ">") {
             blockType = MarkdownBlockType.BLOCKQUOTE
-            contentStart = if (rawText.startsWith("> ")) 2 else 1
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, 0, contentStart, constructStart = 0, constructEnd = len))
+            val leadingWhitespace = rawText.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            contentStart = leadingWhitespace + if (rawText.substring(leadingWhitespace).startsWith("> ")) 2 else 1
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, leadingWhitespace, contentStart, constructStart = 0, constructEnd = len))
         } else if (checklistMatch != null && checklistMatch.range.start == 0) {
             blockType = MarkdownBlockType.TASK_LIST
             contentStart = checklistMatch.value.length
@@ -145,15 +146,16 @@ object MarkdownParser {
             contentStart = unorderedMatch.value.length
             val leadingSpaces = unorderedMatch.value.takeWhile { it.isWhitespace() }.length
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("```")) {
+        } else if (rawText.trimStart().startsWith("```")) {
             blockType = MarkdownBlockType.CODE_BLOCK
+            val fenceStart = rawText.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
             val openingLineEnd = rawText.indexOfFirst { it == '\r' || it == '\n' }
             val openingEndingLength = when {
                 openingLineEnd == -1 -> 0
                 rawText[openingLineEnd] == '\r' && rawText.getOrNull(openingLineEnd + 1) == '\n' -> 2
                 else -> 1
             }
-            val contentStartIndex = if (openingLineEnd == -1) 3 else openingLineEnd + openingEndingLength
+            val contentStartIndex = if (openingLineEnd == -1) fenceStart + 3 else openingLineEnd + openingEndingLength
             val closeIdx = rawText.lastIndexOf("```").takeIf { it >= contentStartIndex } ?: -1
             if (closeIdx != -1) {
                 val cEnd = closeIdx + 3

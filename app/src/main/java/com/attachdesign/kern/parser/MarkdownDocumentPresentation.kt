@@ -31,6 +31,9 @@ object MarkdownDocumentPresentationPlanner {
         MarkdownDocumentScanner.scan(source).forEach { block ->
             val blockEnd = blockStart + block.rawText.length
             blockRanges += DocumentElementRange(block.blockType.asElementType(), blockStart, blockEnd, block.blockType)
+            if (hideInactiveTokens && block.blockType == MarkdownBlockType.HORIZONTAL_RULE && blockStart < blockEnd) {
+                hidden += IndexRange(blockStart, blockEnd)
+            }
             val imageConstructs = block.elements
                 .filter { it.type == MarkdownElementType.IMAGE }
                 .map { it.constructStart to it.constructEnd }
@@ -48,7 +51,13 @@ object MarkdownDocumentPresentationPlanner {
 
                 val constructStart = blockStart + element.constructStart
                 val constructEnd = blockStart + element.constructEnd
-                val selectionTouchesConstruct = selectionMin <= constructEnd && selectionMax >= constructStart
+                // Block-level syntax remains hidden even while the caret is inside the block. This
+                // keeps rendered blockquotes and fenced code looking rendered during editing;
+                // inline syntax still follows the cursor-aware reveal behavior below.
+                val alwaysHideBlockSyntax = element.type == MarkdownElementType.TOKEN_BLOCKQUOTE ||
+                    (block.blockType == MarkdownBlockType.CODE_BLOCK && element.type == MarkdownElementType.TOKEN_INLINE_CODE)
+                val selectionTouchesConstruct = !alwaysHideBlockSyntax &&
+                    selectionMin <= constructEnd && selectionMax >= constructStart
                 if (!selectionTouchesConstruct && start < end) hidden += IndexRange(start, end)
             }
             blockStart = blockEnd + block.separatorAfter.length
