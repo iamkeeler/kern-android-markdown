@@ -74,7 +74,7 @@ Use `val x = 42` inline inside paragraphs.
 [Visit attach.design](https://kern.attach.design)
 
 ### Image
-![Kern Logo](https://kern.attach.design/logo.png)
+![Kern Logo](https://attach.design/kern/logo.svg)
 
 ---
 

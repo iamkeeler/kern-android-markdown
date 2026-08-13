@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" fill="#ECEAE6" />
+  <defs>
+    <linearGradient id="kern-icon" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#5A5D60" />
+      <stop offset="1" stop-color="#353638" />
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="23" fill="url(#kern-icon)" />
+  <text x="32" y="43" font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#F2F0EC" text-anchor="middle">K</text>
+</svg>

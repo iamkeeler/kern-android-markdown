@@ -16,6 +16,7 @@ A focused static website for Kern, an open-source Markdown editor for Android.
 - `contact.html` — Contact info, project links, and security reporting
 - `styles.css` — Central visual system and theme variable declarations
 - `favicon.svg` — Signature Kern "K" vector favicon
+- `logo.svg` — Stable public URL for Markdown image examples
 
 ## Local Preview
 

@@ -32,6 +32,7 @@ jobs:
           test -f website/contact.html
           test -f website/styles.css
           test -f website/favicon.svg
+          test -f website/logo.svg
           echo "All static website files verified successfully."
 
       - name: Deploy website via FTP
