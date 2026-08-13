@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.appendInlineContent
@@ -86,6 +87,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.attachdesign.kern.parser.MarkdownBlockType
+import com.attachdesign.kern.parser.DocumentEditEngine
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun EditorScreen(
@@ -100,6 +103,11 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
+
+    LaunchedEffect(viewModel.documentTextFieldState) {
+        snapshotFlow { viewModel.documentTextFieldState.text.toString() }
+            .collectLatest(viewModel::onDocumentTextChanged)
+    }
 
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -285,12 +293,20 @@ fun EditorScreen(
                     // Floating Formatting Toolbar State
                     var isToolbarMinimized by remember { mutableStateOf(false) }
 
-                    EditorCanvas(
-                        state = uiState,
-                        textFieldValues = textFieldValues,
-                        viewModel = viewModel,
-                        isToolbarMinimized = isToolbarMinimized
-                    )
+                    if (uiState.documentEditorEnabled) {
+                        DocumentEditorField(
+                            state = uiState,
+                            viewModel = viewModel,
+                            isToolbarMinimized = isToolbarMinimized
+                        )
+                    } else {
+                        EditorCanvas(
+                            state = uiState,
+                            textFieldValues = textFieldValues,
+                            viewModel = viewModel,
+                            isToolbarMinimized = isToolbarMinimized
+                        )
+                    }
 
                     val activeIndex = uiState.focusedParagraphIndex
                     val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
@@ -332,16 +348,38 @@ fun EditorScreen(
                         } else {
                             FloatingFormattingToolbar(
                                 theme = uiState.activeTheme,
-                                onHeaderClick = { if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex) },
-                                onHeaderSet = { level -> if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level) },
-                                onIndentClick = { if (activeIndex != -1) viewModel.indentParagraph(activeIndex) },
-                                onOutdentClick = { if (activeIndex != -1) viewModel.outdentParagraph(activeIndex) },
-                                onChecklistClick = { if (activeIndex != -1) viewModel.toggleChecklist(activeIndex) },
-                                onBulletClick = { if (activeIndex != -1) viewModel.toggleBulletList(activeIndex) },
+                                onHeaderClick = {
+                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.CycleHeading)
+                                    else if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex)
+                                },
+                                onHeaderSet = { level ->
+                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.SetHeading(level))
+                                    else if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level)
+                                },
+                                onIndentClick = {
+                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Indent)
+                                    else if (activeIndex != -1) viewModel.indentParagraph(activeIndex)
+                                },
+                                onOutdentClick = {
+                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Outdent)
+                                    else if (activeIndex != -1) viewModel.outdentParagraph(activeIndex)
+                                },
+                                onChecklistClick = {
+                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleChecklist)
+                                    else if (activeIndex != -1) viewModel.toggleChecklist(activeIndex)
+                                },
+                                onBulletClick = {
+                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleBulletList)
+                                    else if (activeIndex != -1) viewModel.toggleBulletList(activeIndex)
+                                },
                                 onMinimizeClick = { isToolbarMinimized = true },
                                 onFormat = { p, s ->
-                                    if (activeIndex == -1) return@FloatingFormattingToolbar
-                                    viewModel.formatParagraph(activeIndex, p, s)
+                                    if (uiState.documentEditorEnabled) {
+                                        viewModel.applyDocumentCommand(DocumentEditEngine.Command.Wrap(p, s))
+                                    } else {
+                                        if (activeIndex == -1) return@FloatingFormattingToolbar
+                                        viewModel.formatParagraph(activeIndex, p, s)
+                                    }
                                 }
                             )
                         }
@@ -560,6 +598,50 @@ fun EditorCanvas(
     } else {
         documentContent()
     }
+}
+
+@Composable
+private fun DocumentEditorField(
+    state: EditorUiState,
+    viewModel: EditorViewModel,
+    isToolbarMinimized: Boolean
+) {
+    val theme = state.activeTheme
+    val scrollState = rememberScrollState()
+    val bottomPadding = if (isToolbarMinimized) {
+        theme.dimensions.spacingMassive
+    } else {
+        theme.dimensions.editorBottomPadding
+    }
+    val editorFont = when (theme.editorFontFamily.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.SansSerif
+    }
+
+    BasicTextField(
+        state = viewModel.documentTextFieldState,
+        modifier = Modifier
+            .fillMaxSize()
+            .widthIn(max = theme.dimensions.maxTextLineWidth)
+            .padding(bottom = bottomPadding)
+            .semantics { contentDescription = "Document editor" }
+            .onFocusChanged { focus -> viewModel.onDocumentEditorFocusChanged(focus.isFocused) },
+        textStyle = TextStyle(
+            color = theme.textPrimary,
+            fontFamily = editorFont,
+            fontSize = theme.typography.body * state.editorFontSizeScale,
+            lineHeight = theme.typography.body * state.editorFontSizeScale * 1.55f
+        ),
+        lineLimits = TextFieldLineLimits.MultiLine(),
+        keyboardOptions = KeyboardOptions(
+            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+            autoCorrectEnabled = true,
+            imeAction = ImeAction.Default
+        ),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.accent),
+        scrollState = scrollState
+    )
 }
 
 @Composable

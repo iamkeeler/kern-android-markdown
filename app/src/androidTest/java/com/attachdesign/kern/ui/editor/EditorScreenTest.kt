@@ -5,17 +5,15 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
@@ -128,8 +126,10 @@ class EditorScreenTest {
 
     // Verify file name in breadcrumb header and initial text contents loaded
     composeTestRule.onNodeWithText("test_file.md").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Introduction").assertIsDisplayed()
-    composeTestRule.onNodeWithText("This is a custom paragraph block with bold text.").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Document editor")
+        .assertIsDisplayed()
+        .assertTextContains("# Introduction", substring = true)
+        .assertTextContains("This is a custom paragraph block with **bold text**.", substring = true)
   }
 
   @Test
@@ -175,8 +175,7 @@ class EditorScreenTest {
     }
     waitForDocument("custom paragraph")
 
-    // Focus on second paragraph block
-    composeTestRule.onNodeWithText("This is a custom paragraph block with bold text.").performClick()
+    composeTestRule.onNodeWithContentDescription("Document editor").performClick()
 
     // Verify format buttons appear in formatting toolbar
     composeTestRule.onNodeWithContentDescription("Format selection bold").assertIsDisplayed()
@@ -233,12 +232,12 @@ class EditorScreenTest {
     }
     waitForDocument("Buy groceries")
 
-    // Verify task lists are rendered with correct checkmarks
-    composeTestRule.onNodeWithText("☐ Buy groceries").assertIsDisplayed()
-    composeTestRule.onNodeWithText("☑ Read book").assertIsDisplayed()
-
-    // Click on the toggle checkmark area
-    composeTestRule.onAllNodesWithContentDescription("Toggle task list checkmark")[0]
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.assertTextContains("- [ ] Buy groceries", substring = true)
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action(0, 0, false)
+    }
+    composeTestRule.onNodeWithContentDescription("Toggle checklist item")
         .performSemanticsAction(SemanticsActions.OnClick)
 
     // Verify that the first item visually transitions to checked state
@@ -248,7 +247,7 @@ class EditorScreenTest {
         "The first checklist item was not toggled: $checklistTexts",
         checklistTexts.firstOrNull()?.startsWith("- [x]") == true
     )
-    composeTestRule.onNodeWithText("☑ Buy groceries").assertIsDisplayed()
+    editor.assertTextContains("- [x] Buy groceries", substring = true)
   }
 
   @Test
@@ -273,7 +272,9 @@ class EditorScreenTest {
     }
     waitForDocument("Before ![Diagram]")
 
-    composeTestRule.onNodeWithContentDescription("Diagram").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Document editor")
+        .assertIsDisplayed()
+        .assertTextContains("![Diagram](https://example.com/diagram.png)", substring = true)
   }
 
   @Test
@@ -294,13 +295,10 @@ class EditorScreenTest {
     }
     waitForDocument("First paragraph")
 
-    val firstBounds = composeTestRule.onNodeWithText("First paragraph").fetchSemanticsNode().boundsInRoot
-    val secondBounds = composeTestRule.onNodeWithText("Second paragraph").fetchSemanticsNode().boundsInRoot
-    composeTestRule.onRoot().performTouchInput {
-      down(Offset(firstBounds.left + 1f, firstBounds.center.y))
-      advanceEventTime(800)
-      moveTo(Offset(secondBounds.right - 1f, secondBounds.center.y))
-      up()
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performClick()
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action(0, "First paragraph\n\nSecond paragraph".length, false)
     }
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val eventTime = SystemClock.uptimeMillis()
@@ -339,22 +337,12 @@ class EditorScreenTest {
     }
     waitForDocument("Paragraph 20")
 
-    val targetText = "Paragraph 20 has enough text to remain easy to target in the editor."
-    val target = composeTestRule.onNodeWithText(targetText)
-    target.performScrollTo()
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    val boundsBeforeFocus = editor.fetchSemanticsNode().boundsInRoot
+    editor.performClick()
     composeTestRule.waitForIdle()
-    val topBeforeFocus = target.fetchSemanticsNode().boundsInRoot.top
-    val rootHeight = composeTestRule.onRoot().fetchSemanticsNode().boundsInRoot.height
-
-    target.performClick()
-    composeTestRule.waitForIdle()
-
-    val focusedTarget = composeTestRule.onNodeWithContentDescription("Block 20 of 30: paragraph")
-    focusedTarget.assertIsFocused()
-    val topAfterFocus = focusedTarget.fetchSemanticsNode().boundsInRoot.top
-    org.junit.Assert.assertTrue(
-        "Focusing a paragraph aligned it near the top: $topBeforeFocus to $topAfterFocus",
-        topAfterFocus > rootHeight * 0.35f
-    )
+    editor.assertIsFocused()
+    val boundsAfterFocus = editor.fetchSemanticsNode().boundsInRoot
+    org.junit.Assert.assertEquals(boundsBeforeFocus.top, boundsAfterFocus.top, 1f)
   }
 }

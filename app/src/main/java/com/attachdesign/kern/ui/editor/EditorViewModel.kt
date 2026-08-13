@@ -2,6 +2,8 @@ package com.attachdesign.kern.ui.editor
  
 import android.content.Context
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.ViewModel
 import com.attachdesign.kern.utils.TextAnalysisUtils.countWords
 import androidx.lifecycle.viewModelScope
@@ -55,6 +57,8 @@ data class EditorUiState(
     val fileName: String = "",
     val paragraphs: ImmutableParagraphList = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
     val focusedParagraphIndex: Int = -1,
+    val documentEditorEnabled: Boolean = true,
+    val isDocumentEditorFocused: Boolean = false,
     val viewMode: ViewMode = ViewMode.RENDERED,
     val stickySelection: Boolean = true,
     val autoHeaderSpacing: Boolean = true,
@@ -102,6 +106,9 @@ class EditorViewModel(
     // Store TextFieldValues for each paragraph to retain selection/cursor state
     private val _paragraphTextFieldValues = MutableStateFlow<Map<Int, TextFieldValue>>(emptyMap())
     val paragraphTextFieldValues: StateFlow<Map<Int, TextFieldValue>> = _paragraphTextFieldValues.asStateFlow()
+    val documentTextFieldState = TextFieldState()
+
+    private var documentText: String = ""
 
     val allProjects: StateFlow<List<ProjectEntity>> = db.projectDao().getAllProjectsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -331,6 +338,11 @@ viewModelScope.launch(Dispatchers.IO) {
                 projectFiles = enriched
             )
             _paragraphTextFieldValues.value = initialValues
+            documentText = content
+            documentTextFieldState.edit {
+                replace(0, length, content)
+                selection = TextRange(if (focusOnStart) 0 else content.length)
+            }
             
             addLog("Loaded file: $filePath")
         }
@@ -565,6 +577,60 @@ viewModelScope.launch(Dispatchers.IO) {
         applyParagraphCommand(index, DocumentEditEngine.Command.Wrap(opening, closing))
     }
 
+    fun applyDocumentCommand(command: DocumentEditEngine.Command) {
+        val selection = documentTextFieldState.selection
+        val result = DocumentEditEngine.apply(
+            text = documentTextFieldState.text.toString(),
+            selectionStart = selection.start,
+            selectionEnd = selection.end,
+            command = command,
+            stickySelection = _uiState.value.stickySelection
+        )
+        documentTextFieldState.edit {
+            replace(0, length, result.text)
+            this.selection = TextRange(result.selectionStart, result.selectionEnd)
+        }
+    }
+
+    fun onDocumentEditorFocusChanged(isFocused: Boolean) {
+        if (_uiState.value.isDocumentEditorFocused == isFocused) return
+        _uiState.value = _uiState.value.copy(isDocumentEditorFocused = isFocused)
+        if (!isFocused) triggerCloudSyncSweep()
+    }
+
+    fun onDocumentTextChanged(content: String) {
+        if (content == documentText) return
+        val previous = documentText
+        documentText = content
+        val blocks = MarkdownParser.parseDocument(content)
+        _uiState.value = _uiState.value.copy(
+            paragraphs = ImmutableParagraphList(blocks.map(::ImmutableParagraphBlock).toImmutableList())
+        )
+        _paragraphTextFieldValues.value = blocks.mapIndexed { index, block ->
+            index to TextFieldValue(block.rawText)
+        }.toMap()
+
+        val characterDelta = (content.length - previous.length).coerceAtLeast(0).toLong()
+        val wordDelta = (countWords(content) - countWords(previous)).coerceAtLeast(0).toLong()
+        if (characterDelta > 0L || wordDelta > 0L) {
+            viewModelScope.launch {
+                if (characterDelta > 0L) {
+                    statsRepository.addCharactersWritten(characterDelta)
+                    analyticsTracker.logCharactersWritten(characterDelta)
+                }
+                if (wordDelta > 0L) {
+                    statsRepository.addWordsWritten(wordDelta)
+                    analyticsTracker.logWordsWritten(wordDelta)
+                }
+            }
+        }
+        saveJob?.cancel()
+        saveJob = viewModelScope.launch {
+            delay(1000)
+            saveActiveFile()
+        }
+    }
+
     private fun applyParagraphCommand(index: Int, command: DocumentEditEngine.Command) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
@@ -694,8 +760,11 @@ viewModelScope.launch(Dispatchers.IO) {
         val filePath = state.activeFilePath
         if (filePath.isEmpty()) return@withContext
 
-        val blocks = state.paragraphs.items.map { it.block }
-        val documentContent = MarkdownParser.joinParsedDocument(blocks)
+        val documentContent = if (state.documentEditorEnabled) {
+            documentText
+        } else {
+            MarkdownParser.joinParsedDocument(state.paragraphs.items.map { it.block })
+        }
         storageManager.writeFile(project, filePath, documentContent)
 
         // Calculate metrics for DB metadata update
