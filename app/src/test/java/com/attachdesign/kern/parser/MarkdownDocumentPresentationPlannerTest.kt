@@ -63,6 +63,17 @@ class MarkdownDocumentPresentationPlannerTest {
     }
 
     @Test
+    fun `blockquote stays rendered when caret is on a different line`() {
+        val source = "Editing here\n\n> Quote remains rendered"
+        val caret = source.indexOf("Editing") + 3
+
+        val plan = MarkdownDocumentPresentationPlanner.build(source, caret, caret, true)
+
+        assertEquals("> ", plan.hiddenRanges.map { source.substring(it.start, it.end) }.single())
+        assertEquals(MarkdownBlockType.BLOCKQUOTE, plan.blocks.last().blockType)
+    }
+
+    @Test
     fun `indented blockquote retains its content while hiding the marker`() {
         val source = "  > Indented quote"
 
