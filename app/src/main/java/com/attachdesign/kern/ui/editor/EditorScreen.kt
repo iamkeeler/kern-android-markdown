@@ -11,7 +11,6 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -331,20 +330,10 @@ fun EditorScreen(
                         label = "ToolbarMinimizeAnimation"
                     ) { minimized ->
                         if (minimized) {
-                            Box(
-                                modifier = Modifier
-                                    .shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
-                                        .background(uiState.activeTheme.surface)
-                                        .clickable { isToolbarMinimized = false }
-                                        .padding(theme.dimensions.spacingLarge)
-                                ) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar", tint = uiState.activeTheme.accent)
-                                }
-                            }
+                            FormattingPaletteFab(
+                                theme = uiState.activeTheme,
+                                onClick = { isToolbarMinimized = false }
+                            )
                         } else {
                             FloatingFormattingToolbar(
                                 theme = uiState.activeTheme,
@@ -611,8 +600,8 @@ private fun DocumentEditorField(
     val bottomPadding = if (isToolbarMinimized) {
         theme.dimensions.spacingMassive
     } else {
-        // Leave only the space needed for the overlay so normal text remains visible behind it.
-        theme.dimensions.spacingTitan
+        // The expanded palette is two touch-target rows; reserve its height so the cursor stays visible.
+        theme.dimensions.editorBottomPadding
     }
     val editorFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
@@ -1203,169 +1192,80 @@ fun FloatingFormattingToolbar(
     onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .widthIn(max = 440.dp)
-            .shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
+    Surface(
+        modifier = modifier.widthIn(max = 320.dp),
+        shape = RoundedCornerShape(theme.dimensions.cornerRadiusLarge),
+        color = theme.surface.copy(alpha = 0.92f),
+        contentColor = theme.textPrimary,
+        shadowElevation = theme.dimensions.elevationMedium
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
-                .background(theme.surface.copy(alpha = 0.88f))
-                .padding(vertical = theme.dimensions.elevationMedium),
-            verticalAlignment = Alignment.CenterVertically
+        Column(modifier = Modifier.padding(theme.dimensions.spacingSmall)) {
+            PaletteRow(theme) {
+                HeaderAction(theme, onHeaderClick, onHeaderSet)
+                FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }) { onFormat("**", "**") }
+                FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }) { onFormat("*", "*") }
+                FormatAction("Format selection strikethrough", { Text("S", textDecoration = TextDecoration.LineThrough, fontSize = theme.typography.subtitle) }) { onFormat("~~", "~~") }
+                FormatAction("Format selection inline code", { Text("C", fontFamily = FontFamily.Monospace, fontSize = theme.typography.bodyLarge) }) { onFormat("`", "`") }
+            }
+            PaletteRow(theme) {
+                FormatAction("Format selection as link", { Text("L", textDecoration = TextDecoration.Underline, fontSize = theme.typography.subtitle) }) { onFormat("[", "](url)") }
+                FormatAction("Toggle checklist item", { Text("☑", fontSize = theme.typography.subtitle) }, onChecklistClick)
+                FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onBulletClick)
+                FormatAction("Outdent paragraph", { Icon(Icons.AutoMirrored.Filled.FormatIndentDecrease, null) }, onOutdentClick)
+                FormatAction("Indent paragraph", { Icon(Icons.AutoMirrored.Filled.FormatIndentIncrease, null) }, onIndentClick)
+                FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onMinimizeClick)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaletteRow(theme: AppColorTheme, content: @Composable RowScope.() -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
+
+@Composable
+private fun FormatAction(
+    description: String,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick, modifier = Modifier.semantics { contentDescription = description }) { icon() }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HeaderAction(theme: AppColorTheme, onHeaderClick: () -> Unit, onHeaderSet: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.size(theme.dimensions.iconHuge).combinedClickable(onClick = onHeaderClick, onLongClick = { expanded = true }).semantics { contentDescription = "Toggle header level" },
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(IntrinsicSize.Min)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(start = theme.dimensions.spacingMedium, end = theme.dimensions.spacingLarge),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-                ) {
-                    var isHeaderMenuExpanded by remember { mutableStateOf(false) }
-                    Box(contentAlignment = Alignment.Center) {
-                        Box(
-                            modifier = Modifier
-                                .size(theme.dimensions.iconHuge)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .combinedClickable(
-                                    onClick = onHeaderClick,
-                                    onLongClick = { isHeaderMenuExpanded = true }
-                                )
-                                .semantics { contentDescription = "Toggle header level" },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = theme.typography.subtitle)
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                modifier = Modifier.align(Alignment.BottomEnd).size(16.dp).padding(bottom = 2.dp, end = 2.dp),
-                                tint = theme.accent
-                            )
-                        }
+            Text("H", fontWeight = FontWeight.Black, fontSize = theme.typography.subtitle)
+            Icon(Icons.Default.ArrowDropDown, null, Modifier.align(Alignment.BottomEnd).size(16.dp).padding(bottom = 2.dp, end = 2.dp), tint = theme.accent)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            (1..6).forEach { level -> DropdownMenuItem(text = { Text("Header $level") }, onClick = { expanded = false; onHeaderSet(level) }) }
+        }
+    }
+}
 
-                        DropdownMenu(
-                            expanded = isHeaderMenuExpanded,
-                            onDismissRequest = { isHeaderMenuExpanded = false }
-                        ) {
-                            (1..6).forEach { level ->
-                                DropdownMenuItem(
-                                    text = { Text("Header $level", color = theme.textPrimary) },
-                                    onClick = {
-                                        isHeaderMenuExpanded = false
-                                        onHeaderSet(level)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .height(16.dp)
-                            .width(1.dp)
-                            .background(theme.textMuted.copy(alpha = 0.25f))
-                    )
-                    IconButton(
-                        onClick = { onFormat("**", "**") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection bold" }
-                    ) {
-                        Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = { onFormat("*", "*") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection italic" }
-                    ) {
-                        Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = { onFormat("~~", "~~") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection strikethrough" }
-                    ) {
-                        Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = { onFormat("`", "`") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection inline code" }
-                    ) {
-                        Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = theme.typography.bodyLarge)
-                    }
-                    IconButton(
-                        onClick = { onFormat("[", "](url)") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection as link" }
-                    ) {
-                        Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = onChecklistClick,
-                        modifier = Modifier.semantics { contentDescription = "Toggle checklist item" }
-                    ) {
-                        Text("☑", color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = onBulletClick,
-                        modifier = Modifier.semantics { contentDescription = "Toggle bullet list" }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
-                            contentDescription = "Toggle bullet list",
-                            tint = theme.textPrimary
-                        )
-                    }
-                    IconButton(
-                        onClick = onOutdentClick,
-                        modifier = Modifier.semantics { contentDescription = "Outdent paragraph" }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.FormatIndentDecrease,
-                            contentDescription = "Outdent paragraph",
-                            tint = theme.textPrimary
-                        )
-                    }
-                    IconButton(
-                        onClick = onIndentClick,
-                        modifier = Modifier.semantics { contentDescription = "Indent paragraph" }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.FormatIndentIncrease,
-                            contentDescription = "Indent paragraph",
-                            tint = theme.textPrimary
-                        )
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .width(24.dp)
-                        .background(
-                            androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                colors = listOf(Color.Transparent, theme.surface.copy(alpha = 0.88f))
-                            )
-                        )
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .background(theme.surface.copy(alpha = 0.88f))
-                    .padding(end = theme.dimensions.spacingMedium, start = theme.dimensions.spacingSmall),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(
-                    onClick = onMinimizeClick,
-                    modifier = Modifier.semantics { contentDescription = "Minimize formatting toolbar" }
-                ) {
-                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = theme.textMuted, modifier = Modifier.size(theme.dimensions.iconMedium))
-                }
-            }
+@Composable
+private fun FormattingPaletteFab(theme: AppColorTheme, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = androidx.compose.foundation.shape.CircleShape,
+        color = theme.surface.copy(alpha = 0.92f),
+        contentColor = theme.accent,
+        shadowElevation = theme.dimensions.elevationMedium
+    ) {
+        Box(Modifier.size(theme.dimensions.iconHuge), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar")
         }
     }
 }

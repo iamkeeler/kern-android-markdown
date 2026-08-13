@@ -36,10 +36,10 @@ object MarkdownDocumentScanner {
             }
 
             val start = index
-            val kind = classify(line.content)
+            val kind = if (isTableStart(lines, index)) LineKind.TABLE else classify(line.content)
             index = when (kind) {
                 LineKind.FENCE -> consumeFence(lines, start)
-                LineKind.TABLE -> consumeWhile(lines, start, LineKind.TABLE)
+                LineKind.TABLE -> consumeTable(lines, start)
                 LineKind.PARAGRAPH -> consumeWhile(lines, start, LineKind.PARAGRAPH)
                 LineKind.STRUCTURAL -> if (MarkdownParser.isListLine(line.content)) {
                     consumeListItem(lines, start)
@@ -69,9 +69,12 @@ object MarkdownDocumentScanner {
     }
 
     private fun consumeFence(lines: List<SourceLine>, start: Int): Int {
+        val opening = fenceMarker(lines[start].content) ?: return start + 1
         var index = start + 1
         while (index < lines.size) {
-            val isClosingFence = lines[index].content.trimStart().startsWith("```")
+            val closing = fenceMarker(lines[index].content)
+            val isClosingFence = closing != null && closing.first == opening.first && closing.second >= opening.second &&
+                lines[index].content.dropWhile { it.isWhitespace() }.drop(closing.second).isBlank()
             index++
             if (isClosingFence) break
         }
@@ -83,6 +86,12 @@ object MarkdownDocumentScanner {
         while (index < lines.size && lines[index].content.isNotBlank() && classify(lines[index].content) == kind) {
             index++
         }
+        return index
+    }
+
+    private fun consumeTable(lines: List<SourceLine>, start: Int): Int {
+        var index = start + 2 // header and required delimiter row
+        while (index < lines.size && lines[index].content.isNotBlank() && lines[index].content.contains('|')) index++
         return index
     }
 
@@ -102,14 +111,26 @@ object MarkdownDocumentScanner {
         val trimmed = line.trim()
         val trimmedStart = line.trimStart()
         return when {
-            trimmedStart.startsWith("```") -> LineKind.FENCE
+            fenceMarker(line) != null -> LineKind.FENCE
             trimmedStart.matches(Regex("#{1,6}\\s+.*")) -> LineKind.STRUCTURAL
-            trimmed == "---" || trimmed == "***" || trimmed == "___" -> LineKind.STRUCTURAL
+            MarkdownParser.isThematicBreak(line) -> LineKind.STRUCTURAL
             trimmedStart.startsWith(">") -> LineKind.STRUCTURAL
             MarkdownParser.isListLine(line) -> LineKind.STRUCTURAL
-            trimmed.startsWith("|") && trimmed.endsWith("|") -> LineKind.TABLE
             else -> LineKind.PARAGRAPH
         }
+    }
+
+    private fun isTableStart(lines: List<SourceLine>, index: Int): Boolean =
+        index + 1 < lines.size && lines[index].content.contains('|') &&
+            lines[index + 1].content.matches(Regex("^\\s*\\|?\\s*:?-{1,}:?\\s*(?:\\|\\s*:?-{1,}:?\\s*)+\\|?\\s*$"))
+
+    private fun fenceMarker(line: String): Pair<Char, Int>? {
+        val indent = line.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+        if (indent > 3) return null
+        val marker = line.getOrNull(indent) ?: return null
+        if (marker != '`' && marker != '~') return null
+        val length = line.drop(indent).takeWhile { it == marker }.length
+        return if (length >= 3) marker to length else null
     }
 
     private fun tokenize(source: String): List<SourceLine> {

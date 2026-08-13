@@ -34,6 +34,20 @@ This document records user-visible editor behavior that must survive refactors. 
 - The floating formatting toolbar is a compact, translucent overlay. Reserve only enough bottom content space for the cursor to remain visible; do not turn the toolbar into a full-width opaque bottom sheet.
 - Regression coverage: `EditorScreenTest.testFocusingVisibleParagraphPreservesViewport`.
 
+### Rendered Markdown must not fall back to source syntax
+
+- Symptom and affected release: Markdown source was visible in the document canvas for styles that should have been rendered, making the live editor read like a raw text field.
+- Root cause: the scanner/parser accepted only a narrow set of line shapes and the presentation test coverage asserted source state instead of transformed layout text.
+- Behavioral invariant: rendered mode hides recognized Markdown syntax while preserving the exact source in `TextFieldState`; the visible layout retains the author’s text and its semantic styling.
+- Automated test names: `MarkdownRenderingRegressionTest.supported markdown fixture has a rendered projection for every text style` and `MarkdownRenderingInstrumentedTest.renderedEditorTextStripsMarkdownSyntaxButRetainsWriting`.
+
+### Formatting palette remains available until explicitly collapsed
+
+- Symptom and affected release: the formatting palette was a horizontally scrolling toolbar with a separately painted collapse area, leaving part of the control visibly opaque and hiding actions off-screen.
+- Root cause: the palette combined a scroll fade, a trailing background panel, and action buttons in one row.
+- Behavioral invariant: while the editor is active, the primary Markdown actions are visible in a single, compact floating palette. Applying an action never closes it; only the explicit collapse control may do so.
+- Automated test name: `EditorScreenTest.testFloatingFormattingToolbarInteraction`.
+
 ## Preferred direction
 
 - Prefer state-based `TextFieldState`. The editor uses `BasicTextField` because the writing canvas intentionally does not use Material filled or outlined field decorations.

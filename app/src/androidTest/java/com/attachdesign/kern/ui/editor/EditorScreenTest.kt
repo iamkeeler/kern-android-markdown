@@ -180,6 +180,12 @@ class EditorScreenTest {
     // Verify format buttons appear in formatting toolbar
     composeTestRule.onNodeWithContentDescription("Format selection bold").assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Toggle bullet list").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Indent paragraph").assertIsDisplayed()
+
+    // Formatting is non-dismissive: actions remain available until the explicit collapse control.
+    composeTestRule.onNodeWithContentDescription("Format selection bold").performClick()
+    composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
 
     // Toggle minimize/expand toolbar
     composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()
