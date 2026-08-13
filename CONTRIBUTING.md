@@ -2,6 +2,8 @@
 
 Thanks for your interest in Kern. The project is currently in pre-release cleanup for Google Play and public open-source launch, so contribution scope is intentionally narrow.
 
+Kern is licensed under the Apache License 2.0. Contributions are accepted under the project license unless a separate written agreement says otherwise. Please read [LICENSE](LICENSE) before contributing. Kern’s name, logo, and official branding remain protected; see the [trademark and branding policy](README.md#trademark-and-branding).
+
 ## Current contribution stance
 
 Until the first public release is complete, the preferred contribution types are:
