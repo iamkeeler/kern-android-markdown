@@ -6,6 +6,12 @@ Kern is an open-source Markdown editor for Android. Write on your phone, tablet,
 
 [https://kern.attach.design.](https://kern.attach.design.) · [GitHub](https://github.com/iamkeeler/kern-android-markdown) · [Privacy policy](https://kern.attach.design/privacy.html)
 
+## Download builds
+
+- **Test build:** Download the current Android APK from the [`test` prerelease](https://github.com/iamkeeler/kern-android-markdown/releases/tag/test).
+- **Stable release:** Once public releases begin, download the newest build from [Latest release](https://github.com/iamkeeler/kern-android-markdown/releases/latest).
+- **All builds:** Browse [all GitHub Releases](https://github.com/iamkeeler/kern-android-markdown/releases) for previous test and release builds.
+
 ## Why Kern
 
 - **Live Markdown preview** — See headings, emphasis, lists, links, and code as you write.
@@ -48,8 +54,8 @@ The release bundle is written to `app/build/outputs/bundle/release/app-release.a
 GitHub Actions provides checks, tester distribution, releases, and website deployment:
 
 1. **Release Readiness** (`release-readiness.yml`) can be run manually. It restores a safe Firebase template when no secret is supplied, runs unit tests and lint, packages an unsigned release APK, and uploads lint reports and the APK as artifacts.
-2. **Test distribution** (`android-build-distribution.yml`) runs when the `test` tag is pushed. It increments the patch version, builds a debug APK, sends it to Firebase App Distribution for the `main-testers` group, and attaches the APK to the `test` GitHub prerelease.
-3. **Google Play Release** (`google-play-release.yml`) runs manually or for `release`/`v*` tags. It restores signing material from GitHub secrets, verifies tests and lint, builds signed APK/AAB files, attaches them to the GitHub Release, and uploads the AAB to the selected Play track. Production completion is intentionally blocked in the workflow.
+2. **Test distribution** (`android-build-distribution.yml`) runs when the `test` tag is pushed. It increments the patch version, builds a debug APK, sends it to Firebase App Distribution for the `main-testers` group, and attaches the APK to the [`test` GitHub prerelease](https://github.com/iamkeeler/kern-android-markdown/releases/tag/test).
+3. **Google Play Release** (`google-play-release.yml`) runs manually or for `release`/`v*` tags. It restores signing material from GitHub secrets, verifies tests and lint, builds signed APK/AAB files, attaches them to [GitHub Releases](https://github.com/iamkeeler/kern-android-markdown/releases), and uploads the AAB to the selected Play track. Production completion is intentionally blocked in the workflow.
 4. **Website deployment** (`deploy-website-ftp.yml`) runs manually or for `website-v*`, `website/*`, and `website-*` tags. It verifies the static site, then deploys `website/` over FTP.
 5. **Google Play Listing** (`google-play-listing.yml`) runs manually after an internal app upload. It packages the approved English metadata and store graphics with Fastlane, then uploads them to Google Play as a draft on the internal track. It does not upload an app binary or publish to production.
 
