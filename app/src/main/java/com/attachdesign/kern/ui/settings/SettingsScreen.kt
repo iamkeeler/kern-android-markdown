@@ -812,39 +812,6 @@ fun SettingsTabsContent(
                           Text(appVersion, color = theme.textMuted, fontSize = theme.typography.tiny,
                               fontFamily = FontFamily.Monospace)
                      }
-                      Row(
-                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
-                          horizontalArrangement = Arrangement.SpaceBetween,
-                          verticalAlignment = Alignment.CenterVertically
-                      ) {
-                          Text("Design & Development", color = theme.textMuted, fontSize = theme.typography.small)
-                          Text("Attach.design", color = theme.accent, fontSize = theme.typography.body,
-                              fontFamily = appFont, fontWeight = FontWeight.Medium,
-                              modifier = Modifier.clickable {
-                                  try {
-                                      uriHandler.openUri("https://kern.attach.design")
-                                  } catch (e: Exception) {
-                                      e.printStackTrace()
-                                  }
-                              })
-                      }
-                      Row(
-                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
-                          horizontalArrangement = Arrangement.SpaceBetween,
-                          verticalAlignment = Alignment.CenterVertically
-                      ) {
-                          Text("Privacy Policy", color = theme.textMuted, fontSize = theme.typography.small)
-                          Text("Read Policy", color = theme.accent, fontSize = theme.typography.body,
-                              fontFamily = appFont, fontWeight = FontWeight.Medium,
-                              modifier = Modifier.clickable {
-                                  try {
-                                      uriHandler.openUri("https://kern.attach.design/privacy.html")
-                                  } catch (e: Exception) {
-                                      e.printStackTrace()
-                                  }
-                              })
-                      }
-
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
@@ -928,19 +895,17 @@ fun SettingsTabsContent(
                      val libraries = listOf(
                          "Jetpack Compose"                to "Apache 2.0 · Google",
                          "Compose Material 3"             to "Apache 2.0 · Google",
+                         "Compose Material Icons"         to "Apache 2.0 · Google",
                          "AndroidX Navigation 3"          to "Apache 2.0 · Google",
                          "Room Persistence Library"       to "Apache 2.0 · Google",
                          "AndroidX Lifecycle & ViewModel" to "Apache 2.0 · Google",
                          "AndroidX Core, Activity & DocumentFile" to "Apache 2.0 · Google",
-                         "AndroidX Test & Espresso"       to "Apache 2.0 · Google",
                          "Firebase Analytics & Crashlytics" to "Apache 2.0 · Google",
                          "KotlinX Serialization"          to "Apache 2.0 · JetBrains",
                          "KotlinX Collections Immutable"  to "Apache 2.0 · JetBrains",
                          "Kotlin & Coroutines"            to "Apache 2.0 · JetBrains",
-                         "Coil"                           to "Apache 2.0 · Coil contributors",
-                         "JUnit 4"                        to "EPL 1.0",
-                         "Robolectric"                    to "MIT",
-                         "MockK & Turbine"                to "Apache 2.0"
+                         "Coil Compose"                   to "Apache 2.0 · Coil contributors",
+                         "Coil Network"                   to "Apache 2.0 · Coil contributors"
                      )
                      libraries.forEach { (lib, license) ->
                           Row(
