@@ -19,4 +19,4 @@ Kern is local-first. It does not require a Kern account or a Kern-hosted documen
 
 The interface is built around readable typography, clear document structure, and minimal distractions—whether you are writing notes, drafting articles, reviewing documentation, or working with a Markdown-based project.
 
-Kern is open source and built for Android.
+Kern is open source and built for Android. See the repository license for details.
