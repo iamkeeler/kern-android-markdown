@@ -59,6 +59,7 @@ import kotlinx.coroutines.Dispatchers
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.ui.theme.ThemeEngine
+import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -201,6 +202,8 @@ fun MainScreen(
             }
         }
     }
+
+    ApplyKernSystemBars(theme)
 
     val typedText = remember { mutableStateOf("K") }
     val splashAlpha = remember { Animatable(1f) }

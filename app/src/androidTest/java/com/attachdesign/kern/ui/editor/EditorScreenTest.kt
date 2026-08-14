@@ -181,11 +181,14 @@ class EditorScreenTest {
     composeTestRule.onNodeWithContentDescription("Format selection bold").assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("Toggle bullet list").assertIsDisplayed()
-    composeTestRule.onNodeWithContentDescription("Indent paragraph").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("More formatting actions").assertIsDisplayed()
 
     // Formatting is non-dismissive: actions remain available until the explicit collapse control.
     composeTestRule.onNodeWithContentDescription("Format selection bold").performClick()
     composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
+
+    composeTestRule.onNodeWithContentDescription("More formatting actions").performClick()
+    composeTestRule.onNodeWithText("Indent").assertIsDisplayed()
 
     // Toggle minimize/expand toolbar
     composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()

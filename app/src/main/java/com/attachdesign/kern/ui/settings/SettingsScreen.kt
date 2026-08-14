@@ -32,12 +32,10 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
-import android.app.Activity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import android.widget.Toast
+import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 
 @Composable
 fun SettingsTabsContent(
@@ -958,16 +956,7 @@ fun SettingsScreen(
         }
     }
 
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as? Activity)?.window
-            if (window != null) {
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !theme.isDark
-                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !theme.isDark
-            }
-        }
-    }
+    ApplyKernSystemBars(theme)
 
      val appFont = when (theme.editorFontFamily.lowercase()) {
          "serif" -> FontFamily.Serif

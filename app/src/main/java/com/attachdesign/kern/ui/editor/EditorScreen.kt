@@ -81,6 +81,7 @@ import com.attachdesign.kern.parser.IndexRange
 import com.attachdesign.kern.parser.IndexTransformationMatrix
 import com.attachdesign.kern.ui.main.InputDialog
 import com.attachdesign.kern.ui.theme.AppColorTheme
+import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 import com.attachdesign.kern.ui.settings.SettingsTabsContent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -102,6 +103,8 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
+
+    ApplyKernSystemBars(theme)
 
     LaunchedEffect(viewModel.documentTextFieldState) {
         snapshotFlow { viewModel.documentTextFieldState.text.toString() }
@@ -279,7 +282,6 @@ fun EditorScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .imePadding()
                         .padding(horizontal = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge)
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
@@ -325,8 +327,8 @@ fun EditorScreen(
                                 })
                         },
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = theme.dimensions.spacingExtraLarge, bottom = theme.dimensions.spacingHuge, top = theme.dimensions.spacingExtraLarge, start = theme.dimensions.spacingExtraLarge),
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = theme.dimensions.spacingMedium),
                         label = "ToolbarMinimizeAnimation"
                     ) { minimized ->
                         if (minimized) {
@@ -600,8 +602,8 @@ private fun DocumentEditorField(
     val bottomPadding = if (isToolbarMinimized) {
         theme.dimensions.spacingMassive
     } else {
-        // The expanded palette is two touch-target rows; reserve its height so the cursor stays visible.
-        theme.dimensions.editorBottomPadding
+        // One palette row plus its bottom inset keeps the active cursor visible.
+        theme.dimensions.spacingTitan
     }
     val editorFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
@@ -1195,37 +1197,75 @@ fun FloatingFormattingToolbar(
     Surface(
         modifier = modifier.widthIn(max = 320.dp),
         shape = RoundedCornerShape(theme.dimensions.cornerRadiusLarge),
-        color = theme.surface.copy(alpha = 0.92f),
+        color = theme.surface,
         contentColor = theme.textPrimary,
         shadowElevation = theme.dimensions.elevationMedium
     ) {
-        Column(modifier = Modifier.padding(theme.dimensions.spacingSmall)) {
-            PaletteRow(theme) {
-                HeaderAction(theme, onHeaderClick, onHeaderSet)
-                FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }) { onFormat("**", "**") }
-                FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }) { onFormat("*", "*") }
-                FormatAction("Format selection strikethrough", { Text("S", textDecoration = TextDecoration.LineThrough, fontSize = theme.typography.subtitle) }) { onFormat("~~", "~~") }
-                FormatAction("Format selection inline code", { Text("C", fontFamily = FontFamily.Monospace, fontSize = theme.typography.bodyLarge) }) { onFormat("`", "`") }
-            }
-            PaletteRow(theme) {
-                FormatAction("Format selection as link", { Text("L", textDecoration = TextDecoration.Underline, fontSize = theme.typography.subtitle) }) { onFormat("[", "](url)") }
-                FormatAction("Toggle checklist item", { Text("☑", fontSize = theme.typography.subtitle) }, onChecklistClick)
-                FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onBulletClick)
-                FormatAction("Outdent paragraph", { Icon(Icons.AutoMirrored.Filled.FormatIndentDecrease, null) }, onOutdentClick)
-                FormatAction("Indent paragraph", { Icon(Icons.AutoMirrored.Filled.FormatIndentIncrease, null) }, onIndentClick)
-                FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onMinimizeClick)
-            }
+        PaletteRow(theme, Modifier.padding(theme.dimensions.spacingSmall)) {
+            HeaderAction(theme, onHeaderClick, onHeaderSet)
+            FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }) { onFormat("**", "**") }
+            FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }) { onFormat("*", "*") }
+            FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onBulletClick)
+            OverflowFormattingActions(theme, onFormat, onChecklistClick, onIndentClick, onOutdentClick)
+            FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onMinimizeClick)
         }
     }
 }
 
 @Composable
-private fun PaletteRow(theme: AppColorTheme, content: @Composable RowScope.() -> Unit) {
+private fun PaletteRow(theme: AppColorTheme, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     Row(
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
+}
+
+@Composable
+private fun OverflowFormattingActions(
+    theme: AppColorTheme,
+    onFormat: (String, String) -> Unit,
+    onChecklistClick: () -> Unit,
+    onIndentClick: () -> Unit,
+    onOutdentClick: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        FormatAction("More formatting actions", { Icon(Icons.Outlined.MoreVert, null) }) { expanded = true }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Strikethrough") },
+                leadingIcon = { Text("S", textDecoration = TextDecoration.LineThrough) },
+                onClick = { expanded = false; onFormat("~~", "~~") }
+            )
+            DropdownMenuItem(
+                text = { Text("Inline code") },
+                leadingIcon = { Text("C", fontFamily = FontFamily.Monospace) },
+                onClick = { expanded = false; onFormat("`", "`") }
+            )
+            DropdownMenuItem(
+                text = { Text("Link") },
+                leadingIcon = { Text("L", textDecoration = TextDecoration.Underline) },
+                onClick = { expanded = false; onFormat("[", "](url)") }
+            )
+            DropdownMenuItem(
+                text = { Text("Checklist") },
+                leadingIcon = { Text("☑") },
+                onClick = { expanded = false; onChecklistClick() }
+            )
+            DropdownMenuItem(
+                text = { Text("Outdent") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.FormatIndentDecrease, null) },
+                onClick = { expanded = false; onOutdentClick() }
+            )
+            DropdownMenuItem(
+                text = { Text("Indent") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.FormatIndentIncrease, null) },
+                onClick = { expanded = false; onIndentClick() }
+            )
+        }
+    }
 }
 
 @Composable
@@ -1260,7 +1300,7 @@ private fun FormattingPaletteFab(theme: AppColorTheme, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = androidx.compose.foundation.shape.CircleShape,
-        color = theme.surface.copy(alpha = 0.92f),
+        color = theme.surface,
         contentColor = theme.accent,
         shadowElevation = theme.dimensions.elevationMedium
     ) {

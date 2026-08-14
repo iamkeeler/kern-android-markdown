@@ -20,6 +20,7 @@ class MarkdownRenderingRegressionTest {
 
         val blocks = MarkdownParser.parseDocument(fixture)
         val rendered = blocks.associateBy({ it.rawText }, MarkdownRenderer::render)
+        val document = MarkdownRenderer.renderDocument(fixture)
 
         assertTrue(blocks.any { it.blockType == MarkdownBlockType.HEADER_1 })
         assertTrue(blocks.any { it.blockType == MarkdownBlockType.HEADER_2 })
@@ -46,6 +47,13 @@ class MarkdownRenderingRegressionTest {
         assertTrue(emphasis.any { it.type == MarkdownElementType.STRIKETHROUGH })
         assertTrue(emphasis.any { it.type == MarkdownElementType.INLINE_CODE })
         assertFalse(rendered.values.any { projection -> projection.text.startsWith("# ") })
+        assertTrue(document.text.contains("│ A block quote"))
+        assertTrue(document.text.contains("• A bullet"))
+        assertTrue(document.text.contains("1. An ordered item"))
+        assertTrue(document.text.contains("☑ A completed task"))
+        assertTrue(document.text.contains("val literal = \"**not bold**\""))
+        assertFalse(document.text.contains("~~~kotlin"))
+        assertFalse(document.text.contains("`code`"))
     }
 
     @Test

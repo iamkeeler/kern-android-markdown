@@ -40,13 +40,22 @@ This document records user-visible editor behavior that must survive refactors. 
 - Root cause: the scanner/parser accepted only a narrow set of line shapes and the presentation test coverage asserted source state instead of transformed layout text.
 - Behavioral invariant: rendered mode hides recognized Markdown syntax while preserving the exact source in `TextFieldState`; the visible layout retains the author’s text and its semantic styling.
 - Automated test names: `MarkdownRenderingRegressionTest.supported markdown fixture has a rendered projection for every text style` and `MarkdownRenderingInstrumentedTest.renderedEditorTextStripsMarkdownSyntaxButRetainsWriting`.
+- Regression update: lists, task lists, block quotes, fenced code blocks, and inline code must use the same shared document projection as the standalone renderer. The projection may change presentation only; `TextFieldState.text` remains exact Markdown source.
 
 ### Formatting palette remains available until explicitly collapsed
 
 - Symptom and affected release: the formatting palette was a horizontally scrolling toolbar with a separately painted collapse area, leaving part of the control visibly opaque and hiding actions off-screen.
 - Root cause: the palette combined a scroll fade, a trailing background panel, and action buttons in one row.
-- Behavioral invariant: while the editor is active, the primary Markdown actions are visible in a single, compact floating palette. Applying an action never closes it; only the explicit collapse control may do so.
+- Behavioral invariant: while the editor is active, the primary Markdown actions are visible in one compact floating row. Less-frequent actions are available from its overflow menu. Applying a primary action never closes the palette; only the explicit collapse control may do so.
 - Automated test name: `EditorScreenTest.testFloatingFormattingToolbarInteraction`.
+- Regression update: the palette is one opaque, centered row. The editor content owns keyboard resizing; the palette must not inherit duplicate IME padding or leave a colored band that obscures the document.
+
+### Active theme controls system bars
+
+- Symptom and affected release: after edge-to-edge was enabled, light themes could show dark system bars because system-bar appearance was updated only by Settings.
+- Root cause: system chrome was not owned by the active application theme.
+- Behavioral invariant: every screen applies the active Kern theme to the status and navigation bars. Light themes use a light background with dark icons; dark themes use a dark background with light icons.
+- Automated test name: `ThemeAccessibilityTest`; add emulator coverage when system-bar test infrastructure is available.
 
 ## Preferred direction
 

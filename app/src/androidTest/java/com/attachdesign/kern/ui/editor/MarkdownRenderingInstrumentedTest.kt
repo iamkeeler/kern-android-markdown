@@ -24,7 +24,7 @@ class MarkdownRenderingInstrumentedTest {
 
     @Test
     fun renderedEditorTextStripsMarkdownSyntaxButRetainsWriting() {
-        val state = TextFieldState("# Title\n\n**bold** and *italic* with `code`")
+        val state = TextFieldState("# Title\n\n> Quote\n- Bullet\n1. Ordered\n- [x] Done\n\n~~~kotlin\nval code = true\n~~~\n\n**bold** and *italic* with `code`")
         // Put the caret in plain text: the editor intentionally reveals syntax for the active construct.
         state.edit { selection = TextRange(8) }
 
@@ -45,7 +45,10 @@ class MarkdownRenderingInstrumentedTest {
         composeTestRule.onNodeWithContentDescription("Rendered markdown probe")
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action -> action(layouts) }
 
-        assertEquals("Title\n\nbold and italic with code", layouts.single().layoutInput.text.text)
-        assertEquals("# Title\n\n**bold** and *italic* with `code`", state.text.toString())
+        assertEquals(
+            "Title\n\n│ Quote\n• Bullet\n1. Ordered\n☑ Done\n\nval code = true\n\nbold and italic with code",
+            layouts.single().layoutInput.text.text
+        )
+        assertEquals("# Title\n\n> Quote\n- Bullet\n1. Ordered\n- [x] Done\n\n~~~kotlin\nval code = true\n~~~\n\n**bold** and *italic* with `code`", state.text.toString())
     }
 }

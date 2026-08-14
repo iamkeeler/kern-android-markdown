@@ -9,11 +9,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.TextUnit
-import com.attachdesign.kern.parser.DocumentElementRange
-import com.attachdesign.kern.parser.IndexTransformationMatrix
 import com.attachdesign.kern.parser.MarkdownBlockType
-import com.attachdesign.kern.parser.MarkdownDocumentPresentationPlanner
 import com.attachdesign.kern.parser.MarkdownElementType
+import com.attachdesign.kern.parser.MarkdownRenderer
 
 class MarkdownDocumentOutputTransformation(
     private val viewMode: ViewMode,
@@ -29,25 +27,15 @@ class MarkdownDocumentOutputTransformation(
             return
         }
 
-        val plan = MarkdownDocumentPresentationPlanner.build(
-            source = source,
-            selectionStart = selection.start,
-            selectionEnd = selection.end,
-            hideInactiveTokens = viewMode == ViewMode.RENDERED
-        )
-        val matrix = IndexTransformationMatrix(plan.hiddenRanges)
-        plan.hiddenRanges.asReversed().forEach { range -> replace(range.start, range.end, "") }
-
-        plan.blocks.forEach { block -> applyBlockStyle(block, matrix) }
-        plan.elements.forEach { element -> applyElementStyle(element, matrix) }
+        val projection = MarkdownRenderer.renderDocument(source)
+        replace(0, length, projection.text)
+        projection.blocks.forEach { block -> applyBlockStyle(block.type, block.start, block.end) }
+        projection.spans.forEach { span -> applyElementStyle(span.type, span.start, span.end) }
     }
 
-    private fun TextFieldBuffer.applyBlockStyle(
-        block: DocumentElementRange,
-        matrix: IndexTransformationMatrix
-    ) {
-        val range = transformedRange(block, matrix) ?: return
-        val style = when (block.blockType) {
+    private fun TextFieldBuffer.applyBlockStyle(blockType: MarkdownBlockType, start: Int, end: Int) {
+        if (start >= end) return
+        val style = when (blockType) {
             MarkdownBlockType.HEADER_1 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = bodySize * 1.75f)
             MarkdownBlockType.HEADER_2 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = bodySize * 1.55f)
             MarkdownBlockType.HEADER_3 -> SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = bodySize * 1.35f)
@@ -65,15 +53,12 @@ class MarkdownDocumentOutputTransformation(
             )
             else -> return
         }
-        addStyle(style, range.first, range.last + 1)
+        addStyle(style, start, end)
     }
 
-    private fun TextFieldBuffer.applyElementStyle(
-        element: DocumentElementRange,
-        matrix: IndexTransformationMatrix
-    ) {
-        val range = transformedRange(element, matrix) ?: return
-        val style = when (element.type) {
+    private fun TextFieldBuffer.applyElementStyle(type: MarkdownElementType, start: Int, end: Int) {
+        if (start >= end) return
+        val style = when (type) {
             MarkdownElementType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
             MarkdownElementType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
             MarkdownElementType.STRIKETHROUGH -> SpanStyle(textDecoration = TextDecoration.LineThrough)
@@ -99,15 +84,6 @@ class MarkdownDocumentOutputTransformation(
             MarkdownElementType.TOKEN_ESCAPE_CHAR -> SpanStyle(color = tokenColor)
             else -> return
         }
-        addStyle(style, range.first, range.last + 1)
-    }
-
-    private fun transformedRange(
-        range: DocumentElementRange,
-        matrix: IndexTransformationMatrix
-    ): IntRange? {
-        val start = matrix.originalToTransformed(range.start)
-        val end = matrix.originalToTransformed(range.end)
-        return if (start < end) start until end else null
+        addStyle(style, start, end)
     }
 }
