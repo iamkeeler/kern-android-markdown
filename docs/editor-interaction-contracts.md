@@ -17,6 +17,10 @@ This document records user-visible editor behavior that must survive refactors. 
 - Copying a selection must preserve document paragraph boundaries without introducing extra blank lines.
 - Do not put a `LazyColumn` or other virtualized layout inside the document `SelectionContainer`; selection behavior for uncomposed text is undefined.
 - Regression coverage: `EditorScreenTest.testCrossParagraphSelectionCopiesParagraphBoundary`.
+- Symptom and affected release: selecting a word in rendered editing could select the full document.
+- Root cause: `MarkdownDocumentOutputTransformation` replaced the complete document in one operation, collapsing Compose's source-to-presentation offset mapping into a document-wide replacement range.
+- Behavioral invariant: selecting a visible word maps to only its corresponding Markdown range (including an adjacent hidden structural marker when needed); Markdown token removal must use local edits rather than a whole-document replacement.
+- Automated test name: `EditorScreenTest.testRenderedEditorSelectsOnlyTheRequestedWordRange`.
 
 ### Document text is the source of truth
 

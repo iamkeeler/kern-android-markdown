@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
@@ -323,6 +324,37 @@ class EditorScreenTest {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     val copied = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
     org.junit.Assert.assertEquals("First paragraph\n\nSecond paragraph", copied)
+  }
+
+  @Test
+  fun testRenderedEditorSelectsOnlyTheRequestedWordRange() {
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", "# Introduction\n\nA selectable paragraph")
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("Introduction")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performClick()
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+          // "Intro" starts at zero in the rendered text, but at offset two in Markdown.
+          action(0, 5, false)
+        }
+    composeTestRule.waitForIdle()
+
+    // The hidden heading marker is included at the start of the source range so applying
+    // formatting to the visible selection preserves the Markdown block construct.
+    org.junit.Assert.assertEquals(TextRange(0, 7), viewModel.documentTextFieldState.selection)
   }
 
   @Test

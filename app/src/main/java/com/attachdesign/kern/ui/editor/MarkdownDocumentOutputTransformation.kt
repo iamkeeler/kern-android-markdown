@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.TextUnit
 import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.MarkdownElementType
 import com.attachdesign.kern.parser.MarkdownRenderer
+import com.attachdesign.kern.parser.MarkdownDocumentScanner
+import com.attachdesign.kern.parser.MarkdownElement
 
 class MarkdownDocumentOutputTransformation(
     private val viewMode: ViewMode,
@@ -27,11 +29,65 @@ class MarkdownDocumentOutputTransformation(
             return
         }
 
+        // Do not replace the entire document in one edit. Compose maps a whole-document
+        // replacement as one transformed range, which collapses word-level selection into
+        // the document boundaries. Apply the Markdown changes as local edits instead so
+        // the platform can retain an accurate offset mapping for selection handles.
+        applyMarkdownProjection(source)
+
         val projection = MarkdownRenderer.renderDocument(source)
-        replace(0, length, projection.text)
         projection.blocks.forEach { block -> applyBlockStyle(block.type, block.start, block.end) }
         projection.spans.forEach { span -> applyElementStyle(span.type, span.start, span.end) }
     }
+
+    private fun TextFieldBuffer.applyMarkdownProjection(source: String) {
+        var blockStart = 0
+        val indexedBlocks = MarkdownDocumentScanner.scan(source).map { block ->
+            val start = blockStart
+            blockStart += block.rawText.length + block.separatorAfter.length
+            start to block
+        }
+
+        indexedBlocks.asReversed().forEach { (start, block) ->
+            val rendered = MarkdownRenderer.render(block).text
+            val edits = block.elements.mapNotNull { element ->
+                element.replacementFor(block.blockType)?.let { replacement ->
+                    LocalEdit(element.start, element.end, replacement)
+                }
+            }.sortedByDescending { it.start }
+
+            val locallyProjected = edits.fold(block.rawText) { text, edit ->
+                text.replaceRange(edit.start, edit.end, edit.replacement)
+            }
+            if (locallyProjected == rendered) {
+                edits.forEach { edit -> replace(start + edit.start, start + edit.end, edit.replacement) }
+            } else if (block.rawText != rendered) {
+                // Tables and other compound blocks need a richer layout projection. Keep
+                // their replacement block-local so ordinary text retains granular mapping.
+                replace(start, start + block.rawText.length, rendered)
+            }
+        }
+    }
+
+    private fun MarkdownElement.replacementFor(blockType: MarkdownBlockType): String? = when (type) {
+        MarkdownElementType.TOKEN_LIST_BULLET -> when (blockType) {
+            MarkdownBlockType.TASK_LIST -> if (extra == "checked") "☑ " else "☐ "
+            MarkdownBlockType.UNORDERED_LIST -> "• "
+            else -> null
+        }
+        MarkdownElementType.TOKEN_BLOCKQUOTE -> "│ "
+        MarkdownElementType.TOKEN_HEADER,
+        MarkdownElementType.TOKEN_BOLD,
+        MarkdownElementType.TOKEN_ITALIC,
+        MarkdownElementType.TOKEN_STRIKETHROUGH,
+        MarkdownElementType.TOKEN_INLINE_CODE,
+        MarkdownElementType.TOKEN_LINK_TEXT,
+        MarkdownElementType.TOKEN_LINK_URL,
+        MarkdownElementType.TOKEN_ESCAPE_CHAR -> ""
+        else -> null
+    }
+
+    private data class LocalEdit(val start: Int, val end: Int, val replacement: String)
 
     private fun TextFieldBuffer.applyBlockStyle(blockType: MarkdownBlockType, start: Int, end: Int) {
         if (start >= end) return
