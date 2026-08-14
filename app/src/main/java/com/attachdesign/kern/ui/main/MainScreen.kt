@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
@@ -156,6 +157,7 @@ fun MainScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var sortMode by remember { mutableStateOf(SortMode.ALPHA_ASC) }
+    var isSortMenuOpen by remember { mutableStateOf(false) }
     var draggedNode by remember { mutableStateOf<VfsNode?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val folderBounds = remember { mutableStateMapOf<String, Rect>() }
@@ -471,33 +473,19 @@ fun MainScreen(
                         (activeProjectLocal.isExternal || state.currentPath.isNotEmpty())
 
                     if (showBackArrow) {
-                        Text(
-                            text = "←",
-                            color = theme.accent,
-                            fontSize = theme.typography.small,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { vm.navigateUp() }
-                                .padding(end = theme.dimensions.spacingMedium)
-                        )
+                        IconButton(onClick = { vm.navigateUp() }) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Up", tint = theme.accent)
+                        }
                     }
 
                     val isAtFilesRoot = activeProjectLocal == null ||
                         (!activeProjectLocal.isExternal && activeProjectLocal.path == "root" && state.currentPath.isEmpty())
 
-                    Text(
-                        text = "files",
-                        color = if (isAtFilesRoot) theme.textPrimary else theme.accent,
-                        fontSize = theme.typography.small,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = if (isAtFilesRoot) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.clickable {
-                            if (activeProjectLocal != null) {
-                                vm.navigateUpToRoot()
-                            }
-                        }
-                    )
+                    TextButton(onClick = { if (activeProjectLocal != null) vm.navigateUpToRoot() }) {
+                        Text("files", color = if (isAtFilesRoot) theme.textPrimary else theme.accent,
+                            fontSize = theme.typography.small, fontFamily = FontFamily.Monospace,
+                            fontWeight = if (isAtFilesRoot) FontWeight.Bold else FontWeight.Normal)
+                    }
 
                     activeProjectLocal?.let { proj ->
                         val isSandboxRoot = !proj.isExternal && proj.path == "root"
@@ -505,18 +493,11 @@ fun MainScreen(
                             Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
 
                             val isProjRoot = state.currentPath.isEmpty()
-                            Text(
-                                text = proj.name.lowercase(),
-                                color = if (isProjRoot) theme.textPrimary else theme.accent,
-                                fontSize = theme.typography.small,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.clickable {
-                                    if (!isProjRoot) {
-                                        vm.navigateToFolderRoot(proj)
-                                    }
-                                }
-                            )
+                            TextButton(onClick = { if (!isProjRoot) vm.navigateToFolderRoot(proj) }) {
+                                Text(proj.name.lowercase(), color = if (isProjRoot) theme.textPrimary else theme.accent,
+                                    fontSize = theme.typography.small, fontFamily = FontFamily.Monospace,
+                                    fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal)
+                            }
                         }
 
                         if (state.currentPath.isNotEmpty()) {
@@ -525,18 +506,11 @@ fun MainScreen(
                                 Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
                                 val isLast = index == segments.lastIndex
                                 val segmentPath = segments.take(index + 1).joinToString("/")
-                                Text(
-                                    text = segment,
-                                    color = if (isLast) theme.textPrimary else theme.accent,
-                                    fontSize = theme.typography.small,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier.clickable {
-                                        if (!isLast) {
-                                            vm.navigateToSegment(proj, segmentPath)
-                                        }
-                                    }
-                                )
+                                TextButton(onClick = { if (!isLast) vm.navigateToSegment(proj, segmentPath) }) {
+                                    Text(segment, color = if (isLast) theme.textPrimary else theme.accent,
+                                        fontSize = theme.typography.small, fontFamily = FontFamily.Monospace,
+                                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal)
+                                }
                             }
                         }
                     }
@@ -545,37 +519,23 @@ fun MainScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium), verticalAlignment = Alignment.CenterVertically) {
                     val isAtRoot = state.activeProject?.let { !it.isExternal && it.path == "root" && state.currentPath.isEmpty() } ?: false
                     if (isAtRoot) {
-                        Text(
-                            text = "[+ workspace]",
-                            color = theme.accent,
-                            fontSize = theme.typography.tiny,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.clickable {
+                        TextButton(onClick = {
                                 if (showWorkspaceIntro) {
                                     isIntroDialogOpen = true
                                 } else {
                                     openDocumentTreeLauncher.launch(null)
                                 }
-                            }
-                        )
+                            }) { Text("Add workspace", color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace) }
                     }
 
-                    Text(
-                        text = sortMode.displayName,
-                        color = theme.accent,
-                        fontSize = theme.typography.tiny,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = (theme.typography.tiny.value * 0.05f).sp,
-                        modifier = Modifier
-                            .clickable { 
-                                sortMode = when (sortMode) {
-                                    SortMode.ALPHA_ASC -> SortMode.ALPHA_DESC
-                                    SortMode.ALPHA_DESC -> SortMode.RECENT
-                                    SortMode.RECENT -> SortMode.ALPHA_ASC
-                                }
+                    Box {
+                        TextButton(onClick = { isSortMenuOpen = true }) { Text(sortMode.displayName, color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace) }
+                        DropdownMenu(expanded = isSortMenuOpen, onDismissRequest = { isSortMenuOpen = false }) {
+                            SortMode.entries.forEach { mode ->
+                                DropdownMenuItem(text = { Text(mode.displayName) }, onClick = { sortMode = mode; isSortMenuOpen = false })
                             }
-                            .padding(vertical = theme.dimensions.spacingSmall, horizontal = theme.dimensions.spacingSmall)
-                    )
+                        }
+                    }
                 }
             }
         }
@@ -640,22 +600,22 @@ fun MainScreen(
                             contentPadding = PaddingValues(bottom = 90.dp)
                         ) {
                             items(filteredItems) { item ->
-                                SearchVfsNodeRow(
+                                SearchOverflowRow(
                                     node = item.node,
                                     project = item.project,
                                     theme = theme,
-                                    onNodeClick = { clicked ->
-                                        if (clicked.isDirectory) {
-                                            vm.navigateToFolder(clicked, item.project)
+                                    onClick = {
+                                        if (item.node.isDirectory) {
+                                            vm.navigateToFolder(item.node, item.project)
                                             isSearchActive = false
                                             searchQuery = ""
                                         } else {
-                                            onItemClick(EditorKey(item.project.id, clicked.relativePath))
+                                            onItemClick(EditorKey(item.project.id, item.node.relativePath))
                                         }
                                     },
-                                    onShareClick = { clicked -> coroutineScope.launch { fileOpsManager.shareNode(item.project, clicked) } },
-                                    onEditClick = { clicked -> nodeToRename = Pair(clicked, item.project) },
-                                    onDeleteClick = { clicked -> nodeToDelete = Pair(clicked, item.project) }
+                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(item.project, item.node) } },
+                                    onEdit = { nodeToRename = Pair(item.node, item.project) },
+                                    onDelete = { nodeToDelete = Pair(item.node, item.project) }
                                 )
                             }
                         }
@@ -691,7 +651,7 @@ fun MainScreen(
                             contentPadding = PaddingValues(bottom = 90.dp)
                         ) {
                             items(sortedProjects, key = { it.id }) { proj ->
-                                SwipeableProjectRow(
+                                ProjectOverflowRow(
                                     project = proj,
                                     theme = theme,
                                     appFont = appFont,
@@ -758,7 +718,7 @@ fun MainScreen(
                                     folderBounds[node.relativePath] = coordinates.boundsInRoot()
                                 }
                                 Box(modifier = rowModifier) {
-                                    SwipeableFileRow(
+                                    FileOverflowRow(
                                         node = node,
                                         theme = theme,
                                         appFont = appFont,
@@ -801,11 +761,6 @@ fun MainScreen(
                                                 }
                                             } else {
                                                 nodeToDelete = Pair(node, activeProj)
-                                            }
-                                        },
-                                        onLongClick = {
-                                            if (!node.relativePath.startsWith("external:")) {
-                                                activeNodeActionsTarget = Pair(node, activeProj)
                                             }
                                         },
                                         onDragStart = { offset ->
@@ -1093,13 +1048,7 @@ private fun ProjectSectionHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.elevationMedium),
-            modifier = Modifier
-                .clickable { onHeaderClick() }
-                .padding(vertical = theme.dimensions.spacingSmall)
-        ) {
+        TextButton(onClick = onHeaderClick) {
             Text(
                 text = buildString {
                     append(project.name.uppercase())
@@ -1126,24 +1075,12 @@ private fun ProjectSectionHeader(
             horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "[+ file]",
-                color = theme.accent,
-                fontSize = theme.typography.tiny,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .clickable { onCreateFileClick() }
-                    .padding(horizontal = theme.dimensions.spacingSmall, vertical = theme.dimensions.spacingTiny)
-            )
-            Text(
-                text = "[+ folder]",
-                color = theme.accent,
-                fontSize = theme.typography.tiny,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .clickable { onCreateFolderClick() }
-                    .padding(horizontal = theme.dimensions.spacingSmall, vertical = theme.dimensions.spacingTiny)
-            )
+            TextButton(onClick = onCreateFileClick) {
+                Text("Add file", color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace)
+            }
+            TextButton(onClick = onCreateFolderClick) {
+                Text("Add folder", color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace)
+            }
         }
     }
 }
@@ -1195,6 +1132,102 @@ private fun EmptyStateHint(
             }
         }
     }
+}
+
+@Composable
+private fun OverflowActions(
+    theme: AppColorTheme,
+    onShare: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Outlined.MoreVert, contentDescription = "More actions", tint = theme.textMuted)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { expanded = false; onShare() })
+            DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = { expanded = false; onEdit() })
+            DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) }, onClick = { expanded = false; onDelete() })
+        }
+    }
+}
+
+@Composable
+private fun FileOverflowRow(
+    node: VfsNode,
+    theme: AppColorTheme,
+    appFont: FontFamily,
+    isExternalProject: Boolean,
+    onClick: () -> Unit,
+    onShare: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onDragStart: (Offset) -> Unit = {},
+    onDrag: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {}
+) {
+    val isExternal = node.relativePath.startsWith("external:")
+    val details = if (node.isDirectory) "Directory" else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0} KB"
+    ListItem(
+        headlineContent = { Text(node.name, fontFamily = appFont, fontWeight = if (isExternal || node.isDirectory) FontWeight.Bold else FontWeight.Normal) },
+        supportingContent = { Text(details, fontFamily = FontFamily.Monospace, color = theme.textMuted) },
+        leadingContent = { Text(if (isExternal || node.isDirectory) "📁" else "📄", fontSize = theme.typography.bodyLarge) },
+        trailingContent = { OverflowActions(theme, onShare, onEdit, onDelete) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(node.relativePath) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = onDragStart,
+                    onDrag = { change, amount -> change.consume(); onDrag(amount) },
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragEnd
+                )
+            }
+            .clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent, headlineColor = theme.textPrimary)
+    )
+}
+
+@Composable
+private fun ProjectOverflowRow(
+    project: ProjectEntity,
+    theme: AppColorTheme,
+    appFont: FontFamily,
+    onClick: () -> Unit,
+    onShare: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(project.name, fontFamily = appFont, fontWeight = FontWeight.Bold) },
+        supportingContent = { Text(if (project.isExternal) "Linked workspace" else "Workspace", color = theme.textMuted) },
+        leadingContent = { Text("📁", fontSize = theme.typography.bodyLarge) },
+        trailingContent = { OverflowActions(theme, onShare, onEdit, onDelete) },
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent, headlineColor = theme.textPrimary)
+    )
+}
+
+@Composable
+private fun SearchOverflowRow(
+    node: VfsNode,
+    project: ProjectEntity,
+    theme: AppColorTheme,
+    onClick: () -> Unit,
+    onShare: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(node.name, fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal) },
+        supportingContent = { Text("${project.name}/${node.relativePath.substringBeforeLast('/', "")}", color = theme.textMuted) },
+        leadingContent = { Text(if (node.isDirectory) "📁" else "📄", fontSize = theme.typography.bodyLarge) },
+        trailingContent = { OverflowActions(theme, onShare, onEdit, onDelete) },
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent, headlineColor = theme.textPrimary)
+    )
 }
 
 // ── Swipe-to-reveal helpers ───────────────────────────────────────────────────
@@ -1614,63 +1647,32 @@ fun InputDialog(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun NodeActionsDialog(
     node: VfsNode,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     onAction: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = node.name,
-                color = theme.textPrimary,
-                fontSize = theme.typography.subtitle,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = theme.surface) {
+        Text(
+            text = node.name,
+            color = theme.textPrimary,
+            fontSize = theme.typography.subtitle,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = theme.dimensions.spacingExtraLarge, vertical = theme.dimensions.spacingMedium)
+        )
+        listOf("duplicate" to "Duplicate", "rename" to "Rename", "share" to "Share", "delete" to "Delete").forEach { (action, label) ->
+            ListItem(
+                headlineContent = { Text(label, color = if (action == "delete") theme.danger else theme.textPrimary) },
+                modifier = Modifier.fillMaxWidth().clickable { onAction(action) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
-            ) {
-                TextButton(
-                    onClick = { onAction("duplicate") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Duplicate", color = theme.textPrimary, modifier = Modifier.fillMaxWidth())
-                }
-                TextButton(
-                    onClick = { onAction("rename") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Rename", color = theme.textPrimary, modifier = Modifier.fillMaxWidth())
-                }
-                TextButton(
-                    onClick = { onAction("share") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Share", color = theme.textPrimary, modifier = Modifier.fillMaxWidth())
-                }
-                TextButton(
-                    onClick = { onAction("delete") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Delete", color = theme.danger, modifier = Modifier.fillMaxWidth())
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = theme.textMuted)
-            }
-        },
-        containerColor = theme.surface
-    )
+        }
+        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+    }
 }
 
 @Composable
@@ -1712,15 +1714,17 @@ fun CreateProjectDialog(
                     )
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)) {
-                    Text(
-                        text = if (selectedUri.isEmpty()) "Link local directory" else "Linked folder: ${Uri.parse(selectedUri).lastPathSegment?.substringAfterLast(":") ?: ""}",
-                        color = theme.accent,
-                        fontSize = theme.typography.body,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clickable { onSelectFolder() }
-                            .padding(vertical = theme.dimensions.spacingSmall)
-                    )
+                    OutlinedButton(onClick = onSelectFolder) {
+                        Text(if (selectedUri.isEmpty()) "Link local directory" else "Change linked folder")
+                    }
+                    if (selectedUri.isNotEmpty()) {
+                        Text(
+                            text = "Linked folder: ${Uri.parse(selectedUri).lastPathSegment?.substringAfterLast(":") ?: ""}",
+                            color = theme.accent,
+                            fontSize = theme.typography.body,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     if (selectedUri.isNotEmpty()) {
                         Text(
                             text = "Files in this directory will be loaded.",

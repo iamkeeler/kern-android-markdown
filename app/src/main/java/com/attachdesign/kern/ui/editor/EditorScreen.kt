@@ -1441,13 +1441,18 @@ fun MetricsTab(
                 "Sentences" to metrics.sentenceCount.toString()
             )
             countItems.forEach { (label, value) ->
-                Column(
+                Card(
                     modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    colors = CardDefaults.cardColors(containerColor = theme.surface.copy(alpha = 0.75f))
                 ) {
-                    Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
-                    Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(theme.dimensions.spacingMedium),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
+                        Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
+                    }
                 }
             }
         }

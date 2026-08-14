@@ -43,12 +43,20 @@ object MarkdownRenderer {
             val start = text.length
             val projection = render(block)
             val blockPrefix = if (block.blockType == MarkdownBlockType.BLOCKQUOTE && projection.text.isNotBlank()) "│ " else ""
+            val renderedText = if (block.blockType == MarkdownBlockType.CODE_BLOCK) {
+                projection.text.removeSuffix("\r\n").removeSuffix("\n").removeSuffix("\r")
+            } else {
+                projection.text
+            }
             text.append(blockPrefix)
-            text.append(projection.text)
+            text.append(renderedText)
             val end = text.length
             blocks += DocumentRenderBlock(block.blockType, start, end)
             projection.spans.forEach { span ->
-                spans += DocumentRenderSpan(span.type, start + blockPrefix.length + span.start, start + blockPrefix.length + span.end)
+                val spanEnd = minOf(span.end, renderedText.length)
+                if (span.start < spanEnd) {
+                    spans += DocumentRenderSpan(span.type, start + blockPrefix.length + span.start, start + blockPrefix.length + spanEnd)
+                }
             }
             text.append(block.separatorAfter)
         }

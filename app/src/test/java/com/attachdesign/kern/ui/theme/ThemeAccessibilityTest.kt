@@ -66,4 +66,13 @@ class ThemeAccessibilityTest {
         val accentBgContrast = calculateContrastRatio(theme.accentHex, theme.backgroundHex)
         assertTrue("Dark theme accent vs bg contrast ($accentBgContrast) is below 3.0:1", accentBgContrast >= 3.0)
     }
+
+    @Test
+    fun activeThemeDrivesAccessibleSystemBarIcons() {
+        val light = systemBarUsesDarkIcons(ThemeEngine.DefaultLight.isDark)
+        val dark = systemBarUsesDarkIcons(ThemeEngine.DefaultDark.isDark)
+
+        assertTrue("Light system bars need dark icons", light)
+        assertTrue("Dark system bars need light icons", !dark)
+    }
 }
