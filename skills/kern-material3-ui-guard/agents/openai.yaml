@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kern Material 3 UI Guard"
+  short_description: "Protect Material 3 UI behavior"
+  default_prompt: "Use $kern-material3-ui-guard to safely implement this Kern UI change."

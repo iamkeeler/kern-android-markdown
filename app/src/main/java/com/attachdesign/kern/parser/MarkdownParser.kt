@@ -4,9 +4,8 @@ import java.util.UUID
 
 object MarkdownParser {
 
-    private val unorderedListMarkerRegex = "^(\\s*)[-*+](\\s+|$)".toRegex()
-    private val orderedListMarkerRegex = "^(\\s*)\\d+\\.(\\s+|$)".toRegex()
-    private val checklistRegex = "^(\\s*)[-*+]\\s+\\[([ xX])\\](?:\\s+|$)".toRegex()
+    private val atxHeadingRegex = "^( {0,3})(#{1,6})(?:[ \\t]+|$)(.*)$".toRegex()
+    private val tableDelimiterRegex = "^\\s*\\|?\\s*:?-{1,}:?\\s*(?:\\|\\s*:?-{1,}:?\\s*)+\\|?\\s*$".toRegex()
 
     /**
      * Optimized list line check.
@@ -14,39 +13,7 @@ object MarkdownParser {
      * in the high-frequency splitDocument loop, reducing execution time by ~94%.
      */
     fun isListLine(line: String): Boolean {
-        var i = 0
-        val len = line.length
-
-        // Skip leading whitespaces
-        while (i < len && line[i].isWhitespace()) {
-            i++
-        }
-        if (i >= len) return false
-
-        val c = line[i]
-
-        // Check for unordered list or checklist: '-' or '*' or '+'
-        if (c == '-' || c == '*' || c == '+') {
-            if (i + 1 == len) return true // e.g. "-"
-            val nextC = line[i + 1]
-            if (nextC.isWhitespace()) {
-                return true
-            }
-        }
-
-        // Check for ordered list: digit(s) followed by '.' followed by space or EOF
-        if (c.isDigit()) {
-            var j = i + 1
-            while (j < len && line[j].isDigit()) {
-                j++
-            }
-            if (j < len && line[j] == '.') {
-                if (j + 1 == len) return true
-                if (line[j + 1].isWhitespace()) return true
-            }
-        }
-
-        return false
+        return MarkdownListSyntax.parse(line) != null
     }
 
     /**
@@ -92,71 +59,66 @@ object MarkdownParser {
         val elements = mutableListOf<MarkdownElement>()
         val len = rawText.length
 
-        val unorderedMatch = unorderedListMarkerRegex.find(rawText)
-        val orderedMatch = orderedListMarkerRegex.find(rawText)
-        val checklistMatch = checklistRegex.find(rawText)
+        val listMarker = MarkdownListSyntax.parse(rawText)
 
-        val lines = rawText.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
-        val isTable = lines.isNotEmpty() && lines.all { it.startsWith("|") && it.endsWith("|") }
+        val sourceLines = rawText.lines()
+        val isTable = sourceLines.size >= 2 && tableDelimiterRegex.matches(sourceLines[1]) &&
+            sourceLines.first().contains('|')
 
         val trimmed = rawText.trim()
         if (isTable) {
             blockType = MarkdownBlockType.TABLE
             contentStart = len
-        } else if (trimmed == "---" || trimmed == "***" || trimmed == "___") {
+        } else if (isThematicBreak(rawText)) {
             blockType = MarkdownBlockType.HORIZONTAL_RULE
             contentStart = len
-        } else if (rawText.startsWith("###### ")) {
-            blockType = MarkdownBlockType.HEADER_6
-            contentStart = 7
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 7, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("##### ")) {
-            blockType = MarkdownBlockType.HEADER_5
-            contentStart = 6
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 6, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("#### ")) {
-            blockType = MarkdownBlockType.HEADER_4
-            contentStart = 5
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 5, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("### ")) {
-            blockType = MarkdownBlockType.HEADER_3
-            contentStart = 4
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 4, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("## ")) {
-            blockType = MarkdownBlockType.HEADER_2
-            contentStart = 3
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 3, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("# ")) {
-            blockType = MarkdownBlockType.HEADER_1
-            contentStart = 2
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, 2, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("> ") || rawText == ">") {
+        } else if (atxHeadingRegex.find(rawText)?.let { it.range.first == 0 } == true) {
+            val match = atxHeadingRegex.find(rawText)!!
+            val prefixLength = match.groupValues[1].length + match.groupValues[2].length +
+                if (rawText.getOrNull(match.groupValues[1].length + match.groupValues[2].length)?.isWhitespace() == true) 1 else 0
+            blockType = when (match.groupValues[2].length) {
+                1 -> MarkdownBlockType.HEADER_1
+                2 -> MarkdownBlockType.HEADER_2
+                3 -> MarkdownBlockType.HEADER_3
+                4 -> MarkdownBlockType.HEADER_4
+                5 -> MarkdownBlockType.HEADER_5
+                else -> MarkdownBlockType.HEADER_6
+            }
+            contentStart = prefixLength
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, 0, prefixLength, constructStart = 0, constructEnd = len))
+            val closing = Regex("\\s+#+\\s*$").find(rawText.substring(contentStart))
+            if (closing != null) {
+                val closingStart = contentStart + closing.range.first
+                elements.add(MarkdownElement(MarkdownElementType.TOKEN_HEADER, closingStart, len, constructStart = 0, constructEnd = len))
+            }
+        } else if (rawText.trimStart().startsWith("> ") || rawText.trim() == ">") {
             blockType = MarkdownBlockType.BLOCKQUOTE
-            contentStart = if (rawText.startsWith("> ")) 2 else 1
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, 0, contentStart, constructStart = 0, constructEnd = len))
-        } else if (checklistMatch != null && checklistMatch.range.start == 0) {
+            val leadingWhitespace = rawText.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            contentStart = leadingWhitespace + if (rawText.substring(leadingWhitespace).startsWith("> ")) 2 else 1
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, leadingWhitespace, contentStart, constructStart = 0, constructEnd = len))
+        } else if (listMarker?.kind == MarkdownListSyntax.Kind.TASK) {
             blockType = MarkdownBlockType.TASK_LIST
-            contentStart = checklistMatch.value.length
-            val leadingSpaces = checklistMatch.groupValues[1].length
-            val isChecked = checklistMatch.groupValues[2].lowercase() == "x"
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, extra = if (isChecked) "checked" else "unchecked", constructStart = 0, constructEnd = len))
-        } else if (unorderedMatch != null && unorderedMatch.range.start == 0) {
+            contentStart = listMarker.contentStart
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, listMarker.indent.length, contentStart, extra = if (listMarker.checked == true) "checked" else "unchecked", constructStart = 0, constructEnd = len))
+        } else if (listMarker?.kind == MarkdownListSyntax.Kind.UNORDERED) {
             blockType = MarkdownBlockType.UNORDERED_LIST
-            contentStart = unorderedMatch.value.length
-            val leadingSpaces = unorderedMatch.value.takeWhile { it.isWhitespace() }.length
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
-        } else if (rawText.startsWith("```")) {
+            contentStart = listMarker.contentStart
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, listMarker.indent.length, contentStart, constructStart = 0, constructEnd = len))
+        } else if (fenceInfo(rawText.lineSequence().firstOrNull().orEmpty()) != null) {
             blockType = MarkdownBlockType.CODE_BLOCK
+            val openingFence = fenceInfo(rawText.lineSequence().firstOrNull().orEmpty())!!
+            val fenceStart = openingFence.first
+            val fence = openingFence.second
             val openingLineEnd = rawText.indexOfFirst { it == '\r' || it == '\n' }
             val openingEndingLength = when {
                 openingLineEnd == -1 -> 0
                 rawText[openingLineEnd] == '\r' && rawText.getOrNull(openingLineEnd + 1) == '\n' -> 2
                 else -> 1
             }
-            val contentStartIndex = if (openingLineEnd == -1) 3 else openingLineEnd + openingEndingLength
-            val closeIdx = rawText.lastIndexOf("```").takeIf { it >= contentStartIndex } ?: -1
+            val contentStartIndex = if (openingLineEnd == -1) fenceStart + fence.length else openingLineEnd + openingEndingLength
+            val closeIdx = closingFenceIndex(rawText, contentStartIndex, fence)
             if (closeIdx != -1) {
-                val cEnd = closeIdx + 3
+                val cEnd = closeIdx + fence.length
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, contentStartIndex, constructStart = 0, constructEnd = cEnd))
                 elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, contentStartIndex, closeIdx, constructStart = 0, constructEnd = cEnd))
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, closeIdx, cEnd, constructStart = 0, constructEnd = cEnd))
@@ -164,11 +126,10 @@ object MarkdownParser {
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, contentStartIndex, constructStart = 0, constructEnd = len))
                 elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, contentStartIndex, len, constructStart = 0, constructEnd = len))
             }
-        } else if (orderedMatch != null && orderedMatch.range.start == 0) {
+        } else if (listMarker?.kind == MarkdownListSyntax.Kind.ORDERED) {
             blockType = MarkdownBlockType.ORDERED_LIST
-            contentStart = orderedMatch.value.length
-            val leadingSpaces = orderedMatch.value.takeWhile { it.isWhitespace() }.length
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
+            contentStart = listMarker.contentStart
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, listMarker.indent.length, contentStart, constructStart = 0, constructEnd = len))
         }
 
         // Inline parser content bounds
@@ -178,6 +139,37 @@ object MarkdownParser {
         }
 
         return ParagraphBlock(id, rawText, blockType, elements.sortedBy { it.start }, separatorAfter)
+    }
+
+    fun isThematicBreak(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.length < 3) return false
+        val markers = trimmed.filterNot { it.isWhitespace() }
+        return markers.length >= 3 && markers.all { it == markers.first() } && markers.first() in "*-_"
+    }
+
+    private fun fenceInfo(line: String): Pair<Int, String>? {
+        val indent = line.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+        if (indent > 3) return null
+        val rest = line.drop(indent)
+        val marker = rest.firstOrNull() ?: return null
+        if (marker != '`' && marker != '~') return null
+        val length = rest.takeWhile { it == marker }.length
+        return if (length >= 3) indent to rest.take(length) else null
+    }
+
+    private fun closingFenceIndex(rawText: String, contentStart: Int, openingFence: String): Int {
+        var lineStart = contentStart
+        while (lineStart < rawText.length) {
+            val lineEnd = rawText.indexOfAny(charArrayOf('\r', '\n'), lineStart).let { if (it == -1) rawText.length else it }
+            val info = fenceInfo(rawText.substring(lineStart, lineEnd))
+            if (info != null && info.second.first() == openingFence.first() && info.second.length >= openingFence.length &&
+                rawText.substring(lineStart + info.first + info.second.length, lineEnd).isBlank()) {
+                return lineStart + info.first
+            }
+            lineStart = if (lineEnd >= rawText.length) rawText.length else lineEnd + if (rawText[lineEnd] == '\r' && rawText.getOrNull(lineEnd + 1) == '\n') 2 else 1
+        }
+        return -1
     }
 
     /**

@@ -11,19 +11,15 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 
@@ -46,6 +42,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -84,11 +81,14 @@ import com.attachdesign.kern.parser.IndexRange
 import com.attachdesign.kern.parser.IndexTransformationMatrix
 import com.attachdesign.kern.ui.main.InputDialog
 import com.attachdesign.kern.ui.theme.AppColorTheme
+import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 import com.attachdesign.kern.ui.settings.SettingsTabsContent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.attachdesign.kern.parser.MarkdownBlockType
+import com.attachdesign.kern.parser.DocumentEditEngine
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun EditorScreen(
@@ -103,6 +103,13 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
+
+    ApplyKernSystemBars(theme)
+
+    LaunchedEffect(viewModel.documentTextFieldState) {
+        snapshotFlow { viewModel.documentTextFieldState.text.toString() }
+            .collectLatest(viewModel::onDocumentTextChanged)
+    }
 
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -201,7 +208,7 @@ fun EditorScreen(
             // Editor Canvas (Main container)
             Column(
                 modifier = Modifier
-                    .weight(editorWeight)
+                    .then(if (isDualPane) Modifier.weight(editorWeight) else Modifier.fillMaxSize())
                     .fillMaxHeight()
             ) {
                 // Header (Breadcrumbs)
@@ -210,13 +217,7 @@ fun EditorScreen(
                         EditorHeader(
                             filePath = filePath,
                             theme = uiState.activeTheme,
-                            isMetricsOpen = uiState.isReadabilityPopupOpen,
-                            metricsContent = {
-                                MetricsTab(
-                                    state = uiState,
-                                    onClose = { viewModel.toggleReadabilityPopup() }
-                                )
-                            },
+                            isMetricsActive = uiState.sidebarMode == SidebarMode.METRICS,
                             onBackClick = onBackClick,
                             onCopyClick = {
                                 val fullText = MarkdownRenderer.copyDocument(uiState.paragraphs.items.map { it.block })
@@ -224,7 +225,8 @@ fun EditorScreen(
                                 Toast.makeText(context, "Copied rendered text", Toast.LENGTH_SHORT).show()
                             },
                             onMetricsToggle = {
-                                viewModel.toggleReadabilityPopup()
+                                val currentMode = uiState.sidebarMode
+                                viewModel.toggleSidebar(if (currentMode == SidebarMode.METRICS) SidebarMode.CLOSED else SidebarMode.METRICS)
                             },
                             onSettingsToggle = {
                                 val currentMode = uiState.sidebarMode
@@ -263,8 +265,8 @@ fun EditorScreen(
                         )
 
                         HorizontalDivider(
-                            thickness = theme.dimensions.borderWidth,
-                            color = uiState.activeTheme.textMuted.copy(alpha = 0.15f)
+                            thickness = 2.dp,
+                            color = uiState.activeTheme.textPrimary
                         )
                     }
                 }
@@ -275,8 +277,14 @@ fun EditorScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        // The editor canvas consumes the IME inset once, so the floating
+                        // palette is laid out directly above the keyboard instead of behind it.
                         .imePadding()
-                        .padding(horizontal = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge)
+                        .padding(
+                            top = theme.dimensions.spacingExtraLarge,
+                            start = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge,
+                            end = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge
+                        )
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
@@ -288,97 +296,150 @@ fun EditorScreen(
                     // Floating Formatting Toolbar State
                     var isToolbarMinimized by remember { mutableStateOf(false) }
 
-                    EditorCanvas(
-                        state = uiState,
-                        textFieldValues = textFieldValues,
-                        viewModel = viewModel,
-                        isToolbarMinimized = isToolbarMinimized
-                    )
+                    if (uiState.documentEditorEnabled) {
+                        DocumentEditorField(
+                            state = uiState,
+                            viewModel = viewModel,
+                            isToolbarMinimized = isToolbarMinimized
+                        )
+                    } else {
+                        EditorCanvas(
+                            state = uiState,
+                            textFieldValues = textFieldValues,
+                            viewModel = viewModel,
+                            isToolbarMinimized = isToolbarMinimized
+                        )
+                    }
 
                     val activeIndex = uiState.focusedParagraphIndex
                     val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
 
-                    androidx.compose.animation.AnimatedContent(
-                        targetState = isToolbarMinimized,
-                        transitionSpec = {
-                            (fadeIn(animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)) +
-                             scaleIn(initialScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)))
-                                .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
-                                              scaleOut(targetScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(100)))
-                                .using(SizeTransform(clip = false) { _, _ ->
-                                    androidx.compose.animation.core.spring(
-                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                                    )
-                                })
-                        },
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val isImeOpen = WindowInsets.ime.getBottom(density) > 0
+                    val targetBottomPadding = if (isImeOpen) {
+                        theme.dimensions.spacingMedium
+                    } else {
+                        theme.dimensions.spacingMedium + 16.dp
+                    }
+                    val toolbarBottomPadding by androidx.compose.animation.core.animateDpAsState(
+                        targetValue = targetBottomPadding,
+                        label = "toolbarBottomPadding"
+                    )
+
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = theme.dimensions.spacingExtraLarge, bottom = theme.dimensions.spacingHuge, top = theme.dimensions.spacingExtraLarge, start = theme.dimensions.spacingExtraLarge),
-                        label = "ToolbarMinimizeAnimation"
-                    ) { minimized ->
-                        if (minimized) {
-                            Box(
-                                modifier = Modifier
-                                    .shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
-                                        .background(uiState.activeTheme.surface)
-                                        .clickable { isToolbarMinimized = false }
-                                        .padding(theme.dimensions.spacingLarge)
-                                ) {
-                                    Icon(imageVector = Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar", tint = uiState.activeTheme.accent)
-                                }
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .zIndex(1f)
+                            .padding(bottom = toolbarBottomPadding)
+                    ) {
+                        androidx.compose.animation.AnimatedContent(
+                            targetState = isToolbarMinimized,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)) +
+                                 scaleIn(initialScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)))
+                                    .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
+                                                  scaleOut(targetScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(100)))
+                                    .using(SizeTransform(clip = false) { _, _ ->
+                                        androidx.compose.animation.core.spring(
+                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                        )
+                                    })
+                            },
+                            modifier = Modifier.align(if (isToolbarMinimized) Alignment.BottomEnd else Alignment.BottomCenter),
+                            label = "ToolbarMinimizeAnimation"
+                        ) { minimized ->
+                            if (minimized) {
+                                FormattingPaletteFab(
+                                    theme = uiState.activeTheme,
+                                    onClick = { isToolbarMinimized = false }
+                                )
+                            } else {
+                                FloatingFormattingToolbar(
+                                    theme = uiState.activeTheme,
+                                    onHeaderClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.CycleHeading)
+                                        else if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex)
+                                    },
+                                    onHeaderSet = { level ->
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.SetHeading(level))
+                                        else if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level)
+                                    },
+                                    onIndentClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Indent)
+                                        else if (activeIndex != -1) viewModel.indentParagraph(activeIndex)
+                                    },
+                                    onOutdentClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Outdent)
+                                        else if (activeIndex != -1) viewModel.outdentParagraph(activeIndex)
+                                    },
+                                    onChecklistClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleChecklist)
+                                        else if (activeIndex != -1) viewModel.toggleChecklist(activeIndex)
+                                    },
+                                    onBulletClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleBulletList)
+                                        else if (activeIndex != -1) viewModel.toggleBulletList(activeIndex)
+                                    },
+                                    onMinimizeClick = { isToolbarMinimized = true },
+                                    onFormat = { p, s ->
+                                        if (uiState.documentEditorEnabled) {
+                                            viewModel.applyDocumentCommand(DocumentEditEngine.Command.Wrap(p, s))
+                                        } else {
+                                            if (activeIndex == -1) return@FloatingFormattingToolbar
+                                            viewModel.formatParagraph(activeIndex, p, s)
+                                        }
+                                    }
+                                )
                             }
-                        } else {
-                            FloatingFormattingToolbar(
-                                theme = uiState.activeTheme,
-                                onHeaderClick = { if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex) },
-                                onHeaderSet = { level -> if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level) },
-                                onIndentClick = { if (activeIndex != -1) viewModel.indentParagraph(activeIndex) },
-                                onOutdentClick = { if (activeIndex != -1) viewModel.outdentParagraph(activeIndex) },
-                                onChecklistClick = { if (activeIndex != -1) viewModel.toggleChecklist(activeIndex) },
-                                onBulletClick = { if (activeIndex != -1) viewModel.toggleBulletList(activeIndex) },
-                                onMinimizeClick = { isToolbarMinimized = true },
-                                onFormat = { p, s ->
-                                    if (activeIndex == -1) return@FloatingFormattingToolbar
-                                    val delimiterStart = p
-                                    val delimiterEnd = s
-                                    val value = textFieldValues[activeIndex] ?: return@FloatingFormattingToolbar
-                                    val selStart = value.selection.start
-                                    val selEnd = value.selection.end
-                                    val text = value.text
-
-                                    val selectedText = text.substring(selStart, selEnd)
-
-                                    if (selStart == selEnd && text.substring(selStart).startsWith(delimiterEnd)) {
-                                        // The user is at the end of the formatting, tapping the format button again should just jump the cursor past the closing delimiter
-                                        viewModel.updateParagraph(activeIndex, TextFieldValue(text, androidx.compose.ui.text.TextRange(selStart + delimiterEnd.length)))
-                                        return@FloatingFormattingToolbar
-                                    }
-
-                                    val formatted = delimiterStart + selectedText + delimiterEnd
-                                    val newText = text.substring(0, selStart) + formatted + text.substring(selEnd)
-
-                                    val newSelection = if (uiState.stickySelection && selStart != selEnd) {
-                                        androidx.compose.ui.text.TextRange(selStart + delimiterStart.length, selStart + delimiterStart.length + selectedText.length)
-                                    } else if (selStart == selEnd) {
-                                        androidx.compose.ui.text.TextRange(selStart + delimiterStart.length)
-                                    } else {
-                                        androidx.compose.ui.text.TextRange(selStart + formatted.length)
-                                    }
-
-                                    viewModel.updateParagraph(activeIndex, TextFieldValue(newText, newSelection))
-                                }
-                            )
                         }
                     }
                 }
             }
 
-            // Collapsible Sidebar (Metrics, Settings, Themes, Sync Logs)
+            // Dual-pane Collapsible Sidebar (Metrics, Settings, Themes, Sync Logs)
+            if (isDualPane) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isSidebarOpen,
+                    enter = androidx.compose.animation.slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ) + androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ),
+                    exit = androidx.compose.animation.slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ) + androidx.compose.animation.fadeOut(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    )
+                ) {
+                    SidebarPane(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(theme.dimensions.sidebarWidth)
+                            .background(uiState.activeTheme.surface)
+                            .statusBarsPadding(),
+                        state = uiState,
+                        viewModel = viewModel,
+                        onCloseClick = { viewModel.toggleSidebar(SidebarMode.CLOSED) }
+                    )
+                }
+            }
+        }
+
+        // Single-pane Collapsible Sidebar (Overlay)
+        if (!isDualPane) {
             androidx.compose.animation.AnimatedVisibility(
                 visible = uiState.isSidebarOpen,
                 enter = androidx.compose.animation.slideInHorizontally(
@@ -401,12 +462,12 @@ fun EditorScreen(
                     animationSpec = androidx.compose.animation.core.spring(
                         stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
                     )
-                )
+                ),
+                modifier = Modifier.fillMaxSize()
             ) {
                 SidebarPane(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(if (isDualPane) theme.dimensions.sidebarWidth else widthDp)
+                        .fillMaxSize()
                         .background(uiState.activeTheme.surface)
                         .statusBarsPadding(),
                     state = uiState,
@@ -428,12 +489,11 @@ fun EditorScreen(
 fun EditorHeader(
     filePath: String,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    isMetricsOpen: Boolean,
-    metricsContent: @Composable () -> Unit,
     onBackClick: () -> Unit,
     onCopyClick: () -> Unit,
     onMetricsToggle: () -> Unit,
     onSettingsToggle: () -> Unit,
+    isMetricsActive: Boolean = false,
     onMoreOptionsAction: (String) -> Unit = {},
     onTitleClick: () -> Unit = {}
 ) {
@@ -480,28 +540,16 @@ fun EditorHeader(
                     modifier = Modifier.size(theme.dimensions.iconMedium)
                 )
             }
-            Box {
-                IconButton(
-                    onClick = onMetricsToggle,
-                    modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Analytics,
-                        contentDescription = "Readability metrics",
-                        tint = theme.textMuted,
-                        modifier = Modifier.size(theme.dimensions.iconMedium)
-                    )
-                }
-                DropdownMenu(
-                    expanded = isMetricsOpen,
-                    onDismissRequest = onMetricsToggle,
-                    modifier = Modifier
-                        .width(280.dp)
-                        .background(theme.surface)
-                        .padding(theme.dimensions.spacingLarge)
-                ) {
-                    metricsContent()
-                }
+            IconButton(
+                onClick = onMetricsToggle,
+                modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Analytics,
+                    contentDescription = "Readability metrics",
+                    tint = if (isMetricsActive) theme.accent else theme.textMuted,
+                    modifier = Modifier.size(theme.dimensions.iconMedium)
+                )
             }
             var showMenu by remember { mutableStateOf(false) }
             Box {
@@ -540,40 +588,39 @@ fun EditorCanvas(
     isToolbarMinimized: Boolean = false
 ) {
     val theme = state.activeTheme
-    val lazyListState = rememberLazyListState()
-
-    LaunchedEffect(state.focusedParagraphIndex) {
-        if (state.focusedParagraphIndex != -1) {
-            lazyListState.animateScrollToItem(state.focusedParagraphIndex)
-        }
-    }
+    val documentScrollState = rememberScrollState()
 
     val bottomPadding = if (isToolbarMinimized) theme.dimensions.spacingMassive else theme.dimensions.editorBottomPadding
+    val documentSelectionManaged = state.viewMode == ViewMode.RENDERED && state.focusedParagraphIndex == -1
 
-    if (state.viewMode == ViewMode.RENDERED && state.focusedParagraphIndex == -1) {
-        SelectionContainer(
+    val documentContent: @Composable () -> Unit = {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .widthIn(max = theme.dimensions.maxTextLineWidth)
+                .verticalScroll(documentScrollState)
+                .padding(bottom = bottomPadding),
+            verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
         ) {
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = bottomPadding),
-                verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-            ) {
-                itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, item ->
-                    Column {
-                        EditorParagraph(
-                            state = state,
-                            textFieldValues = textFieldValues,
-                            viewModel = viewModel,
-                            index = index,
-                            documentSelectionManaged = true
-                        )
-                        if (item.block.separatorAfter.isNotEmpty()) {
+            state.paragraphs.items.forEachIndexed { index, item ->
+                Column {
+                    EditorParagraph(
+                        state = state,
+                        textFieldValues = textFieldValues,
+                        viewModel = viewModel,
+                        index = index,
+                        documentSelectionManaged = documentSelectionManaged
+                    )
+                    if (documentSelectionManaged) {
+                        val separatorLineBreaks = item.block.separatorAfter
+                            .split(Regex("\\r\\n|\\r|\\n"))
+                            .size - 1
+                        if (separatorLineBreaks >= 2) {
                             Text(
-                                text = item.block.separatorAfter,
+                                // SelectionContainer inserts a line break between selectable Text
+                                // nodes. Keep an empty selectable node for a blank paragraph and
+                                // only add line breaks beyond the two structural boundaries.
+                                text = "\n".repeat(separatorLineBreaks - 2),
                                 color = Color.Transparent,
                                 fontSize = 1.sp,
                                 lineHeight = 1.sp
@@ -583,26 +630,66 @@ fun EditorCanvas(
                 }
             }
         }
-    } else {
-        LazyColumn(
-            state = lazyListState,
-            modifier = Modifier
-                .fillMaxSize()
-                .widthIn(max = theme.dimensions.maxTextLineWidth),
-            contentPadding = PaddingValues(bottom = bottomPadding),
-            verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-        ) {
-            itemsIndexed(state.paragraphs.items, key = { _, item -> item.block.id }) { index, _ ->
-                EditorParagraph(
-                    state = state,
-                    textFieldValues = textFieldValues,
-                    viewModel = viewModel,
-                    index = index,
-                    documentSelectionManaged = false
-                )
-            }
-        }
     }
+
+    if (documentSelectionManaged) {
+        SelectionContainer(content = documentContent)
+    } else {
+        documentContent()
+    }
+}
+
+@Composable
+private fun DocumentEditorField(
+    state: EditorUiState,
+    viewModel: EditorViewModel,
+    isToolbarMinimized: Boolean
+) {
+    val theme = state.activeTheme
+    val scrollState = rememberScrollState()
+    val editorFont = when (theme.editorFontFamily.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.SansSerif
+    }
+    val inputTransformation = remember { MarkdownDocumentInputTransformation() }
+
+    BasicTextField(
+        state = viewModel.documentTextFieldState,
+        modifier = Modifier
+            .fillMaxSize()
+            .widthIn(max = theme.dimensions.maxTextLineWidth)
+            .semantics { contentDescription = "Document editor" }
+            .onFocusChanged { focus -> viewModel.onDocumentEditorFocusChanged(focus.isFocused) },
+        textStyle = TextStyle(
+            color = theme.textPrimary,
+            fontFamily = editorFont,
+            fontSize = theme.typography.body * state.editorFontSizeScale,
+            lineHeight = theme.typography.body * state.editorFontSizeScale * 1.55f
+        ),
+        lineLimits = TextFieldLineLimits.MultiLine(),
+        keyboardOptions = KeyboardOptions(
+            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+            autoCorrectEnabled = true,
+            imeAction = ImeAction.Default
+        ),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.accent),
+        inputTransformation = inputTransformation,
+        outputTransformation = remember(
+            state.viewMode,
+            state.editorFontSizeScale,
+            theme.textMuted,
+            theme.codeBackground
+        ) {
+            MarkdownDocumentOutputTransformation(
+                viewMode = state.viewMode,
+                bodySize = theme.typography.body * state.editorFontSizeScale,
+                tokenColor = theme.textMuted,
+                codeBackgroundColor = theme.codeBackground
+            )
+        },
+        scrollState = scrollState
+    )
 }
 
 @Composable
@@ -847,7 +934,6 @@ fun ParagraphField(
     onChecklistToggle: () -> Unit = {}
 ) {
     val focusRequester = remember { FocusRequester() }
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
     val editorFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
@@ -878,22 +964,28 @@ fun ParagraphField(
         else -> Modifier.padding(vertical = theme.dimensions.spacingSmall)
     }
 
+    val blockquoteBorderModifier = if (
+        viewMode != ViewMode.RAW_PLAIN_TEXT && blockType == MarkdownBlockType.BLOCKQUOTE
+    ) {
+        Modifier.drawBehind {
+            val strokeWidth = 4.dp.toPx()
+            drawLine(
+                color = theme.accent,
+                start = androidx.compose.ui.geometry.Offset(strokeWidth / 2f, 0f),
+                end = androidx.compose.ui.geometry.Offset(strokeWidth / 2f, size.height),
+                strokeWidth = strokeWidth
+            )
+        }
+    } else {
+        Modifier
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
+            .then(blockquoteBorderModifier)
             .then(paddingModifier)
     ) {
-        // Render left border for blockquotes
-        if (viewMode != ViewMode.RAW_PLAIN_TEXT && blockType == MarkdownBlockType.BLOCKQUOTE) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .width(4.dp)
-                    .fillMaxHeight()
-                    .background(theme.accent)
-            )
-        }
 
         val contentModifier = if (viewMode != ViewMode.RAW_PLAIN_TEXT && blockType == MarkdownBlockType.BLOCKQUOTE) {
             Modifier.padding(start = theme.dimensions.spacingLarge)
@@ -964,7 +1056,7 @@ fun ParagraphField(
                 val renderedText = remember(value.text, visualTransformation) {
                     visualTransformation.filter(AnnotatedString(value.text)).text
                 }
-                Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     BlockSelectionBoundary(documentSelectionManaged) {
                         RenderedMarkdownText(
                             rawText = value.text,
@@ -981,11 +1073,13 @@ fun ParagraphField(
                         )
                     }
                     if (blockType == MarkdownBlockType.TASK_LIST) {
-                        ChecklistToggleOverlay(onChecklistToggle)
+                        DisableSelection {
+                            ChecklistToggleOverlay(onChecklistToggle)
+                        }
                     }
                 }
             } else {
-                Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     BasicTextField(
                         value = value,
                         onValueChange = onValueChange,
@@ -996,7 +1090,6 @@ fun ParagraphField(
                             .semantics {
                                 contentDescription = "Block ${paragraphIndex + 1} of ${totalParagraphs}: ${blockType.name.lowercase().replace('_', ' ')}"
                             }
-                            .bringIntoViewRequester(bringIntoViewRequester)
                             .focusRequester(focusRequester)
                             .onFocusChanged { onFocusChanged(it.isFocused) }
                             .onPreviewKeyEvent { keyEvent ->
@@ -1030,11 +1123,6 @@ fun ParagraphField(
         }
     }
 
-    LaunchedEffect(isFocused, value.selection, value.text) {
-        if (isFocused) {
-            bringIntoViewRequester.bringIntoView()
-        }
-    }
 }
 
 @Composable
@@ -1103,16 +1191,21 @@ private fun RenderedMarkdownText(
 private fun BoxScope.ChecklistToggleOverlay(onChecklistToggle: () -> Unit) {
     Box(
         modifier = Modifier
-            .align(Alignment.CenterStart)
-            .width(28.dp)
-            .fillMaxHeight()
-            .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null,
-                onClick = onChecklistToggle
-            )
-            .semantics { contentDescription = "Toggle task list checkmark" }
-    )
+            .matchParentSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .width(28.dp)
+                .fillMaxHeight()
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = onChecklistToggle
+                )
+                .semantics { contentDescription = "Toggle task list checkmark" }
+        )
+    }
 }
 
 private fun fullBlockImage(rawText: String) = MarkdownParser.parseParagraph(rawText).elements
@@ -1144,167 +1237,126 @@ fun FloatingFormattingToolbar(
     onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier.shadow(elevation = theme.dimensions.elevationMedium, shape = RoundedCornerShape(theme.dimensions.spacingLarge), clip = false)
+    Surface(
+        modifier = modifier.wrapContentWidth(),
+        shape = RoundedCornerShape(theme.dimensions.cornerRadiusLarge),
+        color = theme.surface,
+        contentColor = theme.textPrimary,
+        shadowElevation = theme.dimensions.elevationMedium
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(theme.dimensions.spacingLarge))
-                .background(theme.surface)
-                .padding(vertical = theme.dimensions.elevationMedium),
-            verticalAlignment = Alignment.CenterVertically
+        PaletteRow(theme, Modifier.padding(theme.dimensions.spacingSmall)) {
+            HeaderAction(theme, onHeaderClick, onHeaderSet)
+            FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }) { onFormat("**", "**") }
+            FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }) { onFormat("*", "*") }
+            FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onBulletClick)
+            OverflowFormattingActions(theme, onFormat, onChecklistClick, onIndentClick, onOutdentClick)
+            FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onMinimizeClick)
+        }
+    }
+}
+
+@Composable
+private fun PaletteRow(theme: AppColorTheme, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
+
+@Composable
+private fun OverflowFormattingActions(
+    theme: AppColorTheme,
+    onFormat: (String, String) -> Unit,
+    onChecklistClick: () -> Unit,
+    onIndentClick: () -> Unit,
+    onOutdentClick: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        FormatAction("More formatting actions", { Icon(Icons.Outlined.MoreVert, null) }) { expanded = true }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = false)
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(IntrinsicSize.Min)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(start = theme.dimensions.spacingMedium, end = theme.dimensions.spacingLarge),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-                ) {
-                    var isHeaderMenuExpanded by remember { mutableStateOf(false) }
-                    Box(contentAlignment = Alignment.Center) {
-                        Box(
-                            modifier = Modifier
-                                .size(theme.dimensions.iconHuge)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .combinedClickable(
-                                    onClick = onHeaderClick,
-                                    onLongClick = { isHeaderMenuExpanded = true }
-                                )
-                                .semantics { contentDescription = "Toggle header level" },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("H", fontWeight = FontWeight.Black, color = theme.accent, fontSize = theme.typography.subtitle)
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                modifier = Modifier.align(Alignment.BottomEnd).size(16.dp).padding(bottom = 2.dp, end = 2.dp),
-                                tint = theme.accent
-                            )
-                        }
+            DropdownMenuItem(
+                text = { Text("Strikethrough") },
+                leadingIcon = { Text("S", textDecoration = TextDecoration.LineThrough) },
+                onClick = { expanded = false; onFormat("~~", "~~") }
+            )
+            DropdownMenuItem(
+                text = { Text("Inline code") },
+                leadingIcon = { Text("C", fontFamily = FontFamily.Monospace) },
+                onClick = { expanded = false; onFormat("`", "`") }
+            )
+            DropdownMenuItem(
+                text = { Text("Link") },
+                leadingIcon = { Text("L", textDecoration = TextDecoration.Underline) },
+                onClick = { expanded = false; onFormat("[", "](url)") }
+            )
+            DropdownMenuItem(
+                text = { Text("Checklist") },
+                leadingIcon = { Text("☑") },
+                onClick = { expanded = false; onChecklistClick() }
+            )
+            DropdownMenuItem(
+                text = { Text("Outdent") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.FormatIndentDecrease, null) },
+                onClick = { expanded = false; onOutdentClick() }
+            )
+            DropdownMenuItem(
+                text = { Text("Indent") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.FormatIndentIncrease, null) },
+                onClick = { expanded = false; onIndentClick() }
+            )
+        }
+    }
+}
 
-                        DropdownMenu(
-                            expanded = isHeaderMenuExpanded,
-                            onDismissRequest = { isHeaderMenuExpanded = false }
-                        ) {
-                            (1..6).forEach { level ->
-                                DropdownMenuItem(
-                                    text = { Text("Header $level", color = theme.textPrimary) },
-                                    onClick = {
-                                        isHeaderMenuExpanded = false
-                                        onHeaderSet(level)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .height(16.dp)
-                            .width(1.dp)
-                            .background(theme.textMuted.copy(alpha = 0.25f))
-                    )
-                    IconButton(
-                        onClick = { onFormat("**", "**") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection bold" }
-                    ) {
-                        Text("B", fontWeight = FontWeight.Bold, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = { onFormat("*", "*") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection italic" }
-                    ) {
-                        Text("I", fontStyle = FontStyle.Italic, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = { onFormat("~~", "~~") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection strikethrough" }
-                    ) {
-                        Text("S", textDecoration = TextDecoration.LineThrough, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = { onFormat("`", "`") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection inline code" }
-                    ) {
-                        Text("C", fontFamily = FontFamily.Monospace, color = theme.textPrimary, fontSize = theme.typography.bodyLarge)
-                    }
-                    IconButton(
-                        onClick = { onFormat("[", "](url)") },
-                        modifier = Modifier.semantics { contentDescription = "Format selection as link" }
-                    ) {
-                        Text("L", textDecoration = TextDecoration.Underline, color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = onChecklistClick,
-                        modifier = Modifier.semantics { contentDescription = "Toggle checklist item" }
-                    ) {
-                        Text("☑", color = theme.textPrimary, fontSize = theme.typography.subtitle)
-                    }
-                    IconButton(
-                        onClick = onBulletClick,
-                        modifier = Modifier.semantics { contentDescription = "Toggle bullet list" }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
-                            contentDescription = "Toggle bullet list",
-                            tint = theme.textPrimary
-                        )
-                    }
-                    IconButton(
-                        onClick = onOutdentClick,
-                        modifier = Modifier.semantics { contentDescription = "Outdent paragraph" }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.FormatIndentDecrease,
-                            contentDescription = "Outdent paragraph",
-                            tint = theme.textPrimary
-                        )
-                    }
-                    IconButton(
-                        onClick = onIndentClick,
-                        modifier = Modifier.semantics { contentDescription = "Indent paragraph" }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.FormatIndentIncrease,
-                            contentDescription = "Indent paragraph",
-                            tint = theme.textPrimary
-                        )
-                    }
-                }
+@Composable
+private fun FormatAction(
+    description: String,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick, modifier = Modifier.semantics { contentDescription = description }) { icon() }
+}
 
-                Spacer(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .width(24.dp)
-                        .background(
-                            androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                colors = listOf(Color.Transparent, theme.surface)
-                            )
-                        )
-                )
-            }
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HeaderAction(theme: AppColorTheme, onHeaderClick: () -> Unit, onHeaderSet: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.size(theme.dimensions.iconHuge).combinedClickable(onClick = onHeaderClick, onLongClick = { expanded = true }).semantics { contentDescription = "Toggle header level" },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("H", fontWeight = FontWeight.Black, fontSize = theme.typography.subtitle)
+            Icon(Icons.Default.ArrowDropDown, null, Modifier.align(Alignment.BottomEnd).size(16.dp).padding(bottom = 2.dp, end = 2.dp), tint = theme.accent)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = false)
+        ) {
+            (1..6).forEach { level -> DropdownMenuItem(text = { Text("Header $level") }, onClick = { expanded = false; onHeaderSet(level) }) }
+        }
+    }
+}
 
-            Box(
-                modifier = Modifier
-                    .background(theme.surface)
-                    .padding(end = theme.dimensions.spacingMedium, start = theme.dimensions.spacingSmall),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(
-                    onClick = onMinimizeClick,
-                    modifier = Modifier.semantics { contentDescription = "Minimize formatting toolbar" }
-                ) {
-                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = theme.textMuted, modifier = Modifier.size(theme.dimensions.iconMedium))
-                }
-            }
+@Composable
+private fun FormattingPaletteFab(theme: AppColorTheme, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = androidx.compose.foundation.shape.CircleShape,
+        color = theme.surface,
+        contentColor = theme.accent,
+        shadowElevation = theme.dimensions.elevationMedium
+    ) {
+        Box(Modifier.size(theme.dimensions.iconHuge), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Expand formatting toolbar")
         }
     }
 }
@@ -1345,8 +1397,8 @@ fun SidebarPane(
         }
         
         HorizontalDivider(
-            thickness = theme.dimensions.borderWidth,
-            color = theme.textMuted.copy(alpha = 0.15f)
+            thickness = 2.dp,
+            color = theme.textPrimary
         )
         
         Spacer(modifier = Modifier.height(theme.dimensions.spacingExtraLarge))
@@ -1440,13 +1492,18 @@ fun MetricsTab(
                 "Sentences" to metrics.sentenceCount.toString()
             )
             countItems.forEach { (label, value) ->
-                Column(
+                Card(
                     modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    colors = CardDefaults.cardColors(containerColor = theme.surface.copy(alpha = 0.75f))
                 ) {
-                    Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
-                    Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(theme.dimensions.spacingMedium),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
+                        Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
+                    }
                 }
             }
         }

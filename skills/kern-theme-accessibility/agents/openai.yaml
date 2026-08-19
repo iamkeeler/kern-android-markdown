@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kern Theme Accessibility"
+  short_description: "Protect theme contrast and system UI"
+  default_prompt: "Use $kern-theme-accessibility to safely update this Kern theme."

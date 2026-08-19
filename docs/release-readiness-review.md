@@ -108,9 +108,9 @@ The workflow is ready, but it will not upload until `GOOGLE_PLAY_SERVICE_ACCOUNT
 
 ### P2 — Lint warnings remain
 
-There are no lint errors after the fixes, but lint still reports 66 warnings and 1 hint. Highest-value warnings to address before a broad release:
+There are no lint errors after the fixes, but lint still reports 70 warnings and 1 hint. Highest-value warnings to address before a broad release:
 
-- `targetSdk = 35` while compile SDK is 36. Current Google Play policy accepts target API 35 for new apps/updates starting Aug 31, 2025, but upgrading target SDK should be planned.
+- The app now compiles against and targets Android 16 (API level 36), satisfying Google Play's target API requirement for app updates beginning August 31, 2026.
 - `EditorViewModel` holds a `Context` field (`app/src/main/java/com/attachdesign/kern/ui/editor/EditorViewModel.kt:81`). Ensure this is application context only; never pass an Activity context into this ViewModel.
 - Deprecated Compose Material APIs in `MainScreen.kt` and `SettingsScreen.kt`.
 - Launcher-icon shape/density warnings.

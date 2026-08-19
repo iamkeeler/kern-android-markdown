@@ -10,6 +10,7 @@ Kern is an open-source Markdown editor for Android. Write on your phone, tablet,
 
 - [Download builds](#download-builds)
 - [Why Kern](#why-kern)
+- [Architecture & app structure](#architecture--app-structure)
 - [See it in action](#see-it-in-action)
 - [Build locally](#build-locally)
 - [CI/CD pipeline](#cicd-pipeline)
@@ -35,6 +36,57 @@ Kern is an open-source Markdown editor for Android. Write on your phone, tablet,
 - **Writing tools** — Check word counts, reading grade level, sentence complexity, and other document metrics.
 - **Large-screen layouts** — Use a file tree beside the editor on tablets and foldables.
 - **Open source** — Read the code, follow development, and suggest changes on GitHub.
+
+## Architecture & app structure
+
+Kern is architected around a local-first, differential parsing pipeline built with Jetpack Compose and Kotlin coroutines. The editor uses a custom inline-reveal engine that updates documents at the paragraph level for fast typing performance on mobile and foldable devices.
+
+```mermaid
+flowchart TB
+    subgraph UI["UI & Presentation Layer (Jetpack Compose)"]
+        Nav["MainActivity & MainNavigation<br/>(Navigation 3 Backstack)"]
+        MainScr["MainScreen<br/>(Breadcrumb Explorer, File Tree, Adaptive Dual-Pane)"]
+        EditScr["EditorScreen<br/>(Inline-Reveal WYSIWYG, Floating Formatting Toolbar)"]
+        SetScr["SettingsScreen<br/>(Theme Tokens, Typography, Editor Config)"]
+        
+        Nav --> MainScr
+        Nav --> EditScr
+        Nav --> SetScr
+    end
+
+    subgraph Engine["Editor & Parsing Engine"]
+        EditVM["EditorViewModel"]
+        DocEngine["DocumentEditEngine & MarkdownEditorEngine<br/>(Differential Paragraph Parsing)"]
+        IndexMatrix["IndexTransformationMatrix<br/>(Presentation ↔ Raw Offset Translation)"]
+        ParserCore["MarkdownParser & AST Scanner<br/>(Syntax Tokenization & Element AST)"]
+        VisualTrans["MarkdownVisualTransformation & RenderProjection<br/>(Inline-Reveal Styling & Formatting)"]
+
+        EditScr <--> EditVM
+        EditVM --> DocEngine
+        DocEngine --> ParserCore
+        DocEngine --> IndexMatrix
+        ParserCore --> VisualTrans
+    end
+
+    subgraph Analysis["Analysis & Metrics Layer"]
+        Hemingway["HemingwayAnalyzer<br/>(Grade Level & Sentence Complexity)"]
+        StatsEngine["Document Stats<br/>(Word/Char Count & Reading Time)"]
+
+        EditVM -.-> Hemingway
+        EditVM -.-> StatsEngine
+    end
+
+    subgraph Storage["Data & Storage Layer"]
+        FileOps["FileOperationsManager & IncomingFileImporter<br/>(Document I/O & Intent Handling)"]
+        StoreMgr["StorageManager<br/>(Internal App Sandbox & Scoped SAF)"]
+        LocalDB["AppDatabase (Room SQLite)<br/>(Projects, Recent Files, Metadata)"]
+
+        MainScr --> FileOps
+        EditVM --> StoreMgr
+        FileOps --> StoreMgr
+        StoreMgr --> LocalDB
+    end
+```
 
 ## See it in action
 

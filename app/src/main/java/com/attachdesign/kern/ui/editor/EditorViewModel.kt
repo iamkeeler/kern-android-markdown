@@ -2,6 +2,8 @@ package com.attachdesign.kern.ui.editor
  
 import android.content.Context
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.ViewModel
 import com.attachdesign.kern.utils.TextAnalysisUtils.countWords
 import androidx.lifecycle.viewModelScope
@@ -21,6 +23,7 @@ import com.attachdesign.kern.data.sync.SyncEngine
 import com.attachdesign.kern.data.sync.SyncProvider
 import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.MarkdownParser
+import com.attachdesign.kern.parser.DocumentEditEngine
 import com.attachdesign.kern.parser.ParagraphBlock
 import com.attachdesign.kern.parser.MarkdownEditorEngine
 import com.attachdesign.kern.ui.theme.AppColorTheme
@@ -54,6 +57,8 @@ data class EditorUiState(
     val fileName: String = "",
     val paragraphs: ImmutableParagraphList = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
     val focusedParagraphIndex: Int = -1,
+    val documentEditorEnabled: Boolean = true,
+    val isDocumentEditorFocused: Boolean = false,
     val viewMode: ViewMode = ViewMode.RENDERED,
     val stickySelection: Boolean = true,
     val autoHeaderSpacing: Boolean = true,
@@ -101,6 +106,9 @@ class EditorViewModel(
     // Store TextFieldValues for each paragraph to retain selection/cursor state
     private val _paragraphTextFieldValues = MutableStateFlow<Map<Int, TextFieldValue>>(emptyMap())
     val paragraphTextFieldValues: StateFlow<Map<Int, TextFieldValue>> = _paragraphTextFieldValues.asStateFlow()
+    val documentTextFieldState = TextFieldState()
+
+    private var documentText: String = ""
 
     val allProjects: StateFlow<List<ProjectEntity>> = db.projectDao().getAllProjectsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -330,6 +338,11 @@ viewModelScope.launch(Dispatchers.IO) {
                 projectFiles = enriched
             )
             _paragraphTextFieldValues.value = initialValues
+            documentText = content
+            documentTextFieldState.edit {
+                replace(0, length, content)
+                selection = TextRange(if (focusOnStart) 0 else content.length)
+            }
             
             addLog("Loaded file: $filePath")
         }
@@ -537,238 +550,115 @@ viewModelScope.launch(Dispatchers.IO) {
     }
 
     fun setHeaderLevel(index: Int, level: Int) {
-        val currentState = _uiState.value
-        val items = currentState.paragraphs.items.toMutableList()
-        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
-        val text = originalValue.text
-
-        // Strip existing header prefixes
-        var plainText = text
-        var prefixLengthToRemove = 0
-        if (text.startsWith("###### ")) prefixLengthToRemove = 7
-        else if (text.startsWith("##### ")) prefixLengthToRemove = 6
-        else if (text.startsWith("#### ")) prefixLengthToRemove = 5
-        else if (text.startsWith("### ")) prefixLengthToRemove = 4
-        else if (text.startsWith("## ")) prefixLengthToRemove = 3
-        else if (text.startsWith("# ")) prefixLengthToRemove = 2
-
-        plainText = text.substring(prefixLengthToRemove)
-
-        val newText = if (level in 1..6) {
-            "#".repeat(level) + " " + plainText
-        } else {
-            plainText
-        }
-
-        val newSelectionOffset = newText.length - text.length
-
-        val newSelection = androidx.compose.ui.text.TextRange(
-            (originalValue.selection.start + newSelectionOffset).coerceIn(0, newText.length),
-            (originalValue.selection.end + newSelectionOffset).coerceIn(0, newText.length)
-        )
-
-        val updatedBlock = reparse(items[index].block, newText)
-        items[index] = ImmutableParagraphBlock(updatedBlock)
-
-        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
-            put(index, TextFieldValue(newText, newSelection))
-        }
-
-        _uiState.value = currentState.copy(
-            paragraphs = ImmutableParagraphList(items.toImmutableList())
-        )
-        saveActiveFileAsync()
+        applyParagraphCommand(index, DocumentEditEngine.Command.SetHeading(level))
     }
 
     fun cycleHeaderLevel(index: Int) {
-        val currentState = _uiState.value
-        val items = currentState.paragraphs.items.toMutableList()
-        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
-        val text = originalValue.text
-
-        val (newText, newSelectionOffset) = when {
-            text.startsWith("###### ") -> Pair(text.substring(7), -7)
-            text.startsWith("##### ") -> Pair("###### " + text.substring(6), 1)
-            text.startsWith("#### ") -> Pair("##### " + text.substring(5), 1)
-            text.startsWith("### ") -> Pair("#### " + text.substring(4), 1)
-            text.startsWith("## ") -> Pair("### " + text.substring(3), 1)
-            text.startsWith("# ") -> Pair("## " + text.substring(2), 1)
-            else -> Pair("# $text", 2)
-        }
-
-        val newSelection = androidx.compose.ui.text.TextRange(
-            (originalValue.selection.start + newSelectionOffset).coerceIn(0, newText.length),
-            (originalValue.selection.end + newSelectionOffset).coerceIn(0, newText.length)
-        )
-
-        val updatedBlock = reparse(items[index].block, newText)
-        items[index] = ImmutableParagraphBlock(updatedBlock)
-
-        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
-            put(index, TextFieldValue(newText, newSelection))
-        }
-
-        _uiState.value = currentState.copy(
-            paragraphs = ImmutableParagraphList(items.toImmutableList())
-        )
-        saveActiveFileAsync()
+        applyParagraphCommand(index, DocumentEditEngine.Command.CycleHeading)
     }
 
     fun toggleChecklist(index: Int) {
-        val currentState = _uiState.value
-        val items = currentState.paragraphs.items.toMutableList()
-        if (index < 0 || index >= items.size) return
-
-        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
-        val text = originalValue.text
-
-        val isTaskUnchecked = text.startsWith("- [ ] ") || text.startsWith("* [ ] ") || text.startsWith("+ [ ] ")
-        val isTaskChecked = text.startsWith("- [x] ") || text.startsWith("* [x] ") || text.startsWith("+ [x] ") ||
-                            text.startsWith("- [X] ") || text.startsWith("* [X] ") || text.startsWith("+ [X] ")
-
-        val newText: String
-        val diff: Int
-        if (isTaskUnchecked) {
-            val prefix = if (text.startsWith("- [ ] ")) "- [ ] " else if (text.startsWith("* [ ] ")) "* [ ] " else "+ [ ] "
-            val newPrefix = prefix.replace("[ ]", "[x]")
-            newText = newPrefix + text.substring(prefix.length)
-            diff = 0
-        } else if (isTaskChecked) {
-            val prefix = if (text.startsWith("- [x] ") || text.startsWith("- [X] ")) {
-                if (text.startsWith("- [x] ")) "- [x] " else "- [X] "
-            } else if (text.startsWith("* [x] ") || text.startsWith("* [X] ")) {
-                if (text.startsWith("* [x] ")) "* [x] " else "* [X] "
-            } else {
-                if (text.startsWith("+ [x] ")) "+ [x] " else "+ [X] "
-            }
-            val newPrefix = if (prefix.contains("x")) prefix.replace("[x]", "[ ]") else prefix.replace("[X]", "[ ]")
-            newText = newPrefix + text.substring(prefix.length)
-            diff = 0
-        } else {
-            newText = "- [ ] " + text
-            diff = 6
-        }
-
-        val newSelection = androidx.compose.ui.text.TextRange(
-            (originalValue.selection.start + diff).coerceIn(0, newText.length),
-            (originalValue.selection.end + diff).coerceIn(0, newText.length)
-        )
-
-        val updatedBlock = reparse(items[index].block, newText)
-        items[index] = ImmutableParagraphBlock(updatedBlock)
-
-        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
-            put(index, TextFieldValue(newText, newSelection))
-        }
-
-        _uiState.value = currentState.copy(
-            paragraphs = ImmutableParagraphList(items.toImmutableList())
-        )
-        saveActiveFileAsync()
+        applyParagraphCommand(index, DocumentEditEngine.Command.ToggleChecklist)
     }
 
     fun toggleBulletList(index: Int) {
-        val currentState = _uiState.value
-        val items = currentState.paragraphs.items.toMutableList()
-        if (index < 0 || index >= items.size) return
-
-        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
-        val text = originalValue.text
-
-        val isBullet = text.startsWith("- ") || text.startsWith("* ") || text.startsWith("+ ")
-
-        val newText: String
-        val diff: Int
-        if (isBullet) {
-            val prefix = if (text.startsWith("- ")) "- " else if (text.startsWith("* ")) "* " else "+ "
-            newText = text.substring(prefix.length)
-            diff = -prefix.length
-        } else {
-            newText = "- " + text
-            diff = 2
-        }
-
-        val newSelection = androidx.compose.ui.text.TextRange(
-            (originalValue.selection.start + diff).coerceIn(0, newText.length),
-            (originalValue.selection.end + diff).coerceIn(0, newText.length)
-        )
-
-        val updatedBlock = reparse(items[index].block, newText)
-        items[index] = ImmutableParagraphBlock(updatedBlock)
-
-        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
-            put(index, TextFieldValue(newText, newSelection))
-        }
-
-        _uiState.value = currentState.copy(
-            paragraphs = ImmutableParagraphList(items.toImmutableList())
-        )
-        saveActiveFileAsync()
+        applyParagraphCommand(index, DocumentEditEngine.Command.ToggleBulletList)
     }
 
     fun indentParagraph(index: Int) {
-        val currentState = _uiState.value
-        val items = currentState.paragraphs.items.toMutableList()
-        if (index < 0 || index >= items.size) return
-
-        val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
-        val text = originalValue.text
-
-        val newText = "    " + text
-        val newSelection = androidx.compose.ui.text.TextRange(
-            (originalValue.selection.start + 4).coerceIn(0, newText.length),
-            (originalValue.selection.end + 4).coerceIn(0, newText.length)
-        )
-
-        val updatedBlock = reparse(items[index].block, newText)
-        items[index] = ImmutableParagraphBlock(updatedBlock)
-
-        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
-            put(index, TextFieldValue(newText, newSelection))
-        }
-
-        _uiState.value = currentState.copy(
-            paragraphs = ImmutableParagraphList(items.toImmutableList())
-        )
-        saveActiveFileAsync()
+        applyParagraphCommand(index, DocumentEditEngine.Command.Indent)
     }
 
     fun outdentParagraph(index: Int) {
+        applyParagraphCommand(index, DocumentEditEngine.Command.Outdent)
+    }
+
+    fun formatParagraph(index: Int, opening: String, closing: String) {
+        applyParagraphCommand(index, DocumentEditEngine.Command.Wrap(opening, closing))
+    }
+
+    fun applyDocumentCommand(command: DocumentEditEngine.Command) {
+        val selection = documentTextFieldState.selection
+        val result = DocumentEditEngine.apply(
+            text = documentTextFieldState.text.toString(),
+            selectionStart = selection.start,
+            selectionEnd = selection.end,
+            command = command,
+            stickySelection = _uiState.value.stickySelection
+        )
+        documentTextFieldState.edit {
+            replace(0, length, result.text)
+            this.selection = TextRange(result.selectionStart, result.selectionEnd)
+        }
+    }
+
+    fun onDocumentEditorFocusChanged(isFocused: Boolean) {
+        if (_uiState.value.isDocumentEditorFocused == isFocused) return
+        _uiState.value = _uiState.value.copy(isDocumentEditorFocused = isFocused)
+        if (!isFocused) triggerCloudSyncSweep()
+    }
+
+    fun onDocumentTextChanged(content: String) {
+        if (content == documentText) return
+        val previous = documentText
+        documentText = content
+        val blocks = MarkdownParser.parseDocument(content)
+        _uiState.value = _uiState.value.copy(
+            paragraphs = ImmutableParagraphList(blocks.map(::ImmutableParagraphBlock).toImmutableList())
+        )
+        _paragraphTextFieldValues.value = blocks.mapIndexed { index, block ->
+            index to TextFieldValue(block.rawText)
+        }.toMap()
+
+        val characterDelta = (content.length - previous.length).coerceAtLeast(0).toLong()
+        val wordDelta = (countWords(content) - countWords(previous)).coerceAtLeast(0).toLong()
+        if (characterDelta > 0L || wordDelta > 0L) {
+            viewModelScope.launch {
+                if (characterDelta > 0L) {
+                    statsRepository.addCharactersWritten(characterDelta)
+                    analyticsTracker.logCharactersWritten(characterDelta)
+                }
+                if (wordDelta > 0L) {
+                    statsRepository.addWordsWritten(wordDelta)
+                    analyticsTracker.logWordsWritten(wordDelta)
+                }
+            }
+        }
+        saveJob?.cancel()
+        saveJob = viewModelScope.launch {
+            delay(1000)
+            saveActiveFile()
+        }
+    }
+
+    private fun applyParagraphCommand(index: Int, command: DocumentEditEngine.Command) {
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
         if (index < 0 || index >= items.size) return
 
         val originalValue = _paragraphTextFieldValues.value[index] ?: TextFieldValue(items[index].block.rawText)
-        val text = originalValue.text
+        val result = DocumentEditEngine.apply(
+            text = originalValue.text,
+            selectionStart = originalValue.selection.start,
+            selectionEnd = originalValue.selection.end,
+            command = command,
+            stickySelection = currentState.stickySelection
+        )
+        if (result.text == originalValue.text &&
+            result.selectionStart == originalValue.selection.start &&
+            result.selectionEnd == originalValue.selection.end
+        ) return
 
-        var spacesToRemove = 0
-        if (text.startsWith("\t")) {
-            spacesToRemove = 1
-        } else {
-            while (spacesToRemove < 4 && spacesToRemove < text.length && text[spacesToRemove] == ' ') {
-                spacesToRemove++
-            }
+        val newValue = TextFieldValue(
+            text = result.text,
+            selection = androidx.compose.ui.text.TextRange(result.selectionStart, result.selectionEnd)
+        )
+        items[index] = ImmutableParagraphBlock(reparse(items[index].block, result.text))
+        _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
+            put(index, newValue)
         }
-
-        if (spacesToRemove > 0) {
-            val newText = text.substring(spacesToRemove)
-            val newSelection = androidx.compose.ui.text.TextRange(
-                (originalValue.selection.start - spacesToRemove).coerceIn(0, newText.length),
-                (originalValue.selection.end - spacesToRemove).coerceIn(0, newText.length)
-            )
-
-            val updatedBlock = reparse(items[index].block, newText)
-            items[index] = ImmutableParagraphBlock(updatedBlock)
-
-            _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
-                put(index, TextFieldValue(newText, newSelection))
-            }
-
-            _uiState.value = currentState.copy(
-                paragraphs = ImmutableParagraphList(items.toImmutableList())
-            )
-            saveActiveFileAsync()
-        }
+        _uiState.value = currentState.copy(paragraphs = ImmutableParagraphList(items.toImmutableList()))
+        saveActiveFileAsync()
     }
 
     fun insertParagraphAfter(index: Int, content: String) {
@@ -870,8 +760,11 @@ viewModelScope.launch(Dispatchers.IO) {
         val filePath = state.activeFilePath
         if (filePath.isEmpty()) return@withContext
 
-        val blocks = state.paragraphs.items.map { it.block }
-        val documentContent = MarkdownParser.joinParsedDocument(blocks)
+        val documentContent = if (state.documentEditorEnabled) {
+            documentText
+        } else {
+            MarkdownParser.joinParsedDocument(state.paragraphs.items.map { it.block })
+        }
         storageManager.writeFile(project, filePath, documentContent)
 
         // Calculate metrics for DB metadata update

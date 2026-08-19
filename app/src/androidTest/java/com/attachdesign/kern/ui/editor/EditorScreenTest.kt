@@ -5,17 +5,20 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.lifecycle.viewModelScope
@@ -26,7 +29,8 @@ import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.FileOperationsManager
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -93,7 +97,11 @@ class EditorScreenTest {
 
   @After
   fun tearDown() {
-    if (::viewModel.isInitialized) viewModel.viewModelScope.cancel()
+    if (::viewModel.isInitialized) {
+      runBlocking {
+        viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
+      }
+    }
     if (::db.isInitialized) db.close()
   }
 
@@ -119,8 +127,10 @@ class EditorScreenTest {
 
     // Verify file name in breadcrumb header and initial text contents loaded
     composeTestRule.onNodeWithText("test_file.md").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Introduction").assertIsDisplayed()
-    composeTestRule.onNodeWithText("This is a custom paragraph block with bold text.").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Document editor")
+        .assertIsDisplayed()
+        .assertTextContains("# Introduction", substring = true)
+        .assertTextContains("This is a custom paragraph block with **bold text**.", substring = true)
   }
 
   @Test
@@ -136,11 +146,12 @@ class EditorScreenTest {
     }
     waitForDocument("Introduction")
 
-    // Toggle sidebar to show Settings options
-    composeTestRule.onNodeWithContentDescription("Toggle consolidated settings sidebar").performClick()
+    // Open Settings from the header overflow menu.
+    composeTestRule.onNodeWithContentDescription("More Options").performClick()
+    composeTestRule.onNodeWithText("Settings").performClick()
 
     // Assert Settings sidebar pane is displayed
-    composeTestRule.onNodeWithText("View Configurations").assertIsDisplayed()
+    composeTestRule.onNodeWithText("VIEW MODE").assertIsDisplayed()
     
     // Switch to Raw Plain-Text view mode
     composeTestRule.onNodeWithText("Raw Plain-Text").performClick()
@@ -165,15 +176,23 @@ class EditorScreenTest {
     }
     waitForDocument("custom paragraph")
 
-    // Focus on second paragraph block
-    composeTestRule.onNodeWithText("This is a custom paragraph block with bold text.").performClick()
+    composeTestRule.onNodeWithContentDescription("Document editor").performClick()
 
     // Verify format buttons appear in formatting toolbar
     composeTestRule.onNodeWithContentDescription("Format selection bold").assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Toggle bullet list").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("More formatting actions").assertIsDisplayed()
+
+    // Formatting is non-dismissive: actions remain available until the explicit collapse control.
+    composeTestRule.onNodeWithContentDescription("Format selection bold").performClick()
+    composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
+
+    composeTestRule.onNodeWithContentDescription("More formatting actions").performClick()
+    composeTestRule.onNodeWithText("Indent").assertIsDisplayed()
 
     // Toggle minimize/expand toolbar
-    composeTestRule.onNodeWithContentDescription("Minimize toolbar").performClick()
+    composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()
     composeTestRule.onNodeWithContentDescription("Expand formatting toolbar").performClick()
   }
 
@@ -193,14 +212,17 @@ class EditorScreenTest {
     // Toggle readability metrics popup/sidebar
     composeTestRule.onNodeWithContentDescription("Toggle readability metrics popup").performClick()
 
-    // Verify word counts and readability levels are presented on screen
-    composeTestRule.onNodeWithText("Readability Analytics").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Word Count").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Character Count").assertIsDisplayed()
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      viewModel.uiState.value.hemingwayMetrics != null
+    }
+    // Verify word and character metrics are presented in the popup.
+    composeTestRule.onNodeWithText("READABILITY").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Words").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Characters").assertIsDisplayed()
   }
 
   @Test
-  fun testDirectChecklistToggling() {
+  fun testChecklistFormattingTogglesCurrentTask() {
     // Write checklist items to the file before setting Compose content
     runBlocking {
       storageManager.writeFile(project, "test_file.md", "- [ ] Buy groceries\n- [x] Read book")
@@ -220,15 +242,52 @@ class EditorScreenTest {
     }
     waitForDocument("Buy groceries")
 
-    // Verify task lists are rendered with correct checkmarks
-    composeTestRule.onNodeWithText("☐ Buy groceries").assertIsDisplayed()
-    composeTestRule.onNodeWithText("☑ Read book").assertIsDisplayed()
-
-    // Click on the toggle checkmark area
-    composeTestRule.onAllNodesWithContentDescription("Toggle task list checkmark")[0].performClick()
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.assertTextContains("- [ ] Buy groceries", substring = true)
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action(0, 0, false)
+    }
+    composeTestRule.onNodeWithContentDescription("More formatting actions").performClick()
+    composeTestRule.onNodeWithText("Checklist").performClick()
 
     // Verify that the first item visually transitions to checked state
-    composeTestRule.onNodeWithText("☑ Buy groceries").assertIsDisplayed()
+    composeTestRule.waitForIdle()
+    val checklistTexts = viewModel.uiState.value.paragraphs.items.map { it.block.rawText }
+    org.junit.Assert.assertTrue(
+        "The first checklist item was not toggled: $checklistTexts",
+        checklistTexts.firstOrNull()?.startsWith("- [x]") == true
+    )
+    editor.assertTextContains("- [x] Buy groceries", substring = true)
+  }
+
+  @Test
+  fun testDocumentEditorContinuesMarkdownList() {
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", "- **First**")
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("First")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performClick()
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action("- **First**".length, "- **First**".length, false)
+    }
+    editor.performTextInput("\n")
+
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      viewModel.documentTextFieldState.text.toString() == "- **First**\n- "
+    }
   }
 
   @Test
@@ -253,7 +312,9 @@ class EditorScreenTest {
     }
     waitForDocument("Before ![Diagram]")
 
-    composeTestRule.onNodeWithContentDescription("Diagram").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Document editor")
+        .assertIsDisplayed()
+        .assertTextContains("![Diagram](https://example.com/diagram.png)", substring = true)
   }
 
   @Test
@@ -274,13 +335,10 @@ class EditorScreenTest {
     }
     waitForDocument("First paragraph")
 
-    val firstBounds = composeTestRule.onNodeWithText("First paragraph").fetchSemanticsNode().boundsInRoot
-    val secondBounds = composeTestRule.onNodeWithText("Second paragraph").fetchSemanticsNode().boundsInRoot
-    composeTestRule.onRoot().performTouchInput {
-      down(Offset(firstBounds.left + 1f, firstBounds.center.y))
-      advanceEventTime(800)
-      moveTo(Offset(secondBounds.right - 1f, secondBounds.center.y))
-      up()
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performClick()
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action(0, "First paragraph\n\nSecond paragraph".length, false)
     }
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val eventTime = SystemClock.uptimeMillis()
@@ -296,5 +354,104 @@ class EditorScreenTest {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     val copied = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
     org.junit.Assert.assertEquals("First paragraph\n\nSecond paragraph", copied)
+  }
+
+  @Test
+  fun testRenderedEditorSelectsOnlyTheRequestedWordRange() {
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", "# Introduction\n\nA selectable paragraph")
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("Introduction")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performClick()
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+          // "Intro" starts at zero in the rendered text, but at offset two in Markdown.
+          action(0, 5, false)
+        }
+    composeTestRule.waitForIdle()
+
+    // The hidden heading marker is included at the start of the source range so applying
+    // formatting to the visible selection preserves the Markdown block construct.
+    org.junit.Assert.assertEquals(TextRange(0, 7), viewModel.documentTextFieldState.selection)
+  }
+
+  @Test
+  fun testFocusingVisibleParagraphPreservesViewport() {
+    val document = (1..30).joinToString("\n\n") { index ->
+      "Paragraph $index has enough text to remain easy to target in the editor."
+    }
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", document)
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("Paragraph 20")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    val boundsBeforeFocus = editor.fetchSemanticsNode().boundsInRoot
+    editor.performClick()
+    composeTestRule.waitForIdle()
+    editor.assertIsFocused()
+    val boundsAfterFocus = editor.fetchSemanticsNode().boundsInRoot
+    org.junit.Assert.assertEquals(boundsBeforeFocus.top, boundsAfterFocus.top, 1f)
+  }
+
+  @Test
+  fun testTypingStressWithRichBlocksPersistsExactText() {
+    val source = buildString {
+      append("![Diagram](https://example.com/diagram.png)\n\n")
+      append("| Name | Value |\n")
+      append("| --- | --- |\n")
+      append("| Alpha | One |\n\n")
+      append("Final paragraph")
+    }
+    val typed = "\n\n" + (1..60).joinToString(" ") { "word$it" } + " 日本語 😀"
+    runBlocking { storageManager.writeFile(project, "test_file.md", source) }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("Final paragraph")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action(source.length, source.length, false)
+    }
+    editor.performTextInput(typed)
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      viewModel.documentTextFieldState.text.toString() == source + typed
+    }
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      runBlocking { storageManager.readFile(project, file.relativePath) } == source + typed
+    }
+    editor.assertIsDisplayed()
   }
 }

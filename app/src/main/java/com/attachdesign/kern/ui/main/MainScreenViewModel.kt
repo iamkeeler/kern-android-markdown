@@ -168,39 +168,53 @@ class MainScreenViewModel(
             )
             val sandboxProj = ProjectEntity(id = sandboxId, name = "Files", path = "root", isExternal = false, isSelected = true)
 
+            // A Play/Firebase reinstall can restore the workspace files without restoring the
+            // Room database. Rebuild the project index before seeding defaults so existing user
+            // documents remain visible and editable.
+            val existingRootItems = storageManager.listDirectory(sandboxProj, "")
+            if (existingRootItems.isNotEmpty()) {
+                indexRecoveredWorkspace(sandboxProj, existingRootItems)
+            }
+
             try {
-                val welcomeContent = try {
-                    storageManager.readAssetFile("Welcome.md")
-                } catch (e: Exception) {
-                    ""
+                if (!storageManager.fileExists(sandboxProj, "Welcome.md")) {
+                    val welcomeContent = try {
+                        storageManager.readAssetFile("Welcome.md")
+                    } catch (e: Exception) {
+                        ""
+                    }
+                    storageManager.writeFile(sandboxProj, "Welcome.md", welcomeContent)
+                    db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
+                        relativePath = "Welcome.md", isDirectory = false,
+                        lastModified = System.currentTimeMillis(), syncState = "PENDING"))
                 }
-                storageManager.writeFile(sandboxProj, "Welcome.md", welcomeContent)
-                db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Welcome.md",
-                    relativePath = "Welcome.md", isDirectory = false,
-                    lastModified = System.currentTimeMillis(), syncState = "PENDING"))
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
             try {
-                val examplesContent = try {
-                    storageManager.readAssetFile("Formatting Examples.md")
-                } catch (e: Exception) {
-                    ""
+                if (!storageManager.fileExists(sandboxProj, "Formatting Examples.md")) {
+                    val examplesContent = try {
+                        storageManager.readAssetFile("Formatting Examples.md")
+                    } catch (e: Exception) {
+                        ""
+                    }
+                    storageManager.writeFile(sandboxProj, "Formatting Examples.md", examplesContent)
+                    db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Formatting Examples.md",
+                        relativePath = "Formatting Examples.md", isDirectory = false,
+                        lastModified = System.currentTimeMillis(), syncState = "PENDING"))
                 }
-                storageManager.writeFile(sandboxProj, "Formatting Examples.md", examplesContent)
-                db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Formatting Examples.md",
-                    relativePath = "Formatting Examples.md", isDirectory = false,
-                    lastModified = System.currentTimeMillis(), syncState = "PENDING"))
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
             try {
-                storageManager.createDirectory(sandboxProj, "Notes")
-                db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes",
-                    relativePath = "Notes", isDirectory = true,
-                    lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+                if (!storageManager.fileExists(sandboxProj, "Notes")) {
+                    storageManager.createDirectory(sandboxProj, "Notes")
+                    db.fileDao().insertFile(FileEntity(projectId = sandboxId, name = "Notes",
+                        relativePath = "Notes", isDirectory = true,
+                        lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -270,6 +284,24 @@ class MainScreenViewModel(
             // If there's no selected project now, select the first available one
             if (db.projectDao().getSelectedProject() == null) {
                 db.projectDao().updateProject(allProjects.first().copy(isSelected = true))
+            }
+        }
+    }
+
+    private suspend fun indexRecoveredWorkspace(project: ProjectEntity, nodes: List<VfsNode>) {
+        nodes.forEach { node ->
+            db.fileDao().insertFile(
+                FileEntity(
+                    projectId = project.id,
+                    name = node.name,
+                    relativePath = node.relativePath,
+                    isDirectory = node.isDirectory,
+                    lastModified = (node as? VfsNode.File)?.lastModified ?: System.currentTimeMillis(),
+                    syncState = "SYNCED"
+                )
+            )
+            if (node is VfsNode.Directory) {
+                indexRecoveredWorkspace(project, storageManager.listDirectory(project, node.relativePath))
             }
         }
     }

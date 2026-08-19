@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kern Android Verification"
+  short_description: "Run safe Android verification"
+  default_prompt: "Use $kern-android-verification to verify this Android change."

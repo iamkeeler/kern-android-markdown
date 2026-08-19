@@ -51,6 +51,16 @@ class MarkdownParserTest {
     }
 
     @Test
+    fun `list markers support bullets ordered delimiters and formatted task content`() {
+        assertEquals(MarkdownBlockType.UNORDERED_LIST, MarkdownParser.parseParagraph("+ Item").blockType)
+        assertEquals(MarkdownBlockType.ORDERED_LIST, MarkdownParser.parseParagraph("2) Item").blockType)
+
+        val task = MarkdownParser.parseParagraph("  * [x] **Done**")
+        assertEquals(MarkdownBlockType.TASK_LIST, task.blockType)
+        assertTrue(task.elements.any { it.type == MarkdownElementType.BOLD })
+    }
+
+    @Test
     fun testParseTables() {
         val tableText = """
             | Header 1 | Header 2 |

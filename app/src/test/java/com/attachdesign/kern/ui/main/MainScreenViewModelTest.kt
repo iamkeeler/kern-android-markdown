@@ -338,4 +338,32 @@ class MainScreenViewModelTest {
         // Clean up
         tempDir.deleteRecursively()
     }
+
+    @Test
+    fun `recovery indexes existing workspace when database is empty`() = runTest {
+        val restoredFile = VfsNode.File(
+            name = "My Note.md",
+            relativePath = "My Note.md",
+            size = 42L,
+            lastModified = 1234L
+        )
+        coEvery { projectDao.insertProject(any()) } returns 7L
+        coEvery { storageManager.listDirectory(any(), "") } returns listOf(restoredFile)
+        coEvery { storageManager.fileExists(any(), any()) } returns true
+
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+        advanceUntilIdle()
+
+        coVerify {
+            fileDao.insertFile(match {
+                it.projectId == 7L &&
+                    it.name == "My Note.md" &&
+                    it.relativePath == "My Note.md" &&
+                    !it.isDirectory &&
+                    it.syncState == "SYNCED"
+            })
+        }
+        coVerify(exactly = 0) { storageManager.writeFile(any(), "Welcome.md", any()) }
+        coVerify(exactly = 0) { storageManager.writeFile(any(), "Formatting Examples.md", any()) }
+    }
 }

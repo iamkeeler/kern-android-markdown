@@ -30,21 +30,39 @@ data class AppThemeJson(
         return AppColorTheme(
             name = name,
             isDark = isDark,
-            background = Color(android.graphics.Color.parseColor(backgroundHex)),
-            surface = Color(android.graphics.Color.parseColor(surfaceHex)),
-            textPrimary = Color(android.graphics.Color.parseColor(textPrimaryHex)),
-            textMuted = Color(android.graphics.Color.parseColor(textMutedHex)),
-            accent = Color(android.graphics.Color.parseColor(accentHex)),
-            codeBackground = Color(android.graphics.Color.parseColor(codeBackgroundHex)),
-            danger = Color(android.graphics.Color.parseColor(dangerHex)),
-            warning = Color(android.graphics.Color.parseColor(warningHex)),
-            info = Color(android.graphics.Color.parseColor(infoHex)),
-            success = Color(android.graphics.Color.parseColor(successHex)),
+            background = parseHexColor(backgroundHex, Color(0xFFF7F3EB)),
+            surface = parseHexColor(surfaceHex, Color(0xFFEDE8DC)),
+            textPrimary = parseHexColor(textPrimaryHex, Color(0xFF1C1C1A)),
+            textMuted = parseHexColor(textMutedHex, Color(0xFF6E6A5F)),
+            accent = parseHexColor(accentHex, Color(0xFFC85A32)),
+            codeBackground = parseHexColor(codeBackgroundHex, Color(0xFFE8E2D6)),
+            danger = parseHexColor(dangerHex, Color(0xFFCC3333)),
+            warning = parseHexColor(warningHex, Color(0xFFFFC04D)),
+            info = parseHexColor(infoHex, Color(0xFF5CD6D6)),
+            success = parseHexColor(successHex, Color(0xFFD65CD6)),
             editorFontFamily = editorFontFamily,
             dimensions = AppDimensions(),
             typography = AppTypographySizes()
-
         )
+    }
+}
+
+private fun parseHexColor(hex: String, fallback: Color): Color {
+    val clean = hex.removePrefix("#").trim()
+    return try {
+        when (clean.length) {
+            6 -> Color(0xFF000000 or clean.toLong(16))
+            8 -> Color(clean.toLong(16))
+            3 -> {
+                val r = clean[0].digitToInt(16)
+                val g = clean[1].digitToInt(16)
+                val b = clean[2].digitToInt(16)
+                Color(0xFF000000 or ((r * 17) shl 16).toLong() or ((g * 17) shl 8).toLong() or (b * 17).toLong())
+            }
+            else -> fallback
+        }
+    } catch (_: Exception) {
+        fallback
     }
 }
 

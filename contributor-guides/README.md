@@ -4,6 +4,7 @@ This folder is the shared context for maintainers, contributors, and AI coding a
 
 ## Start here
 
+- [AI-agent workflow](ai-agent-workflow.md) — mandatory discovery, verification, and handoff rules for AI coding agents.
 - [Design guide](design-guide.md) — visual language, layout, typography, motion, and accessibility expectations.
 - [Product requirements](product-requirements.md) — product intent, editor behavior, storage model, and technical constraints.
 - [Coding standards](coding-standards.md) — Kotlin, Compose, architecture, testing, performance, and security rules.
@@ -17,3 +18,5 @@ Supporting contributor documentation remains in the repository root and `docs/`:
 - [Security policy](../SECURITY.md)
 
 Keep these guides short, specific, and implementation-oriented. Update them when an architectural or visual decision becomes a project-wide rule.
+
+Project-local AI skills live in [`../skills/`](../skills/). The workflow guide explains when each one applies.

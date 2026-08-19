@@ -7,6 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,12 +34,10 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
-import android.app.Activity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import android.widget.Toast
+import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 
 @Composable
 fun SettingsTabsContent(
@@ -161,7 +161,18 @@ fun SettingsTabsContent(
                         "Inky Charcoal (Default)"   to ThemeEngine.DefaultDark
                     )
                     presets.forEach { (name, presetJson) ->
-                        Row(
+                        val isCurrent = theme.name == presetJson.name
+                        ListItem(
+                            headlineContent = {
+                                Text(name, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
+                            },
+                            trailingContent = {
+                                RadioButton(
+                                    selected = isCurrent,
+                                    onClick = null,
+                                    colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
+                                )
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
@@ -170,18 +181,9 @@ fun SettingsTabsContent(
                                         val id = db.themeDao().insertTheme(ThemeEntity(name = presetJson.name, jsonString = jsonString))
                                         db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
                                     }
-                                }
-                                .padding(vertical = theme.dimensions.spacingLarge),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                             Text(name, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            val isCurrent = theme.name == presetJson.name
-                            if (isCurrent) {
-                                Text("Active", color = theme.accent, fontSize = theme.typography.tiny,
-                                    fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
-                            }
-                        }
+                                },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
                     }
 
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
@@ -926,6 +928,7 @@ fun SettingsTabsContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     db: AppDatabase,
@@ -958,16 +961,7 @@ fun SettingsScreen(
         }
     }
 
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as? Activity)?.window
-            if (window != null) {
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !theme.isDark
-                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !theme.isDark
-            }
-        }
-    }
+    ApplyKernSystemBars(theme)
 
      val appFont = when (theme.editorFontFamily.lowercase()) {
          "serif" -> FontFamily.Serif
@@ -979,48 +973,45 @@ fun SettingsScreen(
      var isVisible by remember { mutableStateOf(false) }
      LaunchedEffect(Unit) { isVisible = true }
 
-     androidx.compose.animation.AnimatedVisibility(
-         visible = isVisible,
-         enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(50)),
-         exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(50)),
-         modifier = modifier.fillMaxSize().background(theme.background)
-     ) {
-         Column(
-             modifier = Modifier
-                 .fillMaxSize()
-                 .safeDrawingPadding()
-                 .padding(horizontal = theme.dimensions.spacingHuge, vertical = theme.dimensions.spacingExtraLarge)
-         ) {
-             // ── Page title row ────────────────────────────────────────────────────
-             Row(
-                 modifier = Modifier
-                     .fillMaxWidth()
-                     .padding(top = theme.dimensions.spacingMedium, bottom = theme.dimensions.spacingMedium),
-                 verticalAlignment = Alignment.CenterVertically,
-                 horizontalArrangement = Arrangement.SpaceBetween
-             ) {
-                 Text(
-                     text = "Settings",
-                     fontSize = theme.typography.h1,
-                     fontFamily = appFont,
-                     fontWeight = FontWeight.Light,
-                     color = theme.textPrimary,
-                     letterSpacing = (-0.5).sp
-                 )
-                MinimalOutlinedButton(
-                    text = "Back",
-                    onClick = onBackClick,
-                    theme = theme
-                )
+    androidx.compose.animation.AnimatedVisibility(
+        visible = isVisible,
+        enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(50)),
+        exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(50)),
+        modifier = modifier.fillMaxSize().background(theme.background)
+    ) {
+        Scaffold(
+            containerColor = theme.background,
+            topBar = {
+                Column {
+                    TopAppBar(
+                        title = {
+                            Text("Settings", fontFamily = appFont, fontWeight = FontWeight.Light, fontSize = theme.typography.h1)
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBackClick) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            titleContentColor = theme.textPrimary,
+                            navigationIconContentColor = theme.textPrimary
+                        )
+                    )
+                    HorizontalDivider(
+                        thickness = 2.dp,
+                        color = theme.textPrimary
+                    )
+                }
             }
-    
-            Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-    
-            // Shared settings component
+        ) { innerPadding ->
             SettingsTabsContent(
                 db = db,
                 theme = theme,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = theme.dimensions.spacingHuge)
             )
         }
     }
@@ -1297,11 +1288,12 @@ private fun MetricStatTile(
     appFont: FontFamily,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .background(theme.textMuted.copy(alpha = 0.05f), RoundedCornerShape(theme.dimensions.spacingSmall))
-            .padding(theme.dimensions.spacingLarge)
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = theme.textMuted.copy(alpha = 0.05f)),
+        shape = RoundedCornerShape(theme.dimensions.spacingSmall)
     ) {
+        Column(modifier = Modifier.padding(theme.dimensions.spacingLarge)) {
         Text(
             text = value,
             fontSize = 26.sp,
@@ -1316,5 +1308,6 @@ private fun MetricStatTile(
             fontFamily = appFont,
             color = theme.textMuted
         )
+        }
     }
 }

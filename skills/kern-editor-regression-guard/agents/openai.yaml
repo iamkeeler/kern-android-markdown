@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kern Editor Regression Guard"
+  short_description: "Protect editor interaction contracts"
+  default_prompt: "Use $kern-editor-regression-guard to safely implement this Kern editor change."

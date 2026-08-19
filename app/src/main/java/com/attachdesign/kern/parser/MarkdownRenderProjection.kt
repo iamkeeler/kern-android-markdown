@@ -13,8 +13,57 @@ data class MarkdownRenderProjection(
     val indexMatrix: IndexTransformationMatrix
 )
 
+data class DocumentRenderSpan(
+    val type: MarkdownElementType,
+    val start: Int,
+    val end: Int
+)
+
+data class DocumentRenderBlock(
+    val type: MarkdownBlockType,
+    val start: Int,
+    val end: Int
+)
+
+data class MarkdownDocumentRenderProjection(
+    val text: String,
+    val spans: List<DocumentRenderSpan>,
+    val blocks: List<DocumentRenderBlock>
+)
+
 /** Pure Kotlin rendered-text and clipboard projection shared by every UI surface. */
 object MarkdownRenderer {
+    /** The single presentation projection used by the editor and rendered copy operations. */
+    fun renderDocument(source: String): MarkdownDocumentRenderProjection {
+        val text = StringBuilder()
+        val spans = mutableListOf<DocumentRenderSpan>()
+        val blocks = mutableListOf<DocumentRenderBlock>()
+
+        MarkdownDocumentScanner.scan(source).forEach { block ->
+            val start = text.length
+            val projection = render(block)
+            val blockPrefix = if (block.blockType == MarkdownBlockType.BLOCKQUOTE && projection.text.isNotBlank()) "│ " else ""
+            val renderedText = if (block.blockType == MarkdownBlockType.CODE_BLOCK) {
+                projection.text.removeSuffix("\r\n").removeSuffix("\n").removeSuffix("\r")
+            } else {
+                projection.text
+            }
+            text.append(blockPrefix)
+            text.append(renderedText)
+            val end = text.length
+            blocks += DocumentRenderBlock(block.blockType, start, end)
+            projection.spans.forEach { span ->
+                val spanEnd = minOf(span.end, renderedText.length)
+                if (span.start < spanEnd) {
+                    spans += DocumentRenderSpan(span.type, start + blockPrefix.length + span.start, start + blockPrefix.length + spanEnd)
+                }
+            }
+            text.append(block.separatorAfter)
+        }
+
+        return MarkdownDocumentRenderProjection(text.toString(), spans, blocks)
+    }
+
     fun render(block: ParagraphBlock): MarkdownRenderProjection {
         if (block.blockType == MarkdownBlockType.HORIZONTAL_RULE) {
             return MarkdownRenderProjection("", emptyList(), IndexTransformationMatrix(listOf(IndexRange(0, block.rawText.length))))
@@ -46,6 +95,10 @@ object MarkdownRenderer {
                     if (token.start + retainedLength < token.end) {
                         removedRanges += IndexRange(token.start + retainedLength, token.end)
                     }
+                }
+                token.type == MarkdownElementType.TOKEN_LIST_BULLET && block.blockType == MarkdownBlockType.ORDERED_LIST -> {
+                    // The ordinal is meaningful content, unlike the Markdown punctuation around it.
+                    rendered.append(block.rawText.substring(token.start, token.end))
                 }
                 else -> removedRanges += IndexRange(token.start, token.end)
             }
