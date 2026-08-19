@@ -48,6 +48,12 @@ class ThemeAccessibilityTest {
         // Accent vs Background (WCAG: minimum 3.0:1 for active UI controls & focus indicators)
         val accentBgContrast = calculateContrastRatio(theme.accentHex, theme.backgroundHex)
         assertTrue("Light theme accent vs bg contrast ($accentBgContrast) is below 3.0:1", accentBgContrast >= 3.0)
+
+        // Header Divider vs Background (minimum 3.0:1 for structural UI dividers)
+        val colorTheme = theme.toColorTheme()
+        val dividerHex = theme.headerDividerHex ?: theme.textPrimaryHex
+        val dividerBgContrast = calculateContrastRatio(dividerHex, theme.backgroundHex)
+        assertTrue("Light theme header divider vs bg contrast ($dividerBgContrast) is below 3.0:1", dividerBgContrast >= 3.0)
     }
 
     @Test
@@ -65,6 +71,11 @@ class ThemeAccessibilityTest {
         // Accent vs Background (WCAG: minimum 3.0:1 for active UI controls & focus indicators)
         val accentBgContrast = calculateContrastRatio(theme.accentHex, theme.backgroundHex)
         assertTrue("Dark theme accent vs bg contrast ($accentBgContrast) is below 3.0:1", accentBgContrast >= 3.0)
+
+        // Header Divider vs Background (minimum 3.0:1 for structural UI dividers)
+        val dividerHex = theme.headerDividerHex ?: theme.textPrimaryHex
+        val dividerBgContrast = calculateContrastRatio(dividerHex, theme.backgroundHex)
+        assertTrue("Dark theme header divider vs bg contrast ($dividerBgContrast) is below 3.0:1", dividerBgContrast >= 3.0)
     }
 
     @Test

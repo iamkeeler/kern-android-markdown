@@ -35,11 +35,10 @@ This document records user-visible editor behavior that must survive refactors. 
 - Tapping a visible paragraph must focus it without aligning it to the top or replacing the current scroll position.
 - Do not call `scrollToItem` merely because focus changed.
 - Do not request that an entire paragraph be brought into view on every text or selection update. Let the text field keep its cursor visible and use IME/window insets to reserve obscured space.
-- The floating formatting toolbar is a compact, translucent overlay. Reserve only enough bottom content space for the cursor to remain visible; do not turn the toolbar into a full-width opaque bottom sheet.
-- Symptom and affected release: focusing the editor on OEM devices panned the entire activity window upward, pushing the TopAppBar header off-screen.
-- Root cause: `android:windowSoftInputMode="adjustResize"` was declared on `<application>` rather than explicitly on `<activity android:name=".MainActivity">`, triggering OS fallback to `adjustPan`.
-- Behavioral invariant: the window manager must always resize rather than pan. The TopAppBar header stays permanently anchored under the status bar, and only the editor canvas resizes with IME insets.
-- Regression coverage: `EditorScreenTest.testFocusingVisibleParagraphPreservesViewport`.
+- Symptom and affected release: when scrolling to the end of a long document, the final line was trapped beneath the floating formatting bar, and focusing the editor on OEM devices panned the header off-screen.
+- Root cause: `DocumentEditorField` lacked bottom scroll clearance within its scrollable container, and `android:windowSoftInputMode="adjustResize"` was declared on `<application>` rather than `<activity>`.
+- Behavioral invariant: the editor scroll range includes clearance so the bottom line can scroll completely above the floating toolbar without clipping the text field layout. The TopAppBar header stays permanently anchored under the status bar, and all screens use a unified 2.dp `theme.headerDivider`.
+- Regression coverage: `EditorScreenTest.testFocusingVisibleParagraphPreservesViewport`, `ThemeAccessibilityTest.testDefaultLightThemeContrast`.
 
 ### Rendered Markdown must not fall back to source syntax
 

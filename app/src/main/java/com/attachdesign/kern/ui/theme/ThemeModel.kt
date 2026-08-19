@@ -23,16 +23,18 @@ data class AppThemeJson(
     val warningHex: String = "#FFC04D",
     val infoHex: String = "#5CD6D6",
     val successHex: String = "#D65CD6", // using existing purple for passive, wait let's use more semantic ones for hemingway if needed, or just specific hemingway colors
-    val editorFontFamily: String = "serif"
-
+    val editorFontFamily: String = "serif",
+    val headerDividerHex: String? = null
 ) {
     fun toColorTheme(): AppColorTheme {
+        val resolvedTextPrimary = parseHexColor(textPrimaryHex, Color(0xFF1C1C1A))
+        val resolvedHeaderDivider = headerDividerHex?.let { parseHexColor(it, resolvedTextPrimary) } ?: resolvedTextPrimary
         return AppColorTheme(
             name = name,
             isDark = isDark,
             background = parseHexColor(backgroundHex, Color(0xFFF7F3EB)),
             surface = parseHexColor(surfaceHex, Color(0xFFEDE8DC)),
-            textPrimary = parseHexColor(textPrimaryHex, Color(0xFF1C1C1A)),
+            textPrimary = resolvedTextPrimary,
             textMuted = parseHexColor(textMutedHex, Color(0xFF6E6A5F)),
             accent = parseHexColor(accentHex, Color(0xFFC85A32)),
             codeBackground = parseHexColor(codeBackgroundHex, Color(0xFFE8E2D6)),
@@ -40,6 +42,7 @@ data class AppThemeJson(
             warning = parseHexColor(warningHex, Color(0xFFFFC04D)),
             info = parseHexColor(infoHex, Color(0xFF5CD6D6)),
             success = parseHexColor(successHex, Color(0xFFD65CD6)),
+            headerDivider = resolvedHeaderDivider,
             editorFontFamily = editorFontFamily,
             dimensions = AppDimensions(),
             typography = AppTypographySizes()
@@ -79,6 +82,7 @@ data class AppColorTheme(
     val warning: Color,
     val info: Color,
     val success: Color,
+    val headerDivider: Color,
     val editorFontFamily: String,
     val dimensions: AppDimensions,
     val typography: AppTypographySizes

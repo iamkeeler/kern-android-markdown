@@ -400,7 +400,7 @@ fun MainScreen(
 
                     HorizontalDivider(
                         thickness = 2.dp,
-                        color = theme.textPrimary
+                        color = theme.headerDivider
                     )
 
                     Column(
@@ -449,15 +449,9 @@ fun MainScreen(
                         unfocusedContainerColor = Color.Transparent
                     )
                 ),
-                modifier = Modifier.fillMaxWidth().padding(bottom = theme.dimensions.spacingMedium)
+                modifier = Modifier.fillMaxWidth().padding(top = theme.dimensions.spacingMedium, bottom = theme.dimensions.spacingMedium)
             ) {}
         }
-
-        HorizontalDivider(
-            color = theme.textMuted.copy(alpha = 0.15f),
-            thickness = theme.dimensions.borderWidth,
-            modifier = Modifier.padding(top = theme.dimensions.spacingSmall, bottom = theme.dimensions.spacingMedium)
-        )
 
         Box(
             modifier = Modifier

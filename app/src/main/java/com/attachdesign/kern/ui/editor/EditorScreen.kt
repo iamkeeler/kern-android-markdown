@@ -266,7 +266,7 @@ fun EditorScreen(
 
                         HorizontalDivider(
                             thickness = 2.dp,
-                            color = uiState.activeTheme.textPrimary
+                            color = uiState.activeTheme.headerDivider
                         )
                     }
                 }
@@ -281,7 +281,7 @@ fun EditorScreen(
                         // palette is laid out directly above the keyboard instead of behind it.
                         .imePadding()
                         .padding(
-                            top = theme.dimensions.spacingExtraLarge,
+                            top = theme.dimensions.spacingSmall,
                             start = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge,
                             end = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge
                         )
@@ -319,7 +319,7 @@ fun EditorScreen(
                     val targetBottomPadding = if (isImeOpen) {
                         theme.dimensions.spacingMedium
                     } else {
-                        theme.dimensions.spacingMedium + 16.dp
+                        theme.dimensions.spacingMedium + 28.dp
                     }
                     val toolbarBottomPadding by androidx.compose.animation.core.animateDpAsState(
                         targetValue = targetBottomPadding,
@@ -687,6 +687,12 @@ private fun DocumentEditorField(
                 tokenColor = theme.textMuted,
                 codeBackgroundColor = theme.codeBackground
             )
+        },
+        decorator = { innerTextField ->
+            Column(modifier = Modifier.fillMaxWidth()) {
+                innerTextField()
+                Spacer(modifier = Modifier.height(if (isToolbarMinimized) 60.dp else 120.dp))
+            }
         },
         scrollState = scrollState
     )
@@ -1398,7 +1404,7 @@ fun SidebarPane(
         
         HorizontalDivider(
             thickness = 2.dp,
-            color = theme.textPrimary
+            color = theme.headerDivider
         )
         
         Spacer(modifier = Modifier.height(theme.dimensions.spacingExtraLarge))

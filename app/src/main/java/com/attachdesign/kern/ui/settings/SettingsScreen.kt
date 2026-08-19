@@ -1000,7 +1000,7 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(
                         thickness = 2.dp,
-                        color = theme.textPrimary
+                        color = theme.headerDivider
                     )
                 }
             }
