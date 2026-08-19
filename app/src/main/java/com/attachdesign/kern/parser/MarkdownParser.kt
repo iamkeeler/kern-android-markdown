@@ -4,9 +4,6 @@ import java.util.UUID
 
 object MarkdownParser {
 
-    private val unorderedListMarkerRegex = "^(\\s*)[-*+](\\s+|$)".toRegex()
-    private val orderedListMarkerRegex = "^(\\s*)\\d+[.)](\\s+|$)".toRegex()
-    private val checklistRegex = "^(\\s*)[-*+]\\s+\\[([ xX])\\](?:\\s+|$)".toRegex()
     private val atxHeadingRegex = "^( {0,3})(#{1,6})(?:[ \\t]+|$)(.*)$".toRegex()
     private val tableDelimiterRegex = "^\\s*\\|?\\s*:?-{1,}:?\\s*(?:\\|\\s*:?-{1,}:?\\s*)+\\|?\\s*$".toRegex()
 
@@ -16,39 +13,7 @@ object MarkdownParser {
      * in the high-frequency splitDocument loop, reducing execution time by ~94%.
      */
     fun isListLine(line: String): Boolean {
-        var i = 0
-        val len = line.length
-
-        // Skip leading whitespaces
-        while (i < len && line[i].isWhitespace()) {
-            i++
-        }
-        if (i >= len) return false
-
-        val c = line[i]
-
-        // Check for unordered list or checklist: '-' or '*' or '+'
-        if (c == '-' || c == '*' || c == '+') {
-            if (i + 1 == len) return true // e.g. "-"
-            val nextC = line[i + 1]
-            if (nextC.isWhitespace()) {
-                return true
-            }
-        }
-
-        // Check for ordered list: digit(s) followed by '.' followed by space or EOF
-        if (c.isDigit()) {
-            var j = i + 1
-            while (j < len && line[j].isDigit()) {
-                j++
-            }
-            if (j < len && (line[j] == '.' || line[j] == ')')) {
-                if (j + 1 == len) return true
-                if (line[j + 1].isWhitespace()) return true
-            }
-        }
-
-        return false
+        return MarkdownListSyntax.parse(line) != null
     }
 
     /**
@@ -94,9 +59,7 @@ object MarkdownParser {
         val elements = mutableListOf<MarkdownElement>()
         val len = rawText.length
 
-        val unorderedMatch = unorderedListMarkerRegex.find(rawText)
-        val orderedMatch = orderedListMarkerRegex.find(rawText)
-        val checklistMatch = checklistRegex.find(rawText)
+        val listMarker = MarkdownListSyntax.parse(rawText)
 
         val sourceLines = rawText.lines()
         val isTable = sourceLines.size >= 2 && tableDelimiterRegex.matches(sourceLines[1]) &&
@@ -133,17 +96,14 @@ object MarkdownParser {
             val leadingWhitespace = rawText.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
             contentStart = leadingWhitespace + if (rawText.substring(leadingWhitespace).startsWith("> ")) 2 else 1
             elements.add(MarkdownElement(MarkdownElementType.TOKEN_BLOCKQUOTE, leadingWhitespace, contentStart, constructStart = 0, constructEnd = len))
-        } else if (checklistMatch != null && checklistMatch.range.start == 0) {
+        } else if (listMarker?.kind == MarkdownListSyntax.Kind.TASK) {
             blockType = MarkdownBlockType.TASK_LIST
-            contentStart = checklistMatch.value.length
-            val leadingSpaces = checklistMatch.groupValues[1].length
-            val isChecked = checklistMatch.groupValues[2].lowercase() == "x"
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, extra = if (isChecked) "checked" else "unchecked", constructStart = 0, constructEnd = len))
-        } else if (unorderedMatch != null && unorderedMatch.range.start == 0) {
+            contentStart = listMarker.contentStart
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, listMarker.indent.length, contentStart, extra = if (listMarker.checked == true) "checked" else "unchecked", constructStart = 0, constructEnd = len))
+        } else if (listMarker?.kind == MarkdownListSyntax.Kind.UNORDERED) {
             blockType = MarkdownBlockType.UNORDERED_LIST
-            contentStart = unorderedMatch.value.length
-            val leadingSpaces = unorderedMatch.value.takeWhile { it.isWhitespace() }.length
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
+            contentStart = listMarker.contentStart
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, listMarker.indent.length, contentStart, constructStart = 0, constructEnd = len))
         } else if (fenceInfo(rawText.lineSequence().firstOrNull().orEmpty()) != null) {
             blockType = MarkdownBlockType.CODE_BLOCK
             val openingFence = fenceInfo(rawText.lineSequence().firstOrNull().orEmpty())!!
@@ -166,11 +126,10 @@ object MarkdownParser {
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, contentStartIndex, constructStart = 0, constructEnd = len))
                 elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, contentStartIndex, len, constructStart = 0, constructEnd = len))
             }
-        } else if (orderedMatch != null && orderedMatch.range.start == 0) {
+        } else if (listMarker?.kind == MarkdownListSyntax.Kind.ORDERED) {
             blockType = MarkdownBlockType.ORDERED_LIST
-            contentStart = orderedMatch.value.length
-            val leadingSpaces = orderedMatch.value.takeWhile { it.isWhitespace() }.length
-            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, leadingSpaces, contentStart, constructStart = 0, constructEnd = len))
+            contentStart = listMarker.contentStart
+            elements.add(MarkdownElement(MarkdownElementType.TOKEN_LIST_BULLET, listMarker.indent.length, contentStart, constructStart = 0, constructEnd = len))
         }
 
         // Inline parser content bounds

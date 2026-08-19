@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
     storageManager = StorageManager(applicationContext)
     externalOpenRequest = intent.toExternalOpenRequest()
 
+    window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     enableEdgeToEdge()
     setContent {
       ModernAndroidMarkdownEditorTheme {

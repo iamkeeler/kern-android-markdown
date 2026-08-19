@@ -383,24 +383,31 @@ fun MainScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    state.activeQuote?.let { quote ->
+                        Text(
+                            text = "“${quote.text}” — ${quote.author}, ${quote.year}",
+                            fontSize = theme.typography.small,
+                            fontFamily = appFont,
+                            fontWeight = FontWeight.Normal,
+                            color = theme.textMuted,
+                            lineHeight = theme.typography.subtitle,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = theme.dimensions.spacingExtraLarge)
+                                .padding(bottom = theme.dimensions.spacingMedium)
+                        )
+                    }
+
+                    HorizontalDivider(
+                        thickness = 2.dp,
+                        color = theme.textPrimary
+                    )
+
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = theme.dimensions.spacingExtraLarge)
                     ) {
-
-        state.activeQuote?.let { quote ->
-            Text(
-                text = "“${quote.text}” — ${quote.author}, ${quote.year}",
-                fontSize = theme.typography.small,
-                fontFamily = appFont,
-                fontWeight = FontWeight.Normal,
-                color = theme.textMuted,
-                lineHeight = theme.typography.subtitle,
-                modifier = Modifier.padding(vertical = theme.dimensions.spacingMedium)
-            )
-        }
-
         AnimatedVisibility(
             visible = isSearchActive,
             enter = fadeIn(animationSpec = tween(150)) + expandVertically(animationSpec = tween(150)),

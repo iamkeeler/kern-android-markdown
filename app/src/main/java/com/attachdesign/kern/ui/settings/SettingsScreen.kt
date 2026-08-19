@@ -982,21 +982,27 @@ fun SettingsScreen(
         Scaffold(
             containerColor = theme.background,
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text("Settings", fontFamily = appFont, fontWeight = FontWeight.Light, fontSize = theme.typography.h1)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBackClick) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = theme.textPrimary,
-                        navigationIconContentColor = theme.textPrimary
+                Column {
+                    TopAppBar(
+                        title = {
+                            Text("Settings", fontFamily = appFont, fontWeight = FontWeight.Light, fontSize = theme.typography.h1)
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBackClick) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            titleContentColor = theme.textPrimary,
+                            navigationIconContentColor = theme.textPrimary
+                        )
                     )
-                )
+                    HorizontalDivider(
+                        thickness = 2.dp,
+                        color = theme.textPrimary
+                    )
+                }
             }
         ) { innerPadding ->
             SettingsTabsContent(

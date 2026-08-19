@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kern README Maintenance"
+  short_description: "Keep README accurate and structured"
+  default_prompt: "Use $kern-readme-maintenance to update the Kern README for this change."

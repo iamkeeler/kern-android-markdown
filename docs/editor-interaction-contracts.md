@@ -36,6 +36,9 @@ This document records user-visible editor behavior that must survive refactors. 
 - Do not call `scrollToItem` merely because focus changed.
 - Do not request that an entire paragraph be brought into view on every text or selection update. Let the text field keep its cursor visible and use IME/window insets to reserve obscured space.
 - The floating formatting toolbar is a compact, translucent overlay. Reserve only enough bottom content space for the cursor to remain visible; do not turn the toolbar into a full-width opaque bottom sheet.
+- Symptom and affected release: focusing the editor on OEM devices panned the entire activity window upward, pushing the TopAppBar header off-screen.
+- Root cause: `android:windowSoftInputMode="adjustResize"` was declared on `<application>` rather than explicitly on `<activity android:name=".MainActivity">`, triggering OS fallback to `adjustPan`.
+- Behavioral invariant: the window manager must always resize rather than pan. The TopAppBar header stays permanently anchored under the status bar, and only the editor canvas resizes with IME insets.
 - Regression coverage: `EditorScreenTest.testFocusingVisibleParagraphPreservesViewport`.
 
 ### Rendered Markdown must not fall back to source syntax
@@ -54,12 +57,68 @@ This document records user-visible editor behavior that must survive refactors. 
 - Automated test name: `EditorScreenTest.testFloatingFormattingToolbarInteraction`.
 - Regression update: the palette is one opaque, centered row. The editor content owns keyboard resizing; the palette must not inherit duplicate IME padding or leave a colored band that obscures the document.
 
+### Selecting formatted writing reveals its source syntax
+
+- Symptom and affected release: the document-level editor kept Markdown tokens hidden after selecting formatted text, so a selected construct could not be inspected or edited as source.
+- Root cause: its output transformation stripped syntax unconditionally and did not consider the native text-field selection.
+- Behavioral invariant: rendered mode hides inactive Markdown syntax, but selecting or placing the caret inside an inline construct reveals that construct's source markers while other constructs remain rendered. The floating formatting palette shares the editor canvas's single IME inset and stays above the keyboard.
+- Automated test name: `MarkdownRenderingInstrumentedTest.renderedEditorTextStripsMarkdownSyntaxButRetainsWriting`.
+
+### Markdown lists continue without corrupting source
+
+- Symptom and affected release: pressing Enter in the document-level editor inserted a plain newline because list continuation existed only in the retired paragraph editor path. Formatting commands could also stack incompatible list markers.
+- Root cause: list parsing, continuation, and toolbar conversions used separate marker rules, while the document-level `TextFieldState` had no input transformation.
+- Behavioral invariant: a single Enter continues supported unordered (`-`, `*`, `+`), ordered (`.` and `)`), and task lists using their existing indentation and marker; new task items are unchecked. Empty list items exit without retaining source markers. Inline formatting remains exact source text; fenced code and thematic breaks never continue as lists. Formatting converts list prefixes instead of stacking them.
+- Automated test names: `MarkdownEditorEngineTest.continuation preserves every supported list marker`, `DocumentEditEngineTest.checklist conversion replaces existing bullet and ordered markers`, and `EditorScreenTest.testDocumentEditorContinuesMarkdownList`.
+
 ### Active theme controls system bars
 
 - Symptom and affected release: after edge-to-edge was enabled, light themes could show dark system bars because system-bar appearance was updated only by Settings.
 - Root cause: system chrome was not owned by the active application theme.
 - Behavioral invariant: every screen applies the active Kern theme to the status and navigation bars. Light themes use a light background with dark icons; dark themes use a dark background with light icons.
 - Automated test name: `ThemeAccessibilityTest`; add emulator coverage when system-bar test infrastructure is available.
+
+### Tapping list commands starts lists on empty and blank lines
+
+- Symptom and affected release: tapping the bullet list or task list toolbar action on an empty line had no effect.
+- Root cause: `DocumentEditEngine.transformLine` dropped line commands on blank lines with an unconditional `if (line.isBlank()) return null`.
+- Behavioral invariant: toggling unordered bullets, checklists, or headings on a single empty/blank line inserts the appropriate Markdown prefix (retaining any leading whitespace indentation) and places the cursor at the end of the prefix. In multi-line paragraph selections, blank separator lines between paragraphs remain un-prefixed.
+- Automated test names: `DocumentEditEngineTest.toggle bullet on empty line creates bullet prefix and positions cursor`, `DocumentEditEngineTest.toggle bullet on blank line preserves indentation and positions cursor`, `DocumentEditEngineTest.toggle checklist on empty line creates task prefix and positions cursor`.
+
+### Rendered Markdown styles span full text bounds without offset drift
+
+- Symptom and affected release: when tapping `H` or viewing rendered Markdown, heading and inline styles were truncated by a few characters, leaving trailing characters at normal body size.
+- Root cause: `MarkdownDocumentOutputTransformation` passed already-transformed block and span coordinates into `SourceOffsetMap.map()`, double-subtracting delimiter lengths.
+- Behavioral invariant: output transformation applies block and inline styles using original AST source ranges mapped cleanly through the source-to-buffer offset map. All rendered characters of headings and styled spans receive full, exact styling without character clipping or offset drift.
+- Automated test names: `MarkdownRenderingInstrumentedTest.renderedEditorTextStripsMarkdownSyntaxButRetainsWriting`, `DocumentEditEngineTest.set heading on empty line creates heading prefix and positions cursor`.
+
+### Floating toolbar menus keep soft keyboard visible
+
+- Symptom and affected release: tapping the overflow menu or heading level dropdown on the floating formatting toolbar dismissed the soft keyboard.
+- Root cause: `DropdownMenu` defaulted to `PopupProperties(focusable = true)`, which transferred window focus away from `BasicTextField`.
+- Behavioral invariant: formatting palette dropdown menus use non-focusable popup properties (`PopupProperties(focusable = false)`), allowing the underlying `BasicTextField` to retain input focus and keep the IME active.
+- Automated test name: `EditorScreenTest.testFloatingFormattingToolbarInteraction`.
+
+### Collapsed floating toolbar docks to the right edge
+
+- Symptom and affected release: when minimized, the formatting FAB was centered at the bottom of the screen instead of docking at the trailing edge.
+- Root cause: parent animation container enforced `Alignment.BottomCenter` across both expanded and minimized states.
+- Behavioral invariant: when expanded, the floating formatting toolbar is centered along the bottom edge above the keyboard; when minimized, the floating expand FAB docks at `Alignment.BottomEnd` with margin padding.
+- Automated test name: `EditorScreenTest.testFloatingFormattingToolbarInteraction`.
+
+### Code block and inline code formatting span entire contents uniformly
+
+- Symptom and affected release: fenced code blocks rendered with uneven ragged line highlights with missing styles on closing lines/braces.
+- Root cause: `MarkdownDocumentOutputTransformation` stripped trailing newlines from `CODE_BLOCK` projection strings, causing a discrepancy with AST token replacements and triggering whole-block fallback replacement.
+- Behavioral invariant: code blocks and inline code are projected cleanly via AST token replacements. Monospace font styling and background colors span the exact bounds of all code block lines (including closing braces) and inline code spans without truncation or offset mismatch.
+- Automated test name: `MarkdownRendererTest.fenced code hides fence and language but leaves code literal`.
+
+### Floating formatting toolbar operates on high Z-index with generous document scroll clearance
+
+- Symptom and affected release: the bottom lines of text in the editor could not be scrolled clear of the floating toolbar and keyboard.
+- Root cause: `bottomPadding` in `DocumentEditorField` was too small (`spacingTitan` / 70dp), preventing the document from scrolling past the floating bar.
+- Behavioral invariant: `BasicTextField` content scrolls through the full canvas behind the floating toolbar (`zIndex = 1f`). The document editor area provides generous bottom scroll clearance (`160.dp` expanded, `100.dp` minimized) so any line of text at the bottom can be scrolled comfortably above the floating toolbar into open view.
+
 
 ## Preferred direction
 

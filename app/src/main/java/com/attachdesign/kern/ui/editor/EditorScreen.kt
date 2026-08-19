@@ -208,7 +208,7 @@ fun EditorScreen(
             // Editor Canvas (Main container)
             Column(
                 modifier = Modifier
-                    .weight(editorWeight)
+                    .then(if (isDualPane) Modifier.weight(editorWeight) else Modifier.fillMaxSize())
                     .fillMaxHeight()
             ) {
                 // Header (Breadcrumbs)
@@ -217,13 +217,7 @@ fun EditorScreen(
                         EditorHeader(
                             filePath = filePath,
                             theme = uiState.activeTheme,
-                            isMetricsOpen = uiState.isReadabilityPopupOpen,
-                            metricsContent = {
-                                MetricsTab(
-                                    state = uiState,
-                                    onClose = { viewModel.toggleReadabilityPopup() }
-                                )
-                            },
+                            isMetricsActive = uiState.sidebarMode == SidebarMode.METRICS,
                             onBackClick = onBackClick,
                             onCopyClick = {
                                 val fullText = MarkdownRenderer.copyDocument(uiState.paragraphs.items.map { it.block })
@@ -231,7 +225,8 @@ fun EditorScreen(
                                 Toast.makeText(context, "Copied rendered text", Toast.LENGTH_SHORT).show()
                             },
                             onMetricsToggle = {
-                                viewModel.toggleReadabilityPopup()
+                                val currentMode = uiState.sidebarMode
+                                viewModel.toggleSidebar(if (currentMode == SidebarMode.METRICS) SidebarMode.CLOSED else SidebarMode.METRICS)
                             },
                             onSettingsToggle = {
                                 val currentMode = uiState.sidebarMode
@@ -270,8 +265,8 @@ fun EditorScreen(
                         )
 
                         HorizontalDivider(
-                            thickness = theme.dimensions.borderWidth,
-                            color = uiState.activeTheme.textMuted.copy(alpha = 0.15f)
+                            thickness = 2.dp,
+                            color = uiState.activeTheme.textPrimary
                         )
                     }
                 }
@@ -282,7 +277,14 @@ fun EditorScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(horizontal = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge)
+                        // The editor canvas consumes the IME inset once, so the floating
+                        // palette is laid out directly above the keyboard instead of behind it.
+                        .imePadding()
+                        .padding(
+                            top = theme.dimensions.spacingExtraLarge,
+                            start = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge,
+                            end = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge
+                        )
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
@@ -312,73 +314,132 @@ fun EditorScreen(
                     val activeIndex = uiState.focusedParagraphIndex
                     val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
 
-                    androidx.compose.animation.AnimatedContent(
-                        targetState = isToolbarMinimized,
-                        transitionSpec = {
-                            (fadeIn(animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)) +
-                             scaleIn(initialScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)))
-                                .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
-                                              scaleOut(targetScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(100)))
-                                .using(SizeTransform(clip = false) { _, _ ->
-                                    androidx.compose.animation.core.spring(
-                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                        stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                                    )
-                                })
-                        },
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val isImeOpen = WindowInsets.ime.getBottom(density) > 0
+                    val targetBottomPadding = if (isImeOpen) {
+                        theme.dimensions.spacingMedium
+                    } else {
+                        theme.dimensions.spacingMedium + 16.dp
+                    }
+                    val toolbarBottomPadding by androidx.compose.animation.core.animateDpAsState(
+                        targetValue = targetBottomPadding,
+                        label = "toolbarBottomPadding"
+                    )
+
+                    Box(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = theme.dimensions.spacingMedium),
-                        label = "ToolbarMinimizeAnimation"
-                    ) { minimized ->
-                        if (minimized) {
-                            FormattingPaletteFab(
-                                theme = uiState.activeTheme,
-                                onClick = { isToolbarMinimized = false }
-                            )
-                        } else {
-                            FloatingFormattingToolbar(
-                                theme = uiState.activeTheme,
-                                onHeaderClick = {
-                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.CycleHeading)
-                                    else if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex)
-                                },
-                                onHeaderSet = { level ->
-                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.SetHeading(level))
-                                    else if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level)
-                                },
-                                onIndentClick = {
-                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Indent)
-                                    else if (activeIndex != -1) viewModel.indentParagraph(activeIndex)
-                                },
-                                onOutdentClick = {
-                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Outdent)
-                                    else if (activeIndex != -1) viewModel.outdentParagraph(activeIndex)
-                                },
-                                onChecklistClick = {
-                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleChecklist)
-                                    else if (activeIndex != -1) viewModel.toggleChecklist(activeIndex)
-                                },
-                                onBulletClick = {
-                                    if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleBulletList)
-                                    else if (activeIndex != -1) viewModel.toggleBulletList(activeIndex)
-                                },
-                                onMinimizeClick = { isToolbarMinimized = true },
-                                onFormat = { p, s ->
-                                    if (uiState.documentEditorEnabled) {
-                                        viewModel.applyDocumentCommand(DocumentEditEngine.Command.Wrap(p, s))
-                                    } else {
-                                        if (activeIndex == -1) return@FloatingFormattingToolbar
-                                        viewModel.formatParagraph(activeIndex, p, s)
+                            .zIndex(1f)
+                            .padding(bottom = toolbarBottomPadding)
+                    ) {
+                        androidx.compose.animation.AnimatedContent(
+                            targetState = isToolbarMinimized,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)) +
+                                 scaleIn(initialScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)))
+                                    .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
+                                                  scaleOut(targetScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(100)))
+                                    .using(SizeTransform(clip = false) { _, _ ->
+                                        androidx.compose.animation.core.spring(
+                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                        )
+                                    })
+                            },
+                            modifier = Modifier.align(if (isToolbarMinimized) Alignment.BottomEnd else Alignment.BottomCenter),
+                            label = "ToolbarMinimizeAnimation"
+                        ) { minimized ->
+                            if (minimized) {
+                                FormattingPaletteFab(
+                                    theme = uiState.activeTheme,
+                                    onClick = { isToolbarMinimized = false }
+                                )
+                            } else {
+                                FloatingFormattingToolbar(
+                                    theme = uiState.activeTheme,
+                                    onHeaderClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.CycleHeading)
+                                        else if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex)
+                                    },
+                                    onHeaderSet = { level ->
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.SetHeading(level))
+                                        else if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level)
+                                    },
+                                    onIndentClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Indent)
+                                        else if (activeIndex != -1) viewModel.indentParagraph(activeIndex)
+                                    },
+                                    onOutdentClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Outdent)
+                                        else if (activeIndex != -1) viewModel.outdentParagraph(activeIndex)
+                                    },
+                                    onChecklistClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleChecklist)
+                                        else if (activeIndex != -1) viewModel.toggleChecklist(activeIndex)
+                                    },
+                                    onBulletClick = {
+                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleBulletList)
+                                        else if (activeIndex != -1) viewModel.toggleBulletList(activeIndex)
+                                    },
+                                    onMinimizeClick = { isToolbarMinimized = true },
+                                    onFormat = { p, s ->
+                                        if (uiState.documentEditorEnabled) {
+                                            viewModel.applyDocumentCommand(DocumentEditEngine.Command.Wrap(p, s))
+                                        } else {
+                                            if (activeIndex == -1) return@FloatingFormattingToolbar
+                                            viewModel.formatParagraph(activeIndex, p, s)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Collapsible Sidebar (Metrics, Settings, Themes, Sync Logs)
+            // Dual-pane Collapsible Sidebar (Metrics, Settings, Themes, Sync Logs)
+            if (isDualPane) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isSidebarOpen,
+                    enter = androidx.compose.animation.slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ) + androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ),
+                    exit = androidx.compose.animation.slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    ) + androidx.compose.animation.fadeOut(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                        )
+                    )
+                ) {
+                    SidebarPane(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(theme.dimensions.sidebarWidth)
+                            .background(uiState.activeTheme.surface)
+                            .statusBarsPadding(),
+                        state = uiState,
+                        viewModel = viewModel,
+                        onCloseClick = { viewModel.toggleSidebar(SidebarMode.CLOSED) }
+                    )
+                }
+            }
+        }
+
+        // Single-pane Collapsible Sidebar (Overlay)
+        if (!isDualPane) {
             androidx.compose.animation.AnimatedVisibility(
                 visible = uiState.isSidebarOpen,
                 enter = androidx.compose.animation.slideInHorizontally(
@@ -401,12 +462,12 @@ fun EditorScreen(
                     animationSpec = androidx.compose.animation.core.spring(
                         stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
                     )
-                )
+                ),
+                modifier = Modifier.fillMaxSize()
             ) {
                 SidebarPane(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(if (isDualPane) theme.dimensions.sidebarWidth else widthDp)
+                        .fillMaxSize()
                         .background(uiState.activeTheme.surface)
                         .statusBarsPadding(),
                     state = uiState,
@@ -428,12 +489,11 @@ fun EditorScreen(
 fun EditorHeader(
     filePath: String,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    isMetricsOpen: Boolean,
-    metricsContent: @Composable () -> Unit,
     onBackClick: () -> Unit,
     onCopyClick: () -> Unit,
     onMetricsToggle: () -> Unit,
     onSettingsToggle: () -> Unit,
+    isMetricsActive: Boolean = false,
     onMoreOptionsAction: (String) -> Unit = {},
     onTitleClick: () -> Unit = {}
 ) {
@@ -480,28 +540,16 @@ fun EditorHeader(
                     modifier = Modifier.size(theme.dimensions.iconMedium)
                 )
             }
-            Box {
-                IconButton(
-                    onClick = onMetricsToggle,
-                    modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Analytics,
-                        contentDescription = "Readability metrics",
-                        tint = theme.textMuted,
-                        modifier = Modifier.size(theme.dimensions.iconMedium)
-                    )
-                }
-                DropdownMenu(
-                    expanded = isMetricsOpen,
-                    onDismissRequest = onMetricsToggle,
-                    modifier = Modifier
-                        .width(280.dp)
-                        .background(theme.surface)
-                        .padding(theme.dimensions.spacingLarge)
-                ) {
-                    metricsContent()
-                }
+            IconButton(
+                onClick = onMetricsToggle,
+                modifier = Modifier.semantics { contentDescription = "Toggle readability metrics popup" }
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Analytics,
+                    contentDescription = "Readability metrics",
+                    tint = if (isMetricsActive) theme.accent else theme.textMuted,
+                    modifier = Modifier.size(theme.dimensions.iconMedium)
+                )
             }
             var showMenu by remember { mutableStateOf(false) }
             Box {
@@ -599,24 +647,18 @@ private fun DocumentEditorField(
 ) {
     val theme = state.activeTheme
     val scrollState = rememberScrollState()
-    val bottomPadding = if (isToolbarMinimized) {
-        theme.dimensions.spacingMassive
-    } else {
-        // One palette row plus its bottom inset keeps the active cursor visible.
-        theme.dimensions.spacingTitan
-    }
     val editorFont = when (theme.editorFontFamily.lowercase()) {
         "serif" -> FontFamily.Serif
         "monospace" -> FontFamily.Monospace
         else -> FontFamily.SansSerif
     }
+    val inputTransformation = remember { MarkdownDocumentInputTransformation() }
 
     BasicTextField(
         state = viewModel.documentTextFieldState,
         modifier = Modifier
             .fillMaxSize()
             .widthIn(max = theme.dimensions.maxTextLineWidth)
-            .padding(bottom = bottomPadding)
             .semantics { contentDescription = "Document editor" }
             .onFocusChanged { focus -> viewModel.onDocumentEditorFocusChanged(focus.isFocused) },
         textStyle = TextStyle(
@@ -632,6 +674,7 @@ private fun DocumentEditorField(
             imeAction = ImeAction.Default
         ),
         cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.accent),
+        inputTransformation = inputTransformation,
         outputTransformation = remember(
             state.viewMode,
             state.editorFontSizeScale,
@@ -1195,7 +1238,7 @@ fun FloatingFormattingToolbar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier.widthIn(max = 320.dp),
+        modifier = modifier.wrapContentWidth(),
         shape = RoundedCornerShape(theme.dimensions.cornerRadiusLarge),
         color = theme.surface,
         contentColor = theme.textPrimary,
@@ -1233,7 +1276,11 @@ private fun OverflowFormattingActions(
     var expanded by remember { mutableStateOf(false) }
     Box {
         FormatAction("More formatting actions", { Icon(Icons.Outlined.MoreVert, null) }) { expanded = true }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = false)
+        ) {
             DropdownMenuItem(
                 text = { Text("Strikethrough") },
                 leadingIcon = { Text("S", textDecoration = TextDecoration.LineThrough) },
@@ -1289,7 +1336,11 @@ private fun HeaderAction(theme: AppColorTheme, onHeaderClick: () -> Unit, onHead
             Text("H", fontWeight = FontWeight.Black, fontSize = theme.typography.subtitle)
             Icon(Icons.Default.ArrowDropDown, null, Modifier.align(Alignment.BottomEnd).size(16.dp).padding(bottom = 2.dp, end = 2.dp), tint = theme.accent)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = false)
+        ) {
             (1..6).forEach { level -> DropdownMenuItem(text = { Text("Header $level") }, onClick = { expanded = false; onHeaderSet(level) }) }
         }
     }
@@ -1346,8 +1397,8 @@ fun SidebarPane(
         }
         
         HorizontalDivider(
-            thickness = theme.dimensions.borderWidth,
-            color = theme.textMuted.copy(alpha = 0.15f)
+            thickness = 2.dp,
+            color = theme.textPrimary
         )
         
         Spacer(modifier = Modifier.height(theme.dimensions.spacingExtraLarge))

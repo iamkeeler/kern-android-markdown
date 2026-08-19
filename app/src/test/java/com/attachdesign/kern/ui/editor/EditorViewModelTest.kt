@@ -47,9 +47,6 @@ class EditorViewModelTest {
 
     @Before
     fun setup() {
-        io.mockk.mockkStatic(android.graphics.Color::class)
-        every { android.graphics.Color.parseColor(any()) } returns 0
-
         db = mockk(relaxed = true)
         projectDao = mockk()
         fileDao = mockk()

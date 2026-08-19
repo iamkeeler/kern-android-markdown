@@ -2,16 +2,9 @@ package com.attachdesign.kern.parser
 
 object MarkdownEditorEngine {
 
-    // Regex patterns for continuation detection
-    private val checklistRegex = Regex("^(\\s*[-*+]\\s+\\[[ xX]?\\]\\s+)")
-    private val orderedListRegex = Regex("^(\\s*)(\\d+)\\.(\\s+)")
-    private val bulletListRegex = Regex("^(\\s*[-*+]\\s+)")
     private val blockquoteRegex = Regex("^(\\s*>\\s?)")
 
     // Empty checks (lines containing only the formatting prefix and trailing spaces)
-    private val emptyChecklistRegex = Regex("^(\\s*[-*+]\\s+\\[[ xX]?\\]\\s*)$")
-    private val emptyOrderedListRegex = Regex("^(\\s*\\d+\\.\\s*)$")
-    private val emptyBulletListRegex = Regex("^(\\s*[-*+]\\s*)$")
     private val emptyBlockquoteRegex = Regex("^(\\s*>\\s*)$")
 
     data class ContinuationResult(
@@ -21,49 +14,28 @@ object MarkdownEditorEngine {
         val isExit: Boolean
     )
 
+    data class DocumentContinuation(
+        val markerStart: Int,
+        val markerEnd: Int,
+        val nextPrefix: String?
+    )
+
     fun checkContinuation(line: String): ContinuationResult {
-        // 1. Checklist
-        if (emptyChecklistRegex.matches(line)) {
-            return ContinuationResult(isContinuation = true, newCurrentText = "", nextLinePrefix = "", isExit = true)
-        }
-        val checklistMatch = checklistRegex.find(line)
-        if (checklistMatch != null) {
-            val prefix = checklistMatch.value
-            val indentAndBulletRegex = Regex("^(\\s*[-*+])")
-            val match = indentAndBulletRegex.find(prefix)
-            val nextPrefix = if (match != null) {
-                match.value + " [ ] "
-            } else {
-                "- [ ] "
+        val marker = MarkdownListSyntax.parse(line)
+        if (marker != null) {
+            val content = line.substring(marker.contentStart)
+            if (content.isBlank()) {
+                return ContinuationResult(isContinuation = true, newCurrentText = "", nextLinePrefix = "", isExit = true)
             }
-            return ContinuationResult(isContinuation = true, newCurrentText = line, nextLinePrefix = nextPrefix, isExit = false)
+            return ContinuationResult(
+                isContinuation = true,
+                newCurrentText = line,
+                nextLinePrefix = marker.nextItemPrefix(),
+                isExit = false
+            )
         }
 
-        // 2. Ordered List
-        if (emptyOrderedListRegex.matches(line)) {
-            return ContinuationResult(isContinuation = true, newCurrentText = "", nextLinePrefix = "", isExit = true)
-        }
-        val orderedMatch = orderedListRegex.find(line)
-        if (orderedMatch != null) {
-            val indent = orderedMatch.groupValues[1]
-            val numStr = orderedMatch.groupValues[2]
-            val spacing = orderedMatch.groupValues[3]
-            val num = numStr.toIntOrNull() ?: 1
-            val nextNum = num + 1
-            val nextPrefix = "$indent$nextNum.$spacing"
-            return ContinuationResult(isContinuation = true, newCurrentText = line, nextLinePrefix = nextPrefix, isExit = false)
-        }
-
-        // 3. Bullet List
-        if (emptyBulletListRegex.matches(line)) {
-            return ContinuationResult(isContinuation = true, newCurrentText = "", nextLinePrefix = "", isExit = true)
-        }
-        val bulletMatch = bulletListRegex.find(line)
-        if (bulletMatch != null) {
-            return ContinuationResult(isContinuation = true, newCurrentText = line, nextLinePrefix = bulletMatch.value, isExit = false)
-        }
-
-        // 4. Blockquote
+        // Blockquotes are intentionally not list syntax, but retain the existing continuation behavior.
         if (emptyBlockquoteRegex.matches(line)) {
             return ContinuationResult(isContinuation = true, newCurrentText = "", nextLinePrefix = "", isExit = true)
         }
@@ -75,6 +47,47 @@ object MarkdownEditorEngine {
         }
 
         return ContinuationResult(isContinuation = false, newCurrentText = line, nextLinePrefix = "", isExit = false)
+    }
+
+    /**
+     * Returns the local edit to apply after a single Enter press in the document editor.
+     * Pasted or multi-line edits are deliberately left to the platform unchanged.
+     */
+    fun continueDocumentList(source: String, newlineOffset: Int, lineBreak: String): DocumentContinuation? {
+        if (lineBreak != "\n" && lineBreak != "\r\n") return null
+        val offset = newlineOffset.coerceIn(0, source.length)
+        if (isInsideCodeBlock(source, offset)) return null
+
+        val lineStart = source.lastIndexOf('\n', offset - 1).let { if (it == -1) 0 else it + 1 }
+        val lineEnd = source.indexOf('\n', offset).let { if (it == -1) source.length else it }
+        val line = source.substring(lineStart, lineEnd).removeSuffix("\r")
+        if (MarkdownParser.isThematicBreak(line)) return null
+
+        val marker = MarkdownListSyntax.parse(line) ?: return null
+        val content = line.substring(marker.contentStart)
+        return if (content.isBlank()) {
+            DocumentContinuation(
+                markerStart = lineStart,
+                markerEnd = lineStart + marker.contentStart,
+                nextPrefix = null
+            )
+        } else {
+            DocumentContinuation(
+                markerStart = lineStart,
+                markerEnd = lineStart + marker.contentStart,
+                nextPrefix = marker.nextItemPrefix()
+            )
+        }
+    }
+
+    private fun isInsideCodeBlock(source: String, offset: Int): Boolean {
+        var blockStart = 0
+        MarkdownDocumentScanner.scan(source).forEach { block ->
+            val blockEnd = blockStart + block.rawText.length
+            if (offset in blockStart..blockEnd) return block.blockType == MarkdownBlockType.CODE_BLOCK
+            blockStart = blockEnd + block.separatorAfter.length
+        }
+        return false
     }
 
     data class TransformResult(

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kern Release Learning Loop"
+  short_description: "Turn stable releases into durable learning"
+  default_prompt: "Use $kern-release-learning-loop to review this successful Kern release tag."

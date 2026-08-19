@@ -67,6 +67,60 @@ class DocumentEditEngineTest {
         assertEquals("- [x] First\n\n- [ ] Second", result.text)
     }
 
+    @Test
+    fun `checklist conversion replaces existing bullet and ordered markers`() {
+        val bullets = apply("  * Item", 0, 8, DocumentEditEngine.Command.ToggleChecklist)
+        val ordered = apply("3) Item", 0, 7, DocumentEditEngine.Command.ToggleChecklist)
+
+        assertEquals("  * [ ] Item", bullets.text)
+        assertEquals("- [ ] Item", ordered.text)
+    }
+
+    @Test
+    fun `bullet conversion replaces task and ordered markers`() {
+        val task = apply("  + [x] Done", 0, 12, DocumentEditEngine.Command.ToggleBulletList)
+        val ordered = apply("3) Item", 0, 7, DocumentEditEngine.Command.ToggleBulletList)
+
+        assertEquals("  + Done", task.text)
+        assertEquals("- Item", ordered.text)
+    }
+
+    @Test
+    fun `toggle bullet on empty line creates bullet prefix and positions cursor`() {
+        val result = apply("", 0, 0, DocumentEditEngine.Command.ToggleBulletList)
+
+        assertEquals("- ", result.text)
+        assertEquals(2, result.selectionStart)
+        assertEquals(2, result.selectionEnd)
+    }
+
+    @Test
+    fun `toggle bullet on blank line preserves indentation and positions cursor`() {
+        val result = apply("  ", 2, 2, DocumentEditEngine.Command.ToggleBulletList)
+
+        assertEquals("  - ", result.text)
+        assertEquals(4, result.selectionStart)
+        assertEquals(4, result.selectionEnd)
+    }
+
+    @Test
+    fun `toggle checklist on empty line creates task prefix and positions cursor`() {
+        val result = apply("", 0, 0, DocumentEditEngine.Command.ToggleChecklist)
+
+        assertEquals("- [ ] ", result.text)
+        assertEquals(6, result.selectionStart)
+        assertEquals(6, result.selectionEnd)
+    }
+
+    @Test
+    fun `set heading on empty line creates heading prefix and positions cursor`() {
+        val result = apply("", 0, 0, DocumentEditEngine.Command.SetHeading(1))
+
+        assertEquals("# ", result.text)
+        assertEquals(2, result.selectionStart)
+        assertEquals(2, result.selectionEnd)
+    }
+
     private fun apply(
         text: String,
         start: Int,

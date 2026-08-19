@@ -222,7 +222,7 @@ class EditorScreenTest {
   }
 
   @Test
-  fun testDirectChecklistToggling() {
+  fun testChecklistFormattingTogglesCurrentTask() {
     // Write checklist items to the file before setting Compose content
     runBlocking {
       storageManager.writeFile(project, "test_file.md", "- [ ] Buy groceries\n- [x] Read book")
@@ -247,8 +247,8 @@ class EditorScreenTest {
     editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
       action(0, 0, false)
     }
-    composeTestRule.onNodeWithContentDescription("Toggle checklist item")
-        .performSemanticsAction(SemanticsActions.OnClick)
+    composeTestRule.onNodeWithContentDescription("More formatting actions").performClick()
+    composeTestRule.onNodeWithText("Checklist").performClick()
 
     // Verify that the first item visually transitions to checked state
     composeTestRule.waitForIdle()
@@ -258,6 +258,36 @@ class EditorScreenTest {
         checklistTexts.firstOrNull()?.startsWith("- [x]") == true
     )
     editor.assertTextContains("- [x] Buy groceries", substring = true)
+  }
+
+  @Test
+  fun testDocumentEditorContinuesMarkdownList() {
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", "- **First**")
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("First")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performClick()
+    editor.performSemanticsAction(SemanticsActions.SetSelection) { action ->
+      action("- **First**".length, "- **First**".length, false)
+    }
+    editor.performTextInput("\n")
+
+    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+      viewModel.documentTextFieldState.text.toString() == "- **First**\n- "
+    }
   }
 
   @Test

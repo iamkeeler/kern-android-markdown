@@ -79,11 +79,12 @@ object DocumentEditEngine {
         command: Command
     ): Result {
         val lineStarts = selectedLineStarts(text, selectionStart, selectionEnd)
+        val allowBlank = lineStarts.size == 1
         val replacements = lineStarts.mapNotNull { lineStart ->
             val contentEnd = text.indexOf('\n', lineStart).let { if (it == -1) text.length else it }
             val logicalEnd = if (contentEnd > lineStart && text[contentEnd - 1] == '\r') contentEnd - 1 else contentEnd
             val line = text.substring(lineStart, logicalEnd)
-            transformLine(line, command)?.let { transformed ->
+            transformLine(line, command, allowBlank)?.let { transformed ->
                 minimalReplacement(lineStart, line, transformed)
             }
         }
@@ -114,14 +115,14 @@ object DocumentEditEngine {
         return starts.distinct()
     }
 
-    private fun transformLine(line: String, command: Command): String? {
-        if (line.isBlank()) return null
+    private fun transformLine(line: String, command: Command, allowBlank: Boolean): String? {
+        if (line.isBlank() && !allowBlank) return null
         return when (command) {
             is Command.SetHeading -> setHeading(line, command.level)
             Command.CycleHeading -> cycleHeading(line)
             Command.ToggleChecklist -> toggleChecklist(line)
             Command.ToggleBulletList -> toggleBullet(line)
-            Command.Indent -> "    $line"
+            Command.Indent -> if (line.isEmpty()) null else "    $line"
             Command.Outdent -> outdent(line)
             is Command.Wrap -> null
         }
@@ -140,16 +141,36 @@ object DocumentEditEngine {
     }
 
     private fun toggleChecklist(line: String): String {
-        val match = Regex("^(\\s*)[-*+]\\s+\\[([ xX])\\]\\s+").find(line)
-            ?: return "- [ ] $line"
-        val checked = !match.groupValues[2].equals(" ")
-        val replacement = "${match.groupValues[1]}- [${if (checked) " " else "x"}] "
-        return replacement + line.substring(match.range.last + 1)
+        val marker = MarkdownListSyntax.parse(line)
+        return when (marker?.kind) {
+            MarkdownListSyntax.Kind.TASK -> {
+                val replacement = "${marker.indent}${marker.marker}${marker.spacing}[${if (marker.checked == true) " " else "x"}] "
+                replacement + line.substring(marker.contentStart)
+            }
+            MarkdownListSyntax.Kind.UNORDERED -> {
+                "${marker.indent}${marker.marker}${marker.spacing}[ ] " + line.substring(marker.contentStart)
+            }
+            MarkdownListSyntax.Kind.ORDERED -> {
+                "${marker.indent}- [ ] " + line.substring(marker.contentStart)
+            }
+            null -> {
+                val indent = line.takeWhile { it.isWhitespace() }
+                "$indent- [ ] " + line.substring(indent.length)
+            }
+        }
     }
 
     private fun toggleBullet(line: String): String {
-        val match = Regex("^(\\s*)[-*+]\\s+").find(line) ?: return "- $line"
-        return match.groupValues[1] + line.substring(match.range.last + 1)
+        val marker = MarkdownListSyntax.parse(line)
+        return when (marker?.kind) {
+            MarkdownListSyntax.Kind.UNORDERED -> marker.indent + line.substring(marker.contentStart)
+            MarkdownListSyntax.Kind.TASK -> "${marker.indent}${marker.marker}${marker.spacing}" + line.substring(marker.contentStart)
+            MarkdownListSyntax.Kind.ORDERED -> "${marker.indent}- " + line.substring(marker.contentStart)
+            null -> {
+                val indent = line.takeWhile { it.isWhitespace() }
+                "$indent- " + line.substring(indent.length)
+            }
+        }
     }
 
     private fun outdent(line: String): String? = when {
