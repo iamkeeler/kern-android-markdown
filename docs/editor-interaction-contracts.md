@@ -115,8 +115,15 @@ This document records user-visible editor behavior that must survive refactors. 
 ### Floating formatting toolbar operates on high Z-index with generous document scroll clearance
 
 - Symptom and affected release: the bottom lines of text in the editor could not be scrolled clear of the floating toolbar and keyboard.
-- Root cause: `bottomPadding` in `DocumentEditorField` was too small (`spacingTitan` / 70dp), preventing the document from scrolling past the floating bar.
-- Behavioral invariant: `BasicTextField` content scrolls through the full canvas behind the floating toolbar (`zIndex = 1f`). The document editor area provides generous bottom scroll clearance (`160.dp` expanded, `100.dp` minimized) so any line of text at the bottom can be scrolled comfortably above the floating toolbar into open view.
+- Root cause: `bottomPadding` in `DocumentEditorField` was too small (`spacingTitan` / 70dp) or bound directly to the text layout rather than the outer scroll container, preventing the document from scrolling past the floating bar.
+- Behavioral invariant: `BasicTextField` content scrolls through the full canvas behind the floating toolbar (`zIndex = 1f`). The document editor area provides generous bottom scroll clearance (`220.dp` expanded, `100.dp` minimized) inside a `verticalScroll` container so any line of text at the bottom can be scrolled comfortably above the floating toolbar into open view.
+
+### Readability and metrics modal bottom sheet
+
+- Symptom and affected release: tapping the analytics/readability button displayed an empty sidebar pane with missing counts and no analysis in document editor mode.
+- Root cause: `SidebarMode.METRICS` was unhandled in `SidebarPane`, and `EditorViewModel` read only `paragraphs.items` rather than the active document text in `documentTextFieldState`.
+- Behavioral invariant: tapping the analytics icon opens a Material 3 `ModalBottomSheet` on single-pane devices (or sidebar pane on dual-pane devices) populated with the readability grade, word count, character count, sentence count, reading time, and full Hemingway suggestions breakdown.
+- Automated test name: `EditorViewModelTest.toggleSidebar in METRICS mode calculates readability metrics from document text`.
 
 
 ## Preferred direction

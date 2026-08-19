@@ -86,7 +86,8 @@ class EditorViewModel(
     private val db: AppDatabase,
     private val storageManager: StorageManager,
     private val fileOpsManager: FileOperationsManager,
-    private val context: Context
+    private val context: Context,
+    private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default
 ) : ViewModel() {
     val database: AppDatabase get() = db
     val statsRepository = StatsRepository(db)
@@ -592,6 +593,22 @@ viewModelScope.launch(Dispatchers.IO) {
         }
     }
 
+    fun undo() {
+        if (_uiState.value.documentEditorEnabled) {
+            if (documentTextFieldState.undoState.canUndo) {
+                documentTextFieldState.undoState.undo()
+            }
+        }
+    }
+
+    fun redo() {
+        if (_uiState.value.documentEditorEnabled) {
+            if (documentTextFieldState.undoState.canRedo) {
+                documentTextFieldState.undoState.redo()
+            }
+        }
+    }
+
     fun onDocumentEditorFocusChanged(isFocused: Boolean) {
         if (_uiState.value.isDocumentEditorFocused == isFocused) return
         _uiState.value = _uiState.value.copy(isDocumentEditorFocused = isFocused)
@@ -794,18 +811,25 @@ viewModelScope.launch(Dispatchers.IO) {
         }
 
         // If Hemingway analyzer is active, recalculate on save
-        if (state.sidebarMode == SidebarMode.METRICS) {
+        if (state.sidebarMode == SidebarMode.METRICS || state.isReadabilityPopupOpen) {
             runHemingwayAnalysis(documentContent)
+        }
+    }
+
+    fun getFullDocumentContent(): String {
+        return if (_uiState.value.documentEditorEnabled) {
+            documentTextFieldState.text.toString()
+        } else {
+            MarkdownParser.joinParsedDocument(_uiState.value.paragraphs.items.map { it.block })
         }
     }
 
     fun toggleSidebar(mode: SidebarMode) {
         _uiState.value = _uiState.value.copy(sidebarMode = mode)
         if (mode == SidebarMode.METRICS) {
-            // Readability analysis triggers *only* when sidebar is opened in METRICS mode
-            viewModelScope.launch(Dispatchers.Default) {
-                val blocks = _uiState.value.paragraphs.items.map { it.block }
-                val documentContent = MarkdownParser.joinParsedDocument(blocks)
+            // Readability analysis triggers when sidebar or sheet is opened in METRICS mode
+            viewModelScope.launch(defaultDispatcher) {
+                val documentContent = getFullDocumentContent()
                 runHemingwayAnalysis(documentContent)
             }
         }
@@ -817,9 +841,8 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = currentState.copy(isReadabilityPopupOpen = willOpen)
 
         if (willOpen) {
-            viewModelScope.launch(Dispatchers.Default) {
-                val blocks = _uiState.value.paragraphs.items.map { it.block }
-                val documentContent = MarkdownParser.joinParsedDocument(blocks)
+            viewModelScope.launch(defaultDispatcher) {
+                val documentContent = getFullDocumentContent()
                 runHemingwayAnalysis(documentContent)
             }
         }

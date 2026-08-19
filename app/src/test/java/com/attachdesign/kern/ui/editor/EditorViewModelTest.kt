@@ -67,7 +67,7 @@ class EditorViewModelTest {
         every { settingDao.getSetting(any()) } returns null
         every { themeDao.getAllThemesFlow() } returns MutableStateFlow(emptyList())
 
-        viewModel = EditorViewModel(db, storageManager, fileOpsManager, context)
+        viewModel = EditorViewModel(db, storageManager, fileOpsManager, context, testDispatcher)
     }
 
     @After
@@ -110,5 +110,41 @@ class EditorViewModelTest {
         // Assert
         val textValue = viewModel.paragraphTextFieldValues.value[0]?.text
         assertEquals("Hello world", textValue)
+    }
+
+    @Test
+    fun `toggleSidebar in METRICS mode calculates readability metrics from document text`() = runTest {
+        // Set document content
+        viewModel.documentTextFieldState.edit {
+            replace(0, length, "The quick brown fox jumps over the lazy dog easily.")
+        }
+
+        // Toggle metrics sidebar
+        viewModel.toggleSidebar(SidebarMode.METRICS)
+        advanceUntilIdle()
+
+        // Verify metrics
+        val metrics = viewModel.uiState.value.hemingwayMetrics
+        org.junit.Assert.assertNotNull(metrics)
+        assertEquals(10, metrics?.wordCount)
+        assertTrue((metrics?.charCount ?: 0) > 0)
+        assertEquals(1, metrics?.sentenceCount)
+        assertEquals(1, metrics?.adverbCount) // "easily"
+    }
+
+    @Test
+    fun `toggleReadabilityPopup triggers analysis on full document content`() = runTest {
+        viewModel.documentTextFieldState.edit {
+            replace(0, length, "First sentence here. Second sentence was written by him.")
+        }
+
+        viewModel.toggleReadabilityPopup()
+        advanceUntilIdle()
+
+        val metrics = viewModel.uiState.value.hemingwayMetrics
+        org.junit.Assert.assertNotNull(metrics)
+        assertEquals(9, metrics?.wordCount)
+        assertEquals(2, metrics?.sentenceCount)
+        assertEquals(1, metrics?.passiveVoiceCount) // "was written"
     }
 }

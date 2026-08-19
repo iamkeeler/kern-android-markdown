@@ -14,8 +14,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import kotlinx.coroutines.Dispatchers
 
+import com.attachdesign.kern.test.MainDispatcherRule
+import org.junit.Rule
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncEngineTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     class FakeErrorFileDao : FileDao {
         override fun getFilesForProjectFlow(projectId: Long): Flow<List<FileEntity>> = flowOf()

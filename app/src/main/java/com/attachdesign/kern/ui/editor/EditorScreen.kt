@@ -32,6 +32,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
 import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -90,6 +92,7 @@ import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.DocumentEditEngine
 import kotlinx.coroutines.flow.collectLatest
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
     projectId: Long,
@@ -358,6 +361,10 @@ fun EditorScreen(
                             } else {
                                 FloatingFormattingToolbar(
                                     theme = uiState.activeTheme,
+                                    canUndo = if (uiState.documentEditorEnabled) viewModel.documentTextFieldState.undoState.canUndo else false,
+                                    onUndoClick = { viewModel.undo() },
+                                    canRedo = if (uiState.documentEditorEnabled) viewModel.documentTextFieldState.undoState.canRedo else false,
+                                    onRedoClick = { viewModel.redo() },
                                     onHeaderClick = {
                                         if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.CycleHeading)
                                         else if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex)
@@ -438,8 +445,26 @@ fun EditorScreen(
             }
         }
 
-        // Single-pane Collapsible Sidebar (Overlay)
-        if (!isDualPane) {
+        // Single-pane Readability Sheet (ModalBottomSheet)
+        if (!isDualPane && uiState.sidebarMode == SidebarMode.METRICS) {
+            ModalBottomSheet(
+                onDismissRequest = { viewModel.toggleSidebar(SidebarMode.CLOSED) },
+                containerColor = uiState.activeTheme.surface,
+                dragHandle = {
+                    BottomSheetDefaults.DragHandle(
+                        color = uiState.activeTheme.textMuted.copy(alpha = 0.4f)
+                    )
+                }
+            ) {
+                MetricsTab(
+                    state = uiState,
+                    onClose = { viewModel.toggleSidebar(SidebarMode.CLOSED) }
+                )
+            }
+        }
+
+        // Single-pane Collapsible Settings Sidebar (Overlay)
+        if (!isDualPane && uiState.sidebarMode == SidebarMode.SETTINGS) {
             androidx.compose.animation.AnimatedVisibility(
                 visible = uiState.isSidebarOpen,
                 enter = androidx.compose.animation.slideInHorizontally(
@@ -653,49 +678,50 @@ private fun DocumentEditorField(
         else -> FontFamily.SansSerif
     }
     val inputTransformation = remember { MarkdownDocumentInputTransformation() }
+    val bottomScrollPadding = if (isToolbarMinimized) 100.dp else 220.dp
 
-    BasicTextField(
-        state = viewModel.documentTextFieldState,
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .widthIn(max = theme.dimensions.maxTextLineWidth)
-            .semantics { contentDescription = "Document editor" }
-            .onFocusChanged { focus -> viewModel.onDocumentEditorFocusChanged(focus.isFocused) },
-        textStyle = TextStyle(
-            color = theme.textPrimary,
-            fontFamily = editorFont,
-            fontSize = theme.typography.body * state.editorFontSizeScale,
-            lineHeight = theme.typography.body * state.editorFontSizeScale * 1.55f
-        ),
-        lineLimits = TextFieldLineLimits.MultiLine(),
-        keyboardOptions = KeyboardOptions(
-            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
-            autoCorrectEnabled = true,
-            imeAction = ImeAction.Default
-        ),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.accent),
-        inputTransformation = inputTransformation,
-        outputTransformation = remember(
-            state.viewMode,
-            state.editorFontSizeScale,
-            theme.textMuted,
-            theme.codeBackground
-        ) {
-            MarkdownDocumentOutputTransformation(
-                viewMode = state.viewMode,
-                bodySize = theme.typography.body * state.editorFontSizeScale,
-                tokenColor = theme.textMuted,
-                codeBackgroundColor = theme.codeBackground
-            )
-        },
-        decorator = { innerTextField ->
-            Column(modifier = Modifier.fillMaxWidth()) {
-                innerTextField()
-                Spacer(modifier = Modifier.height(if (isToolbarMinimized) 60.dp else 120.dp))
+            .verticalScroll(scrollState)
+            .padding(bottom = bottomScrollPadding)
+    ) {
+        BasicTextField(
+            state = viewModel.documentTextFieldState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "Document editor" }
+                .onFocusChanged { focus -> viewModel.onDocumentEditorFocusChanged(focus.isFocused) },
+            textStyle = TextStyle(
+                color = theme.textPrimary,
+                fontFamily = editorFont,
+                fontSize = theme.typography.body * state.editorFontSizeScale,
+                lineHeight = theme.typography.body * state.editorFontSizeScale * 1.55f
+            ),
+            lineLimits = TextFieldLineLimits.MultiLine(),
+            keyboardOptions = KeyboardOptions(
+                capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                autoCorrectEnabled = true,
+                imeAction = ImeAction.Default
+            ),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.accent),
+            inputTransformation = inputTransformation,
+            outputTransformation = remember(
+                state.viewMode,
+                state.editorFontSizeScale,
+                theme.textMuted,
+                theme.codeBackground
+            ) {
+                MarkdownDocumentOutputTransformation(
+                    viewMode = state.viewMode,
+                    bodySize = theme.typography.body * state.editorFontSizeScale,
+                    tokenColor = theme.textMuted,
+                    codeBackgroundColor = theme.codeBackground
+                )
             }
-        },
-        scrollState = scrollState
-    )
+        )
+    }
 }
 
 @Composable
@@ -1415,8 +1441,13 @@ fun SidebarPane(
                     SettingsTabsContent(
                         db = viewModel.database,
                         theme = theme,
-                        modifier = Modifier.fillMaxSize(),
-
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                SidebarMode.METRICS -> {
+                    MetricsTab(
+                        state = state,
+                        onClose = onCloseClick
                     )
                 }
                 else -> {}
@@ -1435,7 +1466,7 @@ fun MetricsTab(
 
     if (metrics == null) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(top = theme.dimensions.spacingMassive),
+            modifier = Modifier.fillMaxWidth().padding(theme.dimensions.spacingMassive),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Analyzing Readability...", color = theme.textMuted, fontSize = theme.typography.body)
@@ -1445,36 +1476,31 @@ fun MetricsTab(
         return
     }
 
+    val readingTime = if (metrics.wordCount < 100) "< 1 min" else "${maxOf(1, metrics.wordCount / 200)} min"
+    val countItems = listOf(
+        "Words" to metrics.wordCount.toString(),
+        "Characters" to metrics.charCount.toString(),
+        "Sentences" to metrics.sentenceCount.toString(),
+        "Reading Time" to readingTime
+    )
+
     Column(
-        modifier = Modifier.fillMaxWidth().heightIn(max = theme.dimensions.popupMaxHeight).verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = theme.dimensions.spacingExtraLarge, vertical = theme.dimensions.spacingMedium)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
     ) {
-        // Top bar with close button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = theme.textMuted
-                )
-            }
-        }
         // Readability section (flat, bookish)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = theme.dimensions.spacingLarge)
+                .padding(vertical = theme.dimensions.spacingSmall)
         ) {
             Text("READABILITY", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
             Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
             Text(metrics.readabilityGrade, color = theme.accent, fontSize = theme.typography.h1, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(theme.dimensions.elevationMedium))
+            Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
             Text(
                 text = "Target Grade level is Grade 8-9 for general audience.",
                 color = theme.textMuted,
@@ -1487,17 +1513,30 @@ fun MetricsTab(
 
         // Standard counts (flat, bookish)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = theme.dimensions.spacingLarge),
-            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingExtraLarge)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
         ) {
-            val countItems = listOf(
-                "Words" to metrics.wordCount.toString(),
-                "Characters" to metrics.charCount.toString(),
-                "Sentences" to metrics.sentenceCount.toString()
-            )
-            countItems.forEach { (label, value) ->
+            countItems.take(2).forEach { (label, value) ->
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(containerColor = theme.surface.copy(alpha = 0.75f))
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(theme.dimensions.spacingMedium),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
+                        Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
+                    }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
+        ) {
+            countItems.drop(2).forEach { (label, value) ->
                 Card(
                     modifier = Modifier.weight(1f),
                     colors = CardDefaults.cardColors(containerColor = theme.surface.copy(alpha = 0.75f))
@@ -1520,7 +1559,7 @@ fun MetricsTab(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = theme.dimensions.spacingLarge),
+                .padding(vertical = theme.dimensions.spacingSmall),
             verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
         ) {
             Text("HEMINGWAY SUGGESTIONS", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
@@ -1531,6 +1570,7 @@ fun MetricsTab(
             HemingwayStatRow("Adverbs", metrics.adverbCount, theme.info, theme)
             HemingwayStatRow("Passive Voices", metrics.passiveVoiceCount, theme.success, theme)
         }
+        Spacer(modifier = Modifier.height(theme.dimensions.spacingHuge))
     }
 }
 
