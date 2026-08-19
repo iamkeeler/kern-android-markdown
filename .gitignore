@@ -28,3 +28,6 @@ app/google-services.json
 # Python helper cache
 __pycache__/
 *.pyc
+
+# Kotlin tooling metadata
+.kotlin/

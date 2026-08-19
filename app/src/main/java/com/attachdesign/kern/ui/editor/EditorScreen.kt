@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.attachdesign.kern.ui.editor
 
 import androidx.compose.animation.AnimatedContent
@@ -92,7 +94,7 @@ import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.DocumentEditEngine
 import kotlinx.coroutines.flow.collectLatest
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EditorScreen(
     projectId: Long,
@@ -299,19 +301,27 @@ fun EditorScreen(
                     // Floating Formatting Toolbar State
                     var isToolbarMinimized by remember { mutableStateOf(false) }
 
-                    if (uiState.documentEditorEnabled) {
-                        DocumentEditorField(
-                            state = uiState,
-                            viewModel = viewModel,
-                            isToolbarMinimized = isToolbarMinimized
-                        )
-                    } else {
-                        EditorCanvas(
-                            state = uiState,
-                            textFieldValues = textFieldValues,
-                            viewModel = viewModel,
-                            isToolbarMinimized = isToolbarMinimized
-                        )
+                    val overscrollState = rememberElasticOverscrollState()
+
+                    ElasticOverscrollContainer(
+                        state = overscrollState,
+                        accentColor = theme.accent,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        if (uiState.documentEditorEnabled) {
+                            DocumentEditorField(
+                                state = uiState,
+                                viewModel = viewModel,
+                                isToolbarMinimized = isToolbarMinimized
+                            )
+                        } else {
+                            EditorCanvas(
+                                state = uiState,
+                                textFieldValues = textFieldValues,
+                                viewModel = viewModel,
+                                isToolbarMinimized = isToolbarMinimized
+                            )
+                        }
                     }
 
                     val activeIndex = uiState.focusedParagraphIndex
@@ -1259,6 +1269,10 @@ private fun BlockSelectionBoundary(
 @Composable
 fun FloatingFormattingToolbar(
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    onUndoClick: () -> Unit = {},
+    canUndo: Boolean = false,
+    onRedoClick: () -> Unit = {},
+    canRedo: Boolean = false,
     onHeaderClick: () -> Unit,
     onHeaderSet: (Int) -> Unit = {},
     onIndentClick: () -> Unit = {},
@@ -1277,12 +1291,45 @@ fun FloatingFormattingToolbar(
         shadowElevation = theme.dimensions.elevationMedium
     ) {
         PaletteRow(theme, Modifier.padding(theme.dimensions.spacingSmall)) {
+            FormatAction(
+                description = "Undo",
+                icon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = "Undo",
+                        tint = if (canUndo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
+                        modifier = Modifier.size(theme.dimensions.iconMedium)
+                    )
+                },
+                enabled = canUndo,
+                onClick = onUndoClick
+            )
+            FormatAction(
+                description = "Redo",
+                icon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Redo,
+                        contentDescription = "Redo",
+                        tint = if (canRedo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
+                        modifier = Modifier.size(theme.dimensions.iconMedium)
+                    )
+                },
+                enabled = canRedo,
+                onClick = onRedoClick
+            )
+            VerticalDivider(
+                modifier = Modifier
+                    .height(20.dp)
+                    .padding(horizontal = 2.dp),
+                thickness = 1.dp,
+                color = theme.textMuted.copy(alpha = 0.2f)
+            )
             HeaderAction(theme, onHeaderClick, onHeaderSet)
-            FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }) { onFormat("**", "**") }
-            FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }) { onFormat("*", "*") }
-            FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onBulletClick)
+            FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }, onClick = { onFormat("**", "**") })
+            FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }, onClick = { onFormat("*", "*") })
+            FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onClick = onBulletClick)
             OverflowFormattingActions(theme, onFormat, onChecklistClick, onIndentClick, onOutdentClick)
-            FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onMinimizeClick)
+            FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onClick = onMinimizeClick)
         }
     }
 }
@@ -1307,7 +1354,7 @@ private fun OverflowFormattingActions(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        FormatAction("More formatting actions", { Icon(Icons.Outlined.MoreVert, null) }) { expanded = true }
+        FormatAction("More formatting actions", { Icon(Icons.Outlined.MoreVert, null) }, onClick = { expanded = true })
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
@@ -1351,9 +1398,16 @@ private fun OverflowFormattingActions(
 private fun FormatAction(
     description: String,
     icon: @Composable () -> Unit,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.semantics { contentDescription = description }) { icon() }
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.semantics { contentDescription = description }
+    ) {
+        icon()
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.attachdesign.kern.ui.editor
  
 import android.content.Context

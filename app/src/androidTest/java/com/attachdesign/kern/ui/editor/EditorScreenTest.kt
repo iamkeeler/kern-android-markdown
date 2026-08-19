@@ -18,6 +18,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
@@ -453,5 +454,38 @@ class EditorScreenTest {
       runBlocking { storageManager.readFile(project, file.relativePath) } == source + typed
     }
     editor.assertIsDisplayed()
+  }
+
+  @Test
+  fun testElasticOverscrollBouncePreservesEditorState() {
+    runBlocking {
+      storageManager.writeFile(project, "test_file.md", "# Top Header\n\nDocument body text.")
+    }
+    viewModel.loadFile(project.id, file.relativePath)
+
+    composeTestRule.setContent {
+      EditorScreen(
+          projectId = project.id,
+          filePath = file.relativePath,
+          viewModel = viewModel,
+          onBackClick = {},
+          modifier = Modifier.fillMaxSize()
+      )
+    }
+    waitForDocument("Top Header")
+
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.assertIsDisplayed()
+
+    // Perform elastic downward drag gesture at top of document
+    editor.performTouchInput {
+      swipeDown(startY = centerY, endY = centerY + 300f)
+    }
+    composeTestRule.waitForIdle()
+
+    // Verify document content and editor remain stable and displayed after bounce
+    editor.assertIsDisplayed()
+    editor.assertTextContains("# Top Header", substring = true)
+    editor.assertTextContains("Document body text.", substring = true)
   }
 }

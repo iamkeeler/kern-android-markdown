@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.attachdesign.kern.ui.editor
 
 import android.content.Context
@@ -146,5 +148,24 @@ class EditorViewModelTest {
         assertEquals(9, metrics?.wordCount)
         assertEquals(2, metrics?.sentenceCount)
         assertEquals(1, metrics?.passiveVoiceCount) // "was written"
+    }
+
+    @Test
+    fun `undo and redo modify documentTextFieldState correctly`() = runTest {
+        viewModel.documentTextFieldState.edit {
+            replace(0, length, "Hello")
+        }
+        viewModel.documentTextFieldState.edit {
+            replace(length, length, " World")
+        }
+        assertEquals("Hello World", viewModel.documentTextFieldState.text.toString())
+        assertTrue(viewModel.documentTextFieldState.undoState.canUndo)
+
+        viewModel.undo()
+        assertEquals("Hello", viewModel.documentTextFieldState.text.toString())
+        assertTrue(viewModel.documentTextFieldState.undoState.canRedo)
+
+        viewModel.redo()
+        assertEquals("Hello World", viewModel.documentTextFieldState.text.toString())
     }
 }

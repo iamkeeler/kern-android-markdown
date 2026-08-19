@@ -125,6 +125,19 @@ This document records user-visible editor behavior that must survive refactors. 
 - Behavioral invariant: tapping the analytics icon opens a Material 3 `ModalBottomSheet` on single-pane devices (or sidebar pane on dual-pane devices) populated with the readability grade, word count, character count, sentence count, reading time, and full Hemingway suggestions breakdown.
 - Automated test name: `EditorViewModelTest.toggleSidebar in METRICS mode calculates readability metrics from document text`.
 
+### Undo and Redo actions in floating toolbar
+
+- Feature and release: added dedicated Undo and Redo actions to the floating formatting toolbar.
+- Behavioral invariant: Undo and Redo buttons reflect the transactional state of `TextFieldState.undoState` (`canUndo`, `canRedo`). Inactive states are disabled with dimmed opacity (`0.35f`), active states are fully interactive. Applying formatting commands or editing text immediately enables Undo.
+- Automated test name: `EditorViewModelTest.undo and redo modify documentTextFieldState correctly`.
+
+### Elastic document overscroll bounce-back and end indicators
+
+- Feature and release: elastic overscroll and spring bounce-back when scrolling past top or bottom of a document.
+- Behavioral invariant: scrolling or dragging past the vertical document boundaries applies non-linear rubber-band resistance. Top and bottom boundary elastic indicators stretch dynamically in width and opacity using `theme.accent` (Utility Blue). Releasing or settling flings triggers fluid spring bounce-back (`Spring.DampingRatioMediumBouncy`, `Spring.StiffnessMediumLow`) to zero offset. Hardware-accelerated `graphicsLayer` translation is used without invalidating text measurement, selection handles, or IME composition.
+- Automated test names: `ElasticOverscrollTest`, `EditorScreenTest.testElasticOverscrollBouncePreservesEditorState`.
+
+
 
 ## Preferred direction
 
