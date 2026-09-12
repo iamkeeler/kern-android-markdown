@@ -55,8 +55,8 @@ class MainScreenViewModelPerfTest {
         }
 
         val db = mockk<AppDatabase>()
-        val projectDao = mockk<ProjectDao>()
-        val fileDao = mockk<FileDao>()
+        val projectDao = mockk<ProjectDao>(relaxed = true)
+        val fileDao = mockk<FileDao>(relaxed = true)
         val storageManager = mockk<StorageManager>(relaxed = true)
         val fileOpsManager = mockk<FileOperationsManager>(relaxed = true)
 
@@ -114,8 +114,8 @@ class MainScreenViewModelPerfTest {
         )
 
         val db = mockk<AppDatabase>()
-        val projectDao = mockk<ProjectDao>()
-        val fileDao = mockk<FileDao>()
+        val projectDao = mockk<ProjectDao>(relaxed = true)
+        val fileDao = mockk<FileDao>(relaxed = true)
         val storageManager = mockk<StorageManager>(relaxed = true)
         val fileOpsManager = mockk<FileOperationsManager>(relaxed = true)
 
@@ -130,6 +130,7 @@ class MainScreenViewModelPerfTest {
         every { fileDao.getFilesForProjects(any()) } returns emptyList()
 
         val viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+        viewModel.refreshAllFiles()
         advanceUntilIdle()
 
         // The single batched query must cover every project — otherwise some
