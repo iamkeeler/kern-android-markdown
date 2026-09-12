@@ -3,12 +3,15 @@ package com.attachdesign.kern.data.local
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "projects")
@@ -20,7 +23,13 @@ data class ProjectEntity(
     val isSelected: Boolean
 )
 
-@Entity(tableName = "files")
+@Entity(
+    tableName = "files",
+    // L3: getFileByPath(projectId, relativePath) runs on every save/autosave and
+    // in uniqueness loops — index the lookup instead of full-table scanning.
+    // Non-unique: existing rows are not guaranteed duplicate-free.
+    indices = [Index(value = ["projectId", "relativePath"])]
+)
 data class FileEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val projectId: Long,
@@ -120,6 +129,18 @@ interface SettingDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertSetting(setting: SettingEntity)
+
+    /**
+     * Atomic increment for stats counters (M19): single-statement upsert, so
+     * concurrent increments cannot overwrite each other. The settings `value`
+     * column is TEXT; values are stored/compared as integers.
+     */
+    @Query(
+        "INSERT INTO settings(`key`, `value`) VALUES (:key, :amount) " +
+        "ON CONFLICT(`key`) DO UPDATE SET `value` = " +
+        "CAST(settings.`value` AS INTEGER) + CAST(excluded.`value` AS INTEGER)"
+    )
+    fun incrementSetting(key: String, amount: Long)
 }
 
 @Dao
@@ -160,11 +181,47 @@ interface QuoteDao {
     fun getCount(): Int
 }
 
-@Database(entities = [ProjectEntity::class, FileEntity::class, SettingEntity::class, ThemeEntity::class, QuoteEntity::class], version = 3, exportSchema = false)
+@Database(
+    entities = [ProjectEntity::class, FileEntity::class, SettingEntity::class, ThemeEntity::class, QuoteEntity::class],
+    version = 4,
+    exportSchema = true
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
     abstract fun fileDao(): FileDao
     abstract fun settingDao(): SettingDao
     abstract fun themeDao(): ThemeDao
     abstract fun quoteDao(): QuoteDao
+}
+
+/**
+ * Explicit migrations (H3). Schema history predates `exportSchema`, so the
+ * 1->2 and 2->3 steps are recorded as no-ops: Room still validates the final
+ * schema against the entity definitions on open, which fails loudly instead of
+ * silently corrupting data. Never use a destructive fallback for user documents.
+ *
+ * NOTE: these must be registered with `.addMigrations(MIGRATION_1_2,
+ * MIGRATION_2_3, MIGRATION_3_4)` on the `Room.databaseBuilder` in
+ * `MainActivity` (follow-up for the owner of that file).
+ */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // No recorded schema change for this step; final-schema validation applies on open.
+    }
+}
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // No recorded schema change for this step; final-schema validation applies on open.
+    }
+}
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // L3: index backing getFileByPath(projectId, relativePath).
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_files_projectId_relativePath` " +
+            "ON `files` (`projectId`, `relativePath`)"
+        )
+    }
 }

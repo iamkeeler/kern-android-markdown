@@ -158,69 +158,63 @@ fun ElasticOverscrollContainer(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val overscroll = state.overscrollOffset.value
-    val absOverscroll = abs(overscroll)
-    val progress = (absOverscroll / 120f).coerceIn(0f, 1f)
-
     Box(
         modifier = modifier.nestedScroll(state.nestedScrollConnection)
     ) {
-        // Content with hardware-accelerated elastic translation
+        // Content with hardware-accelerated elastic translation.
+        // L1: the offset is read inside graphicsLayer (deferred read) so the spring
+        // doesn't recompose the document content per frame.
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    translationY = overscroll
+                    translationY = state.overscrollOffset.value
                 }
         ) {
             content()
         }
 
-        // Top Elastic Indicator
-        if (overscroll > 0.5f) {
-            val indicatorWidth = 40.dp + (100.dp * progress)
-            val indicatorAlpha = (progress * 0.85f).coerceIn(0.1f, 0.85f)
-            val indicatorDisplacement = (overscroll * 0.2f).coerceAtMost(12f).dp
+        ElasticEdgeIndicator(state = state, accentColor = accentColor, isTop = true)
+        ElasticEdgeIndicator(state = state, accentColor = accentColor, isTop = false)
+    }
+}
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .padding(top = 4.dp + indicatorDisplacement),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(indicatorWidth)
-                        .height(3.5.dp)
-                        .alpha(indicatorAlpha)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(accentColor)
-                )
-            }
-        }
+/**
+ * L1: the indicator reads the animated offset in its own small scope, so only the
+ * indicator recomposes per frame — not the document above.
+ */
+@Composable
+private fun BoxScope.ElasticEdgeIndicator(
+    state: ElasticOverscrollState,
+    accentColor: Color,
+    isTop: Boolean
+) {
+    val overscroll = state.overscrollOffset.value
+    val visible = if (isTop) overscroll > 0.5f else overscroll < -0.5f
+    if (!visible) return
 
-        // Bottom Elastic Indicator
-        if (overscroll < -0.5f) {
-            val indicatorWidth = 40.dp + (100.dp * progress)
-            val indicatorAlpha = (progress * 0.85f).coerceIn(0.1f, 0.85f)
-            val indicatorDisplacement = (absOverscroll * 0.2f).coerceAtMost(12f).dp
+    val absOverscroll = abs(overscroll)
+    val progress = (absOverscroll / 120f).coerceIn(0f, 1f)
+    val indicatorWidth = 40.dp + (100.dp * progress)
+    val indicatorAlpha = (progress * 0.85f).coerceIn(0.1f, 0.85f)
+    val indicatorDisplacement = (absOverscroll * 0.2f).coerceAtMost(12f).dp
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 4.dp + indicatorDisplacement),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(indicatorWidth)
-                        .height(3.5.dp)
-                        .alpha(indicatorAlpha)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(accentColor)
-                )
-            }
-        }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .align(if (isTop) Alignment.TopCenter else Alignment.BottomCenter)
+            .then(
+                if (isTop) Modifier.padding(top = 4.dp + indicatorDisplacement)
+                else Modifier.padding(bottom = 4.dp + indicatorDisplacement)
+            ),
+        contentAlignment = if (isTop) Alignment.TopCenter else Alignment.BottomCenter
+    ) {
+        Box(
+            modifier = Modifier
+                .width(indicatorWidth)
+                .height(3.5.dp)
+                .alpha(indicatorAlpha)
+                .clip(RoundedCornerShape(2.dp))
+                .background(accentColor)
+        )
     }
 }

@@ -9,6 +9,10 @@ package com.attachdesign.kern.parser
 object MarkdownDocumentScanner {
     private data class SourceLine(val content: String, val ending: String)
 
+    // M6: hoisted off the per-line classify()/isTableStart() hot paths.
+    private val headingLineRegex = Regex("#{1,6}\\s+.*")
+    private val tableDelimiterLineRegex = Regex("^\\s*\\|?\\s*:?-{1,}:?\\s*(?:\\|\\s*:?-{1,}:?\\s*)+\\|?\\s*$")
+
     fun scan(source: String): List<ParagraphBlock> {
         if (source.isEmpty()) return listOf(MarkdownParser.parseParagraph(""))
 
@@ -112,7 +116,7 @@ object MarkdownDocumentScanner {
         val trimmedStart = line.trimStart()
         return when {
             fenceMarker(line) != null -> LineKind.FENCE
-            trimmedStart.matches(Regex("#{1,6}\\s+.*")) -> LineKind.STRUCTURAL
+            trimmedStart.matches(headingLineRegex) -> LineKind.STRUCTURAL
             MarkdownParser.isThematicBreak(line) -> LineKind.STRUCTURAL
             trimmedStart.startsWith(">") -> LineKind.STRUCTURAL
             MarkdownParser.isListLine(line) -> LineKind.STRUCTURAL
@@ -122,7 +126,7 @@ object MarkdownDocumentScanner {
 
     private fun isTableStart(lines: List<SourceLine>, index: Int): Boolean =
         index + 1 < lines.size && lines[index].content.contains('|') &&
-            lines[index + 1].content.matches(Regex("^\\s*\\|?\\s*:?-{1,}:?\\s*(?:\\|\\s*:?-{1,}:?\\s*)+\\|?\\s*$"))
+            lines[index + 1].content.matches(tableDelimiterLineRegex)
 
     private fun fenceMarker(line: String): Pair<Char, Int>? {
         val indent = line.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)

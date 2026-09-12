@@ -6,6 +6,7 @@ import android.content.Context
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.ui.text.TextRange
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.attachdesign.kern.utils.TextAnalysisUtils.countWords
 import androidx.lifecycle.viewModelScope
@@ -36,6 +37,7 @@ import com.attachdesign.kern.data.analytics.AnalyticsTracker
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,8 +45,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.io.FileNotFoundException
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 import android.content.Intent
 
 enum class SidebarMode {
@@ -89,7 +94,8 @@ class EditorViewModel(
     private val storageManager: StorageManager,
     private val fileOpsManager: FileOperationsManager,
     private val context: Context,
-    private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default
+    private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
     val database: AppDatabase get() = db
     val statsRepository = StatsRepository(db)
@@ -117,6 +123,20 @@ class EditorViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private var saveJob: Job? = null
+    // M8: parse generation — only the latest keystroke's parse result is applied
+    // to UI state. Older jobs are never cancelled: each computes its own
+    // per-keystroke word delta, so cancelling would silently drop stats.
+    private val parseGeneration = AtomicLong(0)
+
+    // M9: batch per-keystroke stats in memory; flushed inside saveActiveFile().
+    private val pendingCharsWritten = AtomicLong(0L)
+    private val pendingWordsWritten = AtomicLong(0L)
+
+    // H7: SavedStateHandle keys for the unsaved editor draft (process-death survival).
+    private companion object {
+        const val KEY_DRAFT_TEXT = "editor_draft_text"
+        const val KEY_DRAFT_FILE = "editor_draft_file"
+    }
 
     data class SnackbarEvent(val message: String, val actionLabel: String? = null, val onAction: (() -> Unit)? = null)
     private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
@@ -215,7 +235,7 @@ viewModelScope.launch(Dispatchers.IO) {
             db.settingDao().getSettingFlow("view_mode").collect { setting ->
                 val mode = setting?.value ?: "RENDERED"
                 withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(viewMode = ViewMode.valueOf(mode))
+                    _uiState.value = _uiState.value.copy(viewMode = viewModeOrDefault(mode))
                 }
             }
         }
@@ -231,7 +251,7 @@ viewModelScope.launch(Dispatchers.IO) {
             db.settingDao().getSettingFlow("sync_provider").collect { setting ->
                 val provider = setting?.value ?: "NONE"
                 withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(syncProvider = SyncProvider.valueOf(provider))
+                    _uiState.value = _uiState.value.copy(syncProvider = syncProviderOrDefault(provider))
                 }
             }
         }
@@ -253,7 +273,7 @@ viewModelScope.launch(Dispatchers.IO) {
 
         withContext(Dispatchers.Main) {
             _uiState.value = _uiState.value.copy(
-                viewMode = ViewMode.valueOf(viewModeSetting),
+                viewMode = viewModeOrDefault(viewModeSetting),
                 stickySelection = stickySetting.toBoolean(),
                 autoHeaderSpacing = autoHeaderSetting.toBoolean(),
                 autoCompleteEnabled = autoCompleteSetting.toBoolean(),
@@ -264,9 +284,9 @@ viewModelScope.launch(Dispatchers.IO) {
                 autoCompleteBrackets = autoCompleteBracketsSetting.toBoolean(),
                 sentenceCapitalization = sentenceCapitalizationSetting.toBoolean(),
                 editorFontSizeScale = editorFontSizeScaleSetting.toFloatOrNull() ?: 1.0f,
-                syncProvider = SyncProvider.valueOf(syncProviderSetting)
+                syncProvider = syncProviderOrDefault(syncProviderSetting)
             )
-            syncEngine.setProvider(SyncProvider.valueOf(syncProviderSetting))
+            syncEngine.setProvider(syncProviderOrDefault(syncProviderSetting))
         }
     }
 
@@ -306,7 +326,15 @@ viewModelScope.launch(Dispatchers.IO) {
     fun loadFile(projectId: Long, filePath: String, focusOnStart: Boolean = false) {
         viewModelScope.launch {
             val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) } ?: return@launch
-            val content = storageManager.readFile(project, filePath)
+            // readFile throws FileNotFoundException when the file vanished between
+            // listing and open; fall back to an empty document rather than crashing.
+            val diskContent = try {
+                storageManager.readFile(project, filePath)
+            } catch (e: FileNotFoundException) {
+                ""
+            }
+            // H7: after process death, prefer the unsaved draft over stale disk content.
+            val content = resolveInitialContent(projectId, filePath, diskContent)
             
             // Track document open and words read stats
             statsRepository.incrementDocumentsOpened()
@@ -436,16 +464,13 @@ viewModelScope.launch(Dispatchers.IO) {
 
         val charDelta = (newValue.text.length - oldValue.text.length).toLong()
         if (charDelta > 0) {
+            // M9: batch stats in memory; flushed inside saveActiveFile().
+            pendingCharsWritten.addAndGet(charDelta)
             val oldWords = countWords(oldValue.text)
             val newWords = countWords(newValue.text)
             val wordDelta = (newWords - oldWords).toLong()
-            viewModelScope.launch {
-                statsRepository.addCharactersWritten(charDelta)
-                analyticsTracker.logCharactersWritten(charDelta)
-                if (wordDelta > 0) {
-                    statsRepository.addWordsWritten(wordDelta)
-                    analyticsTracker.logWordsWritten(wordDelta)
-                }
+            if (wordDelta > 0) {
+                pendingWordsWritten.addAndGet(wordDelta)
             }
         }
 
@@ -621,28 +646,31 @@ viewModelScope.launch(Dispatchers.IO) {
         if (content == documentText) return
         val previous = documentText
         documentText = content
-        val blocks = MarkdownParser.parseDocument(content)
-        _uiState.value = _uiState.value.copy(
-            paragraphs = ImmutableParagraphList(blocks.map(::ImmutableParagraphBlock).toImmutableList())
-        )
-        _paragraphTextFieldValues.value = blocks.mapIndexed { index, block ->
-            index to TextFieldValue(block.rawText)
-        }.toMap()
+        persistDraftToSavedState()
 
-        val characterDelta = (content.length - previous.length).coerceAtLeast(0).toLong()
-        val wordDelta = (countWords(content) - countWords(previous)).coerceAtLeast(0).toLong()
-        if (characterDelta > 0L || wordDelta > 0L) {
-            viewModelScope.launch {
-                if (characterDelta > 0L) {
-                    statsRepository.addCharactersWritten(characterDelta)
-                    analyticsTracker.logCharactersWritten(characterDelta)
-                }
-                if (wordDelta > 0L) {
-                    statsRepository.addWordsWritten(wordDelta)
-                    analyticsTracker.logWordsWritten(wordDelta)
+        // M8: full-document parse + word counts run on defaultDispatcher, off Main.
+        // Only the latest keystroke's results are applied to UI state.
+        val generation = parseGeneration.incrementAndGet()
+        viewModelScope.launch(defaultDispatcher) {
+            val blocks = MarkdownParser.parseDocument(content)
+            val characterDelta = (content.length - previous.length).coerceAtLeast(0).toLong()
+            val wordDelta = (countWords(content) - countWords(previous)).coerceAtLeast(0).toLong()
+            // M9: batch stats in memory; flushed inside saveActiveFile().
+            pendingCharsWritten.addAndGet(characterDelta)
+            pendingWordsWritten.addAndGet(wordDelta)
+            if (parseGeneration.get() != generation) return@launch
+            val paragraphs = ImmutableParagraphList(blocks.map(::ImmutableParagraphBlock).toImmutableList())
+            val textValues = blocks.mapIndexed { index, block ->
+                index to TextFieldValue(block.rawText)
+            }.toMap()
+            withContext(Dispatchers.Main) {
+                if (parseGeneration.get() == generation) {
+                    _uiState.value = _uiState.value.copy(paragraphs = paragraphs)
+                    _paragraphTextFieldValues.value = textValues
                 }
             }
         }
+
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(1000)
@@ -785,6 +813,19 @@ viewModelScope.launch(Dispatchers.IO) {
             MarkdownParser.joinParsedDocument(state.paragraphs.items.map { it.block })
         }
         storageManager.writeFile(project, filePath, documentContent)
+        clearSavedDraft()
+
+        // M9: flush batched per-keystroke stats.
+        val charsToFlush = pendingCharsWritten.getAndSet(0L)
+        val wordsToFlush = pendingWordsWritten.getAndSet(0L)
+        if (charsToFlush > 0L) {
+            statsRepository.addCharactersWritten(charsToFlush)
+            analyticsTracker.logCharactersWritten(charsToFlush)
+        }
+        if (wordsToFlush > 0L) {
+            statsRepository.addWordsWritten(wordsToFlush)
+            analyticsTracker.logWordsWritten(wordsToFlush)
+        }
 
         // Calculate metrics for DB metadata update
         val wordCount = countWords(documentContent)
@@ -986,17 +1027,26 @@ viewModelScope.launch(Dispatchers.IO) {
         }
     }
 
-    fun closeFile() {
+    // H2: suspending so the caller can await the final save before the nav entry
+    // (and its ViewModelStore) is popped and the scope cancelled.
+    suspend fun closeFile() {
         saveJob?.cancel()
-        viewModelScope.launch {
-            saveActiveFile()
-            triggerCloudSyncSweep()
-            _uiState.value = _uiState.value.copy(
-                activeFilePath = "",
-                paragraphs = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
-                hemingwayMetrics = null
-            )
+        saveActiveFile()
+        triggerCloudSyncSweep()
+        _uiState.value = _uiState.value.copy(
+            activeFilePath = "",
+            paragraphs = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
+            hemingwayMetrics = null
+        )
+    }
+
+    override fun onCleared() {
+        saveJob?.cancel()
+        // H7: last-chance synchronous flush; NonCancellable so entry teardown can't drop it.
+        runBlocking {
+            withContext(NonCancellable) { saveActiveFile() }
         }
+        super.onCleared()
     }
 
     fun triggerCloudSyncSweep() {
@@ -1182,6 +1232,40 @@ viewModelScope.launch(Dispatchers.IO) {
     private fun reparse(block: com.attachdesign.kern.parser.ParagraphBlock, rawText: String) =
         MarkdownParser.parseParagraph(rawText, block.id, block.separatorAfter)
 
+    // L16: corrupt/legacy setting values must not crash the editor.
+    internal fun viewModeOrDefault(raw: String?): ViewMode =
+        runCatching { ViewMode.valueOf(raw!!) }.getOrDefault(ViewMode.RENDERED)
+
+    internal fun syncProviderOrDefault(raw: String?): SyncProvider =
+        runCatching { SyncProvider.valueOf(raw!!) }.getOrDefault(SyncProvider.NONE)
+
+    // H7: keep the latest unsaved text in SavedStateHandle so process death
+    // doesn't lose keystrokes inside the autosave debounce window.
+    // Extracted as internal for direct unit testing of the draft-vs-disk rule.
+    internal fun resolveInitialContent(projectId: Long, filePath: String, diskContent: String): String {
+        val draftKey = savedStateHandle.get<String>(KEY_DRAFT_FILE)
+        return if (draftKey == "$projectId/$filePath") {
+            savedStateHandle.get<String>(KEY_DRAFT_TEXT) ?: diskContent
+        } else {
+            diskContent
+        }
+    }
+
+    // H7: keep the latest unsaved text in SavedStateHandle so process death
+    // doesn't lose keystrokes inside the autosave debounce window.
+    private fun persistDraftToSavedState() {
+        val state = _uiState.value
+        val project = state.activeProject ?: return
+        if (state.activeFilePath.isEmpty()) return
+        savedStateHandle[KEY_DRAFT_FILE] = "${project.id}/${state.activeFilePath}"
+        savedStateHandle[KEY_DRAFT_TEXT] = documentText
+    }
+
+    private fun clearSavedDraft() {
+        savedStateHandle.remove<String>(KEY_DRAFT_TEXT)
+        savedStateHandle.remove<String>(KEY_DRAFT_FILE)
+    }
+
     private fun separatorFor(previousText: String, nextText: String): String =
         if (MarkdownParser.isListLine(previousText) && MarkdownParser.isListLine(nextText)) "\n" else "\n\n"
 
@@ -1198,5 +1282,10 @@ viewModelScope.launch(Dispatchers.IO) {
         _paragraphTextFieldValues.value = _paragraphTextFieldValues.value.toMutableMap().apply {
             put(index, value)
         }
+    }
+
+    internal fun setTestActiveFile(project: ProjectEntity, filePath: String, content: String = "") {
+        _uiState.value = _uiState.value.copy(activeProject = project, activeFilePath = filePath)
+        documentText = content
     }
 }

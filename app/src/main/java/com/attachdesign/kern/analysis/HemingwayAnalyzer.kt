@@ -56,8 +56,6 @@ object HemingwayAnalyzer {
         Pattern.CASE_INSENSITIVE
     )
 
-    private val sentencePattern = Pattern.compile("([^.!?]+[.!?]*)")
-
     fun analyze(text: String): HemingwayMetrics {
         if (text.isBlank()) {
             return HemingwayMetrics(
@@ -142,7 +140,8 @@ object HemingwayAnalyzer {
 
         return HemingwayMetrics(
             wordCount = wordCount,
-            charCount = text.length,
+            // L11: report the computed whitespace-excluding count used for ARI, per its definition.
+            charCount = charCount,
             sentenceCount = sentences.size,
             readabilityGrade = gradeLevel,
             adverbCount = adverbCount,

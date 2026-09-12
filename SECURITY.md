@@ -54,3 +54,41 @@ See:
 ```text
 docs/security-scrub-report.md
 ```
+
+## Data handling
+
+This section documents the current data-handling decisions (not a future
+roadmap). Changing any of them is a product decision; update this section when
+they change.
+
+### Telemetry (opt-out, default-on)
+
+Usage analytics are **enabled by default** and can be disabled by the user in
+Settings (opt-out):
+
+- `TelemetryCollection.DEFAULT_ENABLED = true`; `MainActivity` seeds the
+  `telemetry_collection_enabled` setting to `"true"` for new installs.
+- Events are sent to **Firebase Analytics** (`words_written`,
+  `chars_written`, `words_read`, `document_opened`, `document_shared`) plus
+  Firebase Crashlytics. Event payloads contain aggregate counts only — no
+  document titles, paths, or text content.
+- Firebase's SDK performs its own automatic device-identifier collection
+  independent of Kern's event payloads.
+
+### Backups
+
+User documents are included in Android Auto Backup / cloud backup **in
+plaintext**:
+
+- `app/src/main/res/xml/data_extraction_rules.xml` and
+  `app/src/main/res/xml/backup_rules.xml` both
+  `<include domain="file" path="."/>`, so every markdown document under the
+  app's files directory is uploaded to the user's Google backup.
+  (`backup_rules.xml` excludes the `database` domain; `data_extraction_rules.xml`
+  includes `sharedpref`.)
+- There is **no at-rest encryption** applied to documents or preferences
+  (`EncryptedFile`/Tink/`EncryptedSharedPreferences` are not used).
+
+Rationale for the current state: these are the platform-default backup rules,
+kept so a user who reinstalls Kern recovers their documents. The tradeoff is
+that document contents leave the device unencrypted to a third-party cloud.

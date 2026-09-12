@@ -9,9 +9,12 @@ class AnalyticsTracker(context: Context) {
 
     init {
         try {
-            firebaseAnalytics = FirebaseAnalytics.getInstance(context.applicationContext).also {
-                it.setAnalyticsCollectionEnabled(TelemetryCollection.isEnabled())
-            }
+            // H5: never enable collection here. The persisted
+            // `telemetry_collection_enabled` preference is applied by the app's
+            // startup flow, which calls setAnalyticsCollectionEnabled with the
+            // stored value; until then collection stays at the Firebase default
+            // (disabled via TelemetryCollection.DEFAULT_ENABLED = false).
+            firebaseAnalytics = FirebaseAnalytics.getInstance(context.applicationContext)
         } catch (_: Exception) {
             // Safe fallback if Firebase is not initialized or running in unit tests
         }

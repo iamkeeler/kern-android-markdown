@@ -29,7 +29,7 @@ cp app/google-services.json.example app/google-services.json
 5. Run verification:
 
 ```bash
-./gradlew test lint bundleRelease
+./gradlew testDebugUnitTest lint assembleRelease
 ```
 
 ## Architecture rules
@@ -71,10 +71,10 @@ See `docs/repository-governance.md` for the full PR process and recommended bran
 
 ## Before opening a pull request
 
-Run:
+Run (the same tasks CI's `release-readiness.yml` runs):
 
 ```bash
-./gradlew test lint bundleRelease
+./gradlew testDebugUnitTest lint assembleRelease
 ```
 
 A PR should include:

@@ -7,6 +7,10 @@ object MarkdownEditorEngine {
     // Empty checks (lines containing only the formatting prefix and trailing spaces)
     private val emptyBlockquoteRegex = Regex("^(\\s*>\\s*)$")
 
+    // M6: hoisted off the per-keystroke handleTextChange path.
+    // M7: no `^` anchor — the match is explicitly pinned to the caret's line start below.
+    private val headerSpacingRegex = Regex("(#+)([^#\\s])")
+
     data class ContinuationResult(
         val isContinuation: Boolean,
         val newCurrentText: String,
@@ -153,13 +157,16 @@ object MarkdownEditorEngine {
         var cursorState = newSelStart
 
         // 1. Auto Header Spacing: "#Text" -> "# Text"
+        // M7: anchored to the caret's current line (not the document start), mirroring
+        // continueDocumentList's line-start computation.
         if (autoHeaderSpacing) {
-            val headerMatch = Regex("^(#+)([^#\\s])").find(textState)
-            if (headerMatch != null) {
-                val hashes = headerMatch.groupValues[1]
-                val headerLen = hashes.length
-                textState = hashes + " " + textState.substring(headerLen)
-                if (cursorState > headerLen) {
+            val lineStart = textState.lastIndexOf('\n', (cursorState - 1).coerceAtLeast(0))
+                .let { if (it == -1) 0 else it + 1 }
+            val headerMatch = headerSpacingRegex.find(textState, lineStart)
+            if (headerMatch != null && headerMatch.range.first == lineStart) {
+                val insertAt = lineStart + headerMatch.groupValues[1].length
+                textState = textState.substring(0, insertAt) + " " + textState.substring(insertAt)
+                if (cursorState > insertAt) {
                     cursorState += 1
                 }
             }
@@ -167,7 +174,8 @@ object MarkdownEditorEngine {
 
 
         // 1.5 Auto Sentence Capitalization
-        if (sentenceCapitalization && isInsertion && newText.length == oldText.length + 1) {
+        // L9: cursorState can be 0 (insertion at the very start with the caret pinned there).
+        if (sentenceCapitalization && isInsertion && cursorState > 0 && newText.length == oldText.length + 1) {
             val insertedChar = textState[cursorState - 1]
             if (insertedChar.isLowerCase()) {
                 // Check if it's the start of the text block or start of a sentence

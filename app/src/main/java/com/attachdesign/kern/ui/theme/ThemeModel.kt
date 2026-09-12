@@ -5,6 +5,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -88,6 +91,68 @@ data class AppColorTheme(
     val typography: AppTypographySizes
 
 )
+
+/**
+ * M14: bridges the custom [AppColorTheme] into an M3 [ColorScheme] so M3 components
+ * (DropdownMenu, AlertDialog, ModalBottomSheet, SnackbarHost, …) inherit the active
+ * Kern theme instead of falling back to baseline purple.
+ */
+fun AppColorTheme.toColorScheme(): ColorScheme =
+    if (isDark) {
+        darkColorScheme(
+            primary = accent,
+            onPrimary = Color.White,
+            primaryContainer = accent.copy(alpha = 0.3f),
+            onPrimaryContainer = textPrimary,
+            secondary = info,
+            onSecondary = background,
+            tertiary = warning,
+            onTertiary = background,
+            background = background,
+            onBackground = textPrimary,
+            surface = surface,
+            onSurface = textPrimary,
+            surfaceVariant = codeBackground,
+            onSurfaceVariant = textMuted,
+            error = danger,
+            onError = Color.White,
+            errorContainer = danger.copy(alpha = 0.3f),
+            onErrorContainer = textPrimary,
+            outline = textMuted.copy(alpha = 0.5f),
+            outlineVariant = textMuted.copy(alpha = 0.25f),
+            scrim = background.copy(alpha = 0.6f),
+            inverseSurface = textPrimary,
+            inverseOnSurface = background,
+            inversePrimary = accent
+        )
+    } else {
+        lightColorScheme(
+            primary = accent,
+            onPrimary = Color.White,
+            primaryContainer = accent.copy(alpha = 0.18f),
+            onPrimaryContainer = textPrimary,
+            secondary = info,
+            onSecondary = background,
+            tertiary = warning,
+            onTertiary = background,
+            background = background,
+            onBackground = textPrimary,
+            surface = surface,
+            onSurface = textPrimary,
+            surfaceVariant = codeBackground,
+            onSurfaceVariant = textMuted,
+            error = danger,
+            onError = Color.White,
+            errorContainer = danger.copy(alpha = 0.15f),
+            onErrorContainer = textPrimary,
+            outline = textMuted.copy(alpha = 0.5f),
+            outlineVariant = textMuted.copy(alpha = 0.25f),
+            scrim = background.copy(alpha = 0.6f),
+            inverseSurface = textPrimary,
+            inverseOnSurface = background,
+            inversePrimary = accent
+        )
+    }
 
 
 data class AppDimensions(

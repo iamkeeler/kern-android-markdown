@@ -34,6 +34,9 @@ object MarkdownDocumentPresentationPlanner {
             if (hideInactiveTokens && block.blockType == MarkdownBlockType.HORIZONTAL_RULE && blockStart < blockEnd) {
                 hidden += IndexRange(blockStart, blockEnd)
             }
+            // L13: images are deliberately exempt from token hiding — unlike links, an image's
+            // `![alt](url)` syntax always stays visible during rendered editing so the URL
+            // remains tappable and editable. Revisit only if that product decision changes.
             val imageConstructs = block.elements
                 .filter { it.type == MarkdownElementType.IMAGE }
                 .map { it.constructStart to it.constructEnd }

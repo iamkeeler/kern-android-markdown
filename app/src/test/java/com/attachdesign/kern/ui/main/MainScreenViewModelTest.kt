@@ -1,6 +1,8 @@
 package com.attachdesign.kern.ui.main
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import app.cash.turbine.test
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileDao
@@ -28,10 +30,16 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+/**
+ * Cancels the ViewModel's coroutine scope so coroutines from one test cannot
+ * leak into the next. Uses the public [viewModelScope] API instead of
+ * reflection on the compiler-mangled internal `ViewModel.clear()` method, which
+ * is brittle across lifecycle library upgrades. (MainScreenViewModel does not
+ * override `onCleared`, so cancelling the scope is the whole of what `clear()`
+ * would do here.)
+ */
 private fun ViewModel.clearForTest() {
-    val clearMethod = ViewModel::class.java.getDeclaredMethod("clear\$lifecycle_viewmodel")
-    clearMethod.isAccessible = true
-    clearMethod.invoke(this)
+    viewModelScope.cancel()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -316,7 +324,7 @@ class MainScreenViewModelTest {
         oldDir.mkdirs()
         java.io.File(oldDir, "test_file.txt").writeText("hello")
         
-        every { storageManager.getAbsoluteFile(legacyProj, "") } returns oldDir
+        coEvery { storageManager.getAbsoluteFile(legacyProj, "") } returns oldDir
         
         // Act
         viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)

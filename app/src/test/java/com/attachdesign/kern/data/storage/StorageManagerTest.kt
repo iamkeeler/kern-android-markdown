@@ -7,20 +7,35 @@ import androidx.documentfile.provider.DocumentFile
 import com.attachdesign.kern.data.local.ProjectEntity
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import androidx.test.core.app.ApplicationProvider
+import java.io.ByteArrayInputStream
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class StorageManagerTest {
+
+    /**
+     * M23: per-test temp directory instead of a fixed shared real path, so
+     * parallel workers or residue from an interrupted run cannot collide.
+     * (An instance rule: @ClassRule TemporaryFolder does not initialize
+     * reliably under RobolectricTestRunner.)
+     */
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     private lateinit var context: Context
     private lateinit var storageManager: StorageManager
@@ -30,8 +45,9 @@ class StorageManagerTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        storageManager = StorageManager(context)
-        sandboxDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), "Kern/sandbox")
+        val kernRoot = File(tempFolder.root, "Kern")
+        storageManager = StorageManager(context, kernRoot)
+        sandboxDir = File(kernRoot, "sandbox")
         project = ProjectEntity(name = "TestProject", path = "TestProjectDir", isExternal = false, isSelected = false)
     }
 
@@ -176,11 +192,71 @@ class StorageManagerTest {
     }
 
     @Test
-    fun testReadAssetFile() {
+    fun testReadAssetFile() = runTest {
         val content = storageManager.readAssetFile("Welcome.md")
         assertTrue(content.contains("Welcome to Kern"))
 
         val examplesContent = storageManager.readAssetFile("Formatting Examples.md")
         assertTrue(examplesContent.contains("Formatting Examples"))
+    }
+
+    @Test
+    fun moveNode_saf_doesNotDeleteSourceWhenWriteFails() = runTest {
+        // C1: the SAF move must not delete the source when the destination write fails.
+        mockkStatic(DocumentFile::class)
+        try {
+            val resolver = mockk<ContentResolver>()
+            val safContext = mockk<Context>(relaxed = true)
+            every { safContext.contentResolver } returns resolver
+
+            val rootDoc = mockk<DocumentFile>()
+            val srcDoc = mockk<DocumentFile>()
+            val srcUri = Uri.parse("content://com.example.documents/tree/saf/document/1")
+            every { DocumentFile.fromTreeUri(any(), any()) } returns rootDoc
+            every { rootDoc.findFile("note.md") } returns srcDoc
+            every { srcDoc.uri } returns srcUri
+            every { srcDoc.isDirectory } returns false
+            every { resolver.openInputStream(srcUri) } returns ByteArrayInputStream("hello".toByteArray())
+            // Destination write fails: temp document creation returns null.
+            every { rootDoc.createFile(any(), any()) } returns null
+
+            val safManager = StorageManager(safContext)
+            val safProject = ProjectEntity(
+                name = "SafProject",
+                path = "content://com.example.documents/tree/saf",
+                isExternal = true,
+                isSelected = false
+            )
+
+            val moved = safManager.moveNode(safProject, "note.md", safProject, "moved.md")
+
+            assertFalse(moved)
+            verify(exactly = 0) { srcDoc.delete() }
+        } finally {
+            unmockkStatic(DocumentFile::class)
+        }
+    }
+
+    @Test
+    fun moveNode_saf_doesNotDeleteSourceWhenReadFails() = runTest {
+        // C1: the SAF move must report failure (not success) when the source cannot be read.
+        mockkStatic(DocumentFile::class)
+        try {
+            every { DocumentFile.fromTreeUri(any(), any()) } returns null
+
+            val safManager = StorageManager(context)
+            val safProject = ProjectEntity(
+                name = "SafProject",
+                path = "content://com.example.documents/tree/saf",
+                isExternal = true,
+                isSelected = false
+            )
+
+            val moved = safManager.moveNode(safProject, "missing.md", safProject, "moved.md")
+
+            assertFalse(moved)
+        } finally {
+            unmockkStatic(DocumentFile::class)
+        }
     }
 }
