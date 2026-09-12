@@ -10,6 +10,8 @@ import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayOutputStream
 
 private const val OPENED_FILES_PROJECT_NAME = "Opened Files"
@@ -27,7 +29,16 @@ class IncomingFileImporter(
         val fileName: String
     )
 
-    suspend fun import(uri: Uri, mimeTypeHint: String?): ImportedFile = withContext(Dispatchers.IO) {
+    /**
+     * Serializes imports (L6): the check-then-act sequences below (get-or-create
+     * "Opened Files" project, unique-path probing, write-then-DB-insert) must not
+     * interleave across concurrent imports.
+     */
+    private val importMutex = Mutex()
+
+    suspend fun import(uri: Uri, mimeTypeHint: String?): ImportedFile {
+        return importMutex.withLock {
+            withContext(Dispatchers.IO) {
         require(IncomingFileImportPolicy.isSupportedScheme(uri.scheme)) {
             "Unsupported file source"
         }
@@ -79,6 +90,8 @@ class IncomingFileImporter(
             filePath = targetPath,
             fileName = targetPath.substringAfterLast('/')
         )
+            }
+        }
     }
 
     private fun getOrCreateOpenedFilesProject(): ProjectEntity {

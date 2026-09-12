@@ -80,9 +80,11 @@ class StatsRepository(private val db: AppDatabase) {
         }
     }
 
+    /**
+     * Single-statement atomic upsert (M19) — no read-modify-write race between
+     * concurrent increments.
+     */
     private fun incrementKey(key: String, amount: Long) {
-        val current = db.settingDao().getSetting(key)?.value?.toLongOrNull() ?: 0L
-        val updated = current + amount
-        db.settingDao().insertSetting(SettingEntity(key = key, value = updated.toString()))
+        db.settingDao().incrementSetting(key, amount)
     }
 }

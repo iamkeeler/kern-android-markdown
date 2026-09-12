@@ -10,6 +10,8 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -37,7 +39,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import android.widget.Toast
-import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 
 @Composable
 fun SettingsTabsContent(
@@ -52,22 +53,22 @@ fun SettingsTabsContent(
     val uriHandler = LocalUriHandler.current
 
     // Observe global settings reactively
-    val viewModeSetting     by db.settingDao().getSettingFlow("view_mode").collectAsState(initial = null)
-    val editorFontSetting   by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
-    val editorFontSizeScaleSetting by db.settingDao().getSettingFlow("editor_font_size_scale").collectAsState(initial = null)
-    val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsState(initial = null)
-    val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
-    val sentenceCapitalizationSetting by db.settingDao().getSettingFlow("sentence_capitalization").collectAsState(initial = null)
-    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow("show_workspace_intro").collectAsState(initial = null)
-    val telemetryCollectionSetting by db.settingDao().getSettingFlow(TelemetryCollection.SETTING_KEY).collectAsState(initial = null)
+    val viewModeSetting     by db.settingDao().getSettingFlow("view_mode").collectAsStateWithLifecycle(initialValue = null)
+    val editorFontSetting   by db.settingDao().getSettingFlow("editor_font_family").collectAsStateWithLifecycle(initialValue = null)
+    val editorFontSizeScaleSetting by db.settingDao().getSettingFlow("editor_font_size_scale").collectAsStateWithLifecycle(initialValue = null)
+    val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsStateWithLifecycle(initialValue = null)
+    val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsStateWithLifecycle(initialValue = null)
+    val sentenceCapitalizationSetting by db.settingDao().getSettingFlow("sentence_capitalization").collectAsStateWithLifecycle(initialValue = null)
+    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow("show_workspace_intro").collectAsStateWithLifecycle(initialValue = null)
+    val telemetryCollectionSetting by db.settingDao().getSettingFlow(TelemetryCollection.SETTING_KEY).collectAsStateWithLifecycle(initialValue = null)
 
-    val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
-    val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsState(initial = null)
-    val autoCompleteQuotesSetting       by db.settingDao().getSettingFlow("auto_complete_quotes").collectAsState(initial = null)
-    val autoCompleteSingleQuotesSetting by db.settingDao().getSettingFlow("auto_complete_single_quotes").collectAsState(initial = null)
-    val autoCompleteBracesSetting       by db.settingDao().getSettingFlow("auto_complete_braces").collectAsState(initial = null)
-    val autoCompleteParensSetting       by db.settingDao().getSettingFlow("auto_complete_parens").collectAsState(initial = null)
-    val autoCompleteBracketsSetting     by db.settingDao().getSettingFlow("auto_complete_brackets").collectAsState(initial = null)
+    val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsStateWithLifecycle(initialValue = null)
+    val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsStateWithLifecycle(initialValue = null)
+    val autoCompleteQuotesSetting       by db.settingDao().getSettingFlow("auto_complete_quotes").collectAsStateWithLifecycle(initialValue = null)
+    val autoCompleteSingleQuotesSetting by db.settingDao().getSettingFlow("auto_complete_single_quotes").collectAsStateWithLifecycle(initialValue = null)
+    val autoCompleteBracesSetting       by db.settingDao().getSettingFlow("auto_complete_braces").collectAsStateWithLifecycle(initialValue = null)
+    val autoCompleteParensSetting       by db.settingDao().getSettingFlow("auto_complete_parens").collectAsStateWithLifecycle(initialValue = null)
+    val autoCompleteBracketsSetting     by db.settingDao().getSettingFlow("auto_complete_brackets").collectAsStateWithLifecycle(initialValue = null)
 
     val currentViewMode            = viewModeSetting?.value ?: "RENDERED"
     val currentFontFamily          = editorFontSetting?.value ?: "serif"
@@ -93,7 +94,7 @@ fun SettingsTabsContent(
         else -> FontFamily.Default
     }
 
-    var activeTab by remember { mutableIntStateOf(0) }
+    var activeTab by rememberSaveable { mutableIntStateOf(0) }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Tabs Selector
@@ -358,7 +359,7 @@ fun SettingsTabsContent(
                         isError = !isJsonValid,
                         supportingText = {
                             if (!isJsonValid) {
-                                Text("Invalid Theme JSON format", color = Color(0xFFE53935))
+                                Text("Invalid Theme JSON format", color = theme.danger)
                             }
                         },
                         textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = theme.typography.small, color = theme.textPrimary),
@@ -369,11 +370,11 @@ fun SettingsTabsContent(
                             errorTextColor = theme.textPrimary,
                             focusedBorderColor   = theme.accent,
                             unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
-                            errorBorderColor = Color(0xFFE53935),
+                            errorBorderColor = theme.danger,
                             focusedLabelColor   = theme.accent,
                             unfocusedLabelColor = theme.textMuted,
-                            errorLabelColor = Color(0xFFE53935),
-                            errorSupportingTextColor = Color(0xFFE53935),
+                            errorLabelColor = theme.danger,
+                            errorSupportingTextColor = theme.danger,
                             cursorColor = theme.accent
                         )
                     )
@@ -787,7 +788,7 @@ fun SettingsTabsContent(
                          )
                      }
                      Text(
-                         text = "This is on by default. The data is anonymized and only used to improve Kern. You can turn it off at any time.",
+                         text = "This is off by default. The data is anonymized and only used to improve Kern. You can turn it on at any time.",
                          color = theme.textMuted,
                          fontSize = theme.typography.tiny,
                          fontFamily = appFont,
@@ -936,8 +937,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     // Observe global settings reactively (only theme is needed for status bar and background)
-    val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsState(initial = null)
-    val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
+    val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsStateWithLifecycle(initialValue = null)
+    val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsStateWithLifecycle(initialValue = null)
     var theme by remember { mutableStateOf(ThemeEngine.DefaultLight.toColorTheme()) }
 
     LaunchedEffect(selectedThemeIdSetting, editorFontSetting) {
@@ -960,8 +961,6 @@ fun SettingsScreen(
             }
         }
     }
-
-    ApplyKernSystemBars(theme)
 
      val appFont = when (theme.editorFontFamily.lowercase()) {
          "serif" -> FontFamily.Serif
@@ -1071,7 +1070,8 @@ fun MinimalOutlinedButtonSmall(
 
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.defaultMinSize(minWidth = 1.dp, minHeight = 1.dp),
+        // M18: no 1.dp min-size override — keep the default minimum touch target.
+        modifier = modifier,
         shape = RoundedCornerShape(theme.dimensions.spacingSmall),
         border = BorderStroke(theme.dimensions.borderWidth, border),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -1097,7 +1097,7 @@ fun StatsTabContent(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val statsRepository = remember(db) { StatsRepository(db) }
-    val userStats by statsRepository.getStatsFlow().collectAsState(initial = UserStats())
+    val userStats by statsRepository.getStatsFlow().collectAsStateWithLifecycle(initialValue = UserStats())
     var showResetDialog by remember { mutableStateOf(false) }
 
     Column(

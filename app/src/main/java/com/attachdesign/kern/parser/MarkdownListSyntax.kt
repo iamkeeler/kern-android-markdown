@@ -17,9 +17,16 @@ object MarkdownListSyntax {
 
         fun nextItemPrefix(): String = when (kind) {
             Kind.UNORDERED -> "$indent$marker$spacing"
-            Kind.ORDERED -> "$indent${(ordinal ?: 0) + 1}$marker$spacing"
+            Kind.ORDERED -> "$indent${saturatingIncrement(ordinal)}$marker$spacing"
             Kind.TASK -> "$indent$marker$spacing[ ] "
         }
+
+        /**
+         * L10: the next ordinal, saturating at Int.MAX_VALUE instead of overflowing to
+         * Int.MIN_VALUE for absurd inputs like `2147483647. `.
+         */
+        private fun saturatingIncrement(ordinal: Int?): Long =
+            ((ordinal?.toLong() ?: 0L) + 1).coerceAtMost(Int.MAX_VALUE.toLong())
     }
 
     private val taskPattern = Regex("^([ \\t]*)([-*+])([ \\t]+)\\[([ xX])\\]([ \\t]+|$)")

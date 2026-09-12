@@ -8,9 +8,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.os.Environment
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.util.UUID
 import com.attachdesign.kern.parser.MarkdownResourcePathResolver
 
-class StorageManager(private val context: Context) {
+class StorageManager(
+    private val context: Context,
+    /**
+     * Test-only override for the Documents/Kern root used by [getProjectRootFile].
+     * Null (default) preserves the production path resolution.
+     */
+    private val sandboxRootOverride: File? = null
+) {
+
+    companion object {
+        private const val PREFS_NAME = "kern_storage"
+        private const val KEY_LEGACY_MIGRATION_DONE = "legacy_migration_completed"
+    }
+
+    private fun storagePrefs() =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     suspend fun resolveMarkdownImage(
         project: ProjectEntity,
@@ -83,13 +101,16 @@ class StorageManager(private val context: Context) {
     /**
      * Gets the root java.io.File directory for a project depending on whether it is
      * App-Sandbox (internal) or External Scoped Storage (SAF).
+     *
+     * The legacy migration from the old app-private root into Documents/Kern runs
+     * at most once per install; completion is persisted in SharedPreferences (L4).
      */
     private fun getProjectRootFile(project: ProjectEntity): File {
         val rootDirName = if (project.isExternal) "external_saf" else "sandbox"
 
-        // Migration logic: move old files to the new accessible directory
         val oldRootDir = File(context.filesDir, rootDirName)
-        val newDocumentsDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Kern")
+        val newDocumentsDir = sandboxRootOverride
+            ?: File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Kern")
         val newRootDir = File(newDocumentsDir, rootDirName)
 
         var finalRootDir = newRootDir
@@ -100,54 +121,33 @@ class StorageManager(private val context: Context) {
             }
         }
 
-        // Test writability of the resolved directory (important for Android 10+ scoped storage restrictions)
-        try {
-            val testFile = File(finalRootDir, ".write_test")
-            testFile.createNewFile()
-            testFile.delete()
-        } catch (e: Exception) {
-            finalRootDir = oldRootDir
-        }
-
         if (!finalRootDir.exists()) {
             finalRootDir.mkdirs()
         }
 
-        // If old root exists and new root is empty, copy everything over to preserve user data
-        if (oldRootDir.exists() && oldRootDir.isDirectory && finalRootDir.exists() && finalRootDir != oldRootDir) {
-            val oldFiles = oldRootDir.listFiles()
-            if (oldFiles != null && oldFiles.isNotEmpty() && finalRootDir.listFiles()?.isEmpty() == true) {
-                try {
-                    oldRootDir.copyRecursively(finalRootDir, overwrite = true)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+        // One-time legacy migration: if the old root still holds files and the new
+        // root is empty, copy everything over to preserve user data. Never re-runs.
+        if (!storagePrefs().getBoolean(KEY_LEGACY_MIGRATION_DONE, false)) {
+            var migrationOk = true
+            if (oldRootDir.exists() && oldRootDir.isDirectory && finalRootDir.exists() && finalRootDir != oldRootDir) {
+                val oldFiles = oldRootDir.listFiles()
+                if (oldFiles != null && oldFiles.isNotEmpty() && finalRootDir.listFiles()?.isEmpty() == true) {
+                    try {
+                        oldRootDir.copyRecursively(finalRootDir, overwrite = true)
+                    } catch (e: Exception) {
+                        migrationOk = false
+                        e.printStackTrace()
+                    }
                 }
+            }
+            if (migrationOk) {
+                storagePrefs().edit().putBoolean(KEY_LEGACY_MIGRATION_DONE, true).apply()
             }
         }
 
         val projectDir = getSafeFile(finalRootDir, project.path)
         if (!projectDir.exists()) {
             projectDir.mkdirs()
-        }
-
-        // Test writability of the final project directory to handle reinstall ownership conflicts
-        var isProjectDirWritable = false
-        try {
-            val testFile = File(projectDir, ".write_test")
-            testFile.createNewFile()
-            testFile.delete()
-            isProjectDirWritable = true
-        } catch (e: Exception) {
-            isProjectDirWritable = false
-        }
-
-        if (!isProjectDirWritable && finalRootDir != oldRootDir) {
-            val fallbackRootDir = oldRootDir
-            val fallbackProjectDir = getSafeFile(fallbackRootDir, project.path)
-            if (!fallbackProjectDir.exists()) {
-                fallbackProjectDir.mkdirs()
-            }
-            return fallbackProjectDir
         }
 
         return projectDir
@@ -207,13 +207,17 @@ class StorageManager(private val context: Context) {
 
     /**
      * Reads file content as a UTF-8 string on Dispatchers.IO.
+     *
+     * @throws FileNotFoundException if the file cannot be found or opened (C1:
+     * callers must treat a missing file as a failure, never as empty content).
      */
     suspend fun readFile(project: ProjectEntity, relativePath: String): String = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
-            val doc = getDocumentFile(project, relativePath) ?: return@withContext ""
+            val doc = getDocumentFile(project, relativePath)
+                ?: throw FileNotFoundException("SAF document not found: $relativePath")
             return@withContext context.contentResolver.openInputStream(doc.uri)?.use { inputStream ->
                 inputStream.bufferedReader().use { it.readText() }
-            } ?: ""
+            } ?: throw FileNotFoundException("Cannot open SAF document for reading: $relativePath")
         }
 
         val projectRoot = getProjectRootFile(project)
@@ -221,29 +225,96 @@ class StorageManager(private val context: Context) {
         if (file.exists() && file.isFile) {
             file.readText(Charsets.UTF_8)
         } else {
-            ""
+            throw FileNotFoundException("File not found: $relativePath")
         }
     }
 
     /**
      * Writes UTF-8 string content to a file on Dispatchers.IO.
+     *
+     * Writes are atomic (H1): java.io targets go to a temp file which is fsync'd
+     * and then renamed over the target; SAF targets are written to a temp document
+     * that is renamed into place. Returns false (and leaves the original file
+     * untouched) when the write could not be completed.
      */
-    suspend fun writeFile(project: ProjectEntity, relativePath: String, content: String): Unit = withContext(Dispatchers.IO) {
+    suspend fun writeFile(project: ProjectEntity, relativePath: String, content: String): Boolean = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
-            val doc = getOrCreateDocumentFile(project, relativePath, isDirectory = false) ?: return@withContext
-            context.contentResolver.openOutputStream(doc.uri, "rwt")?.use { outputStream ->
-                outputStream.bufferedWriter().use { it.write(content) }
-            }
-            return@withContext
+            return@withContext writeSafAtomically(project, relativePath, content.toByteArray(Charsets.UTF_8))
         }
 
         val projectRoot = getProjectRootFile(project)
         val file = getSafeFile(projectRoot, relativePath)
-        val parent = file.parentFile
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs()
+        writeAtomically(file, content)
+    }
+
+    /**
+     * Atomic write for java.io: temp file in the same directory + fsync + rename
+     * over the target (H1). Never leaves a truncated target behind.
+     */
+    private fun writeAtomically(target: File, content: String): Boolean {
+        val parent = target.parentFile ?: return false
+        if (!parent.exists() && !parent.mkdirs()) return false
+        val tmp = File(parent, "${target.name}.tmp.${UUID.randomUUID()}")
+        return try {
+            FileOutputStream(tmp).use { fos ->
+                fos.write(content.toByteArray(Charsets.UTF_8))
+                fos.flush()
+                fos.fd.sync()
+            }
+            if (!tmp.renameTo(target)) {
+                // Cross-filesystem fallback: copy over the target, then drop the temp file.
+                tmp.copyTo(target, overwrite = true)
+                tmp.delete()
+            }
+            true
+        } catch (e: Exception) {
+            tmp.delete()
+            false
         }
-        file.writeText(content, Charsets.UTF_8)
+    }
+
+    /**
+     * Atomic write for SAF: write to a temp document in the target directory,
+     * then delete any existing document at the target path and rename the temp
+     * document into place (H1). Returns false without touching the original when
+     * any step fails.
+     */
+    private suspend fun writeSafAtomically(project: ProjectEntity, relativePath: String, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val parentPath = relativePath.substringBeforeLast('/', "")
+            val fileName = relativePath.substringAfterLast('/')
+            val treeUri = Uri.parse(project.path)
+            var parentDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return@withContext false
+            for (part in parentPath.split('/')) {
+                if (part.isEmpty()) continue
+                val next = parentDoc.findFile(part) ?: parentDoc.createDirectory(part)
+                if (next == null) return@withContext false
+                parentDoc = next
+            }
+
+            val tmpName = "$fileName.tmp.${UUID.randomUUID()}"
+            val tmpDoc = parentDoc.createFile("text/markdown", tmpName) ?: return@withContext false
+            try {
+                context.contentResolver.openOutputStream(tmpDoc.uri, "rwt")?.use { outputStream ->
+                    outputStream.write(bytes)
+                    outputStream.flush()
+                } ?: run {
+                    tmpDoc.delete()
+                    return@withContext false
+                }
+                parentDoc.findFile(fileName)?.delete()
+                if (!tmpDoc.renameTo(fileName)) {
+                    tmpDoc.delete()
+                    return@withContext false
+                }
+                true
+            } catch (e: Exception) {
+                tmpDoc.delete()
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
@@ -284,11 +355,13 @@ class StorageManager(private val context: Context) {
 
     /**
      * Deletes a file or directory recursively on Dispatchers.IO.
+     * SAF directories are deleted children-first, since `DocumentFile.delete()`
+     * refuses non-empty directories (M11).
      */
     suspend fun deleteFile(project: ProjectEntity, relativePath: String): Boolean = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
             val doc = getDocumentFile(project, relativePath) ?: return@withContext false
-            return@withContext doc.delete()
+            return@withContext deleteDocumentTree(doc)
         }
 
         val projectRoot = getProjectRootFile(project)
@@ -300,8 +373,22 @@ class StorageManager(private val context: Context) {
         }
     }
 
+    /** Recursively deletes a SAF document tree, children before parents. */
+    private fun deleteDocumentTree(doc: DocumentFile): Boolean {
+        if (doc.isDirectory) {
+            for (child in doc.listFiles()) {
+                if (!deleteDocumentTree(child)) return false
+            }
+        }
+        return doc.delete()
+    }
+
     /**
      * Renames a file or directory on Dispatchers.IO.
+     *
+     * On SAF this renames within the same parent directory only (M12/H4: use
+     * [moveAcrossPaths] for moves across directories). Returns the actual result
+     * of the rename instead of assuming success.
      */
     suspend fun renameFile(project: ProjectEntity, oldPath: String, newPath: String): Boolean = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
@@ -312,45 +399,136 @@ class StorageManager(private val context: Context) {
         val projectRoot = getProjectRootFile(project)
         val oldFile = getSafeFile(projectRoot, oldPath)
         val newFile = getSafeFile(projectRoot, newPath)
-        if (oldFile.exists()) {
-            oldFile.renameTo(newFile)
-        } else {
+        if (!oldFile.exists()) return@withContext false
+        if (oldFile.renameTo(newFile)) return@withContext true
+        // Cross-filesystem fallback: copy then delete; report success only when both succeed.
+        return@withContext try {
+            if (oldFile.isDirectory) {
+                oldFile.copyRecursively(newFile, overwrite = true)
+                oldFile.deleteRecursively()
+            } else {
+                oldFile.copyTo(newFile, overwrite = true)
+                oldFile.delete()
+            }
+            true
+        } catch (e: Exception) {
             false
         }
     }
 
     /**
+     * Moves a file or directory across paths (e.g. into/out of `.trash`) on
+     * Dispatchers.IO.
+     *
+     * SAF moves are a verified copy-then-delete (H4): read the source tree, write
+     * it at the destination, and delete the source only after the copy verified.
+     * Never uses `renameTo` across directories.
+     */
+    suspend fun moveAcrossPaths(project: ProjectEntity, oldPath: String, newPath: String): Boolean = withContext(Dispatchers.IO) {
+        if (project.path.startsWith("content://")) {
+            return@withContext safMoveCopyThenDelete(project, oldPath, project, newPath)
+        }
+        renameFile(project, oldPath, newPath)
+    }
+
+    /**
+     * Verified SAF move: copy the source tree to the destination, then delete the
+     * source tree. Returns false (leaving the source untouched) when the copy did
+     * not fully succeed (C1/H4).
+     */
+    private suspend fun safMoveCopyThenDelete(
+        fromProject: ProjectEntity,
+        fromPath: String,
+        toProject: ProjectEntity,
+        toPath: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (!safCopyTree(fromProject, fromPath, toProject, toPath)) return@withContext false
+        val srcDoc = getDocumentFile(fromProject, fromPath) ?: return@withContext false
+        deleteDocumentTree(srcDoc)
+    }
+
+    /** Recursively copies a SAF document (file or directory tree) to a new path. */
+    private suspend fun safCopyTree(
+        fromProject: ProjectEntity,
+        fromPath: String,
+        toProject: ProjectEntity,
+        toPath: String
+    ): Boolean {
+        val srcDoc = getDocumentFile(fromProject, fromPath) ?: return false
+        return safCopyDocument(srcDoc, toProject, toPath)
+    }
+
+    private suspend fun safCopyDocument(srcDoc: DocumentFile, toProject: ProjectEntity, toPath: String): Boolean {
+        if (srcDoc.isDirectory) {
+            if (getOrCreateDocumentFile(toProject, toPath, isDirectory = true) == null) return false
+            for (child in srcDoc.listFiles()) {
+                val childName = child.name ?: return false
+                if (!safCopyDocument(child, toProject, "$toPath/$childName")) return false
+            }
+            return true
+        }
+        val bytes = try {
+            context.contentResolver.openInputStream(srcDoc.uri)?.use { it.readBytes() } ?: return false
+        } catch (e: Exception) {
+            return false
+        }
+        return writeSafAtomically(toProject, toPath, bytes)
+    }
+
+    /**
      * Moves a file or directory from one project/path to another project/path on Dispatchers.IO.
+     *
+     * SAF (or mixed SAF/java.io) moves are verified copy-then-delete (C1): the
+     * source is deleted only after the read and the write both succeeded, and the
+     * result reports whether the move actually happened.
      */
     suspend fun moveNode(fromProject: ProjectEntity, fromPath: String, toProject: ProjectEntity, toPath: String): Boolean = withContext(Dispatchers.IO) {
         if (fromProject.path.startsWith("content://") || toProject.path.startsWith("content://")) {
-            val content = readFile(fromProject, fromPath)
-            writeFile(toProject, toPath, content)
-            deleteFile(fromProject, fromPath)
-            return@withContext true
+            return@withContext try {
+                val content = readFile(fromProject, fromPath) // throws FileNotFoundException on failure
+                if (!writeFile(toProject, toPath, content)) return@withContext false
+                deleteFile(fromProject, fromPath)
+            } catch (e: Exception) {
+                false
+            }
         }
 
         val srcRoot = getProjectRootFile(fromProject)
         val destRoot = getProjectRootFile(toProject)
         val srcFile = getSafeFile(srcRoot, fromPath)
         val destFile = getSafeFile(destRoot, toPath)
-        
+
         if (!srcFile.exists()) return@withContext false
-        
+
         val destParent = destFile.parentFile
         if (destParent != null && !destParent.exists()) {
             destParent.mkdirs()
         }
-        
-        srcFile.renameTo(destFile)
+
+        if (srcFile.renameTo(destFile)) return@withContext true
+        // Cross-filesystem fallback: copy then delete; report success only when both succeed.
+        return@withContext try {
+            if (srcFile.isDirectory) {
+                srcFile.copyRecursively(destFile, overwrite = true)
+                srcFile.deleteRecursively()
+            } else {
+                srcFile.copyTo(destFile, overwrite = true)
+                srcFile.delete()
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
      * Resolves the absolute java.io.File path for a relative path inside a project.
      * Note: Avoid using this for content:// projects. Use exportToTempFile instead.
+     *
+     * Suspend with internal IO dispatch (L7): resolving the root can hit the disk.
      */
-    fun getAbsoluteFile(project: ProjectEntity, relativePath: String): File {
-        return getSafeFile(getProjectRootFile(project), relativePath)
+    suspend fun getAbsoluteFile(project: ProjectEntity, relativePath: String): File = withContext(Dispatchers.IO) {
+        getSafeFile(getProjectRootFile(project), relativePath)
     }
 
     /**
@@ -376,8 +554,12 @@ class StorageManager(private val context: Context) {
         }
     }
 
-    fun readAssetFile(fileName: String): String {
-        return context.assets.open(fileName).use { inputStream ->
+    /**
+     * Reads a bundled asset file as a UTF-8 string.
+     * Suspend with internal IO dispatch (L7).
+     */
+    suspend fun readAssetFile(fileName: String): String = withContext(Dispatchers.IO) {
+        context.assets.open(fileName).use { inputStream ->
             inputStream.bufferedReader().use { it.readText() }
         }
     }

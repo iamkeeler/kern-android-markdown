@@ -1,5 +1,6 @@
 package com.attachdesign.kern.ui.main
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.attachdesign.kern.data.local.AppDatabase
@@ -11,6 +12,7 @@ import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.data.storage.VfsNodeMapper
 import com.attachdesign.kern.data.storage.FileOperationsManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,11 +47,19 @@ class MainScreenViewModel(
     private val db: AppDatabase,
     private val storageManager: StorageManager,
     private val fileOpsManager: FileOperationsManager,
-    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
 
     companion object {
         private var hasSplashRun = false
+
+        // L25: SavedStateHandle keys for the folder nav history. ProjectEntity isn't
+        // Bundle-safe, so stacks persist as parallel project-id/path string lists.
+        private const val KEY_BACK_IDS = "folder_nav_back_ids"
+        private const val KEY_BACK_PATHS = "folder_nav_back_paths"
+        private const val KEY_FWD_IDS = "folder_nav_fwd_ids"
+        private const val KEY_FWD_PATHS = "folder_nav_fwd_paths"
     }
 
     private val _activeProject = MutableStateFlow<ProjectEntity?>(null)
@@ -69,6 +79,36 @@ class MainScreenViewModel(
 
     private val backStack = mutableListOf<Pair<ProjectEntity?, String>>()
     private val forwardStack = mutableListOf<Pair<ProjectEntity?, String>>()
+
+    // M10: handle for the in-flight folder load, cancelled before each new one.
+    private var navJob: Job? = null
+
+    // L25: mirror the in-memory folder nav history into SavedStateHandle on every
+    // mutation; restored (projects re-resolved from the DB) in init.
+    private fun persistFolderNavHistory() {
+        savedStateHandle[KEY_BACK_IDS] = ArrayList(backStack.map { (project, _) -> (project?.id ?: -1L).toString() })
+        savedStateHandle[KEY_BACK_PATHS] = ArrayList(backStack.map { (_, path) -> path })
+        savedStateHandle[KEY_FWD_IDS] = ArrayList(forwardStack.map { (project, _) -> (project?.id ?: -1L).toString() })
+        savedStateHandle[KEY_FWD_PATHS] = ArrayList(forwardStack.map { (_, path) -> path })
+    }
+
+    private suspend fun restoreFolderNavHistory() = withContext(ioDispatcher) {
+        val backIds = savedStateHandle.get<ArrayList<String>>(KEY_BACK_IDS) ?: return@withContext
+        val backPaths = savedStateHandle.get<ArrayList<String>>(KEY_BACK_PATHS) ?: return@withContext
+        val fwdIds = savedStateHandle.get<ArrayList<String>>(KEY_FWD_IDS) ?: return@withContext
+        val fwdPaths = savedStateHandle.get<ArrayList<String>>(KEY_FWD_PATHS) ?: return@withContext
+        suspend fun resolve(ids: List<String>, paths: List<String>): List<Pair<ProjectEntity?, String>> =
+            ids.zip(paths) { id, path ->
+                val projectId = id.toLongOrNull()
+                Pair(if (projectId == null || projectId < 0) null else db.projectDao().getProjectById(projectId), path)
+            }
+        backStack.clear()
+        backStack.addAll(resolve(backIds, backPaths))
+        forwardStack.clear()
+        forwardStack.addAll(resolve(fwdIds, fwdPaths))
+        _canNavigateBack.value = backStack.isNotEmpty()
+        _canNavigateForward.value = forwardStack.isNotEmpty()
+    }
 
     val explorerState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
@@ -106,6 +146,7 @@ class MainScreenViewModel(
 
     init {
         viewModelScope.launch {
+            restoreFolderNavHistory()
             seedInitialData()
             seedQuotes()
             refreshAllFiles()
@@ -341,6 +382,7 @@ class MainScreenViewModel(
         if (clearForward) {
             forwardStack.clear()
         }
+        persistFolderNavHistory()
 
         _activeProject.value = project
         _currentPath.value = path
@@ -348,7 +390,9 @@ class MainScreenViewModel(
         _canNavigateBack.value = backStack.isNotEmpty()
         _canNavigateForward.value = forwardStack.isNotEmpty()
 
-        viewModelScope.launch {
+        // M10: cancel the in-flight load so a stale folder can't overwrite a newer one.
+        navJob?.cancel()
+        navJob = viewModelScope.launch {
             if (project == null) {
                 refreshAllFiles()
             } else {

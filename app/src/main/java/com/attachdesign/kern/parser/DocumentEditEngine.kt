@@ -20,6 +20,9 @@ object DocumentEditEngine {
 
     private data class Replacement(val start: Int, val end: Int, val text: String)
 
+    // M6: hoisted off the per-line setHeading()/cycleHeading() paths.
+    private val headingPrefixRegex = Regex("^(#{1,6})\\s+")
+
     fun apply(
         text: String,
         selectionStart: Int,
@@ -129,12 +132,12 @@ object DocumentEditEngine {
     }
 
     private fun setHeading(line: String, level: Int): String {
-        val plain = line.replaceFirst(Regex("^#{1,6}\\s+"), "")
+        val plain = line.replaceFirst(headingPrefixRegex, "")
         return if (level in 1..6) "${"#".repeat(level)} $plain" else plain
     }
 
     private fun cycleHeading(line: String): String {
-        val match = Regex("^(#{1,6})\\s+").find(line) ?: return "# $line"
+        val match = headingPrefixRegex.find(line) ?: return "# $line"
         val level = match.groupValues[1].length
         val plain = line.substring(match.range.last + 1)
         return if (level == 6) plain else "${"#".repeat(level + 1)} $plain"

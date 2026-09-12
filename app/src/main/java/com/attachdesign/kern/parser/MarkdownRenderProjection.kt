@@ -33,6 +33,9 @@ data class MarkdownDocumentRenderProjection(
 
 /** Pure Kotlin rendered-text and clipboard projection shared by every UI surface. */
 object MarkdownRenderer {
+    // M6: hoisted off the per-row path in renderTable (was compiled for every table row).
+    // M4: outer pipes are optional so pipe-less GFM rows (`a | b`) are accepted, matching detection.
+    private val tableDelimiterRowRegex = Regex("^\\|?[-:|]+\\|?$")
     /** The single presentation projection used by the editor and rendered copy operations. */
     fun renderDocument(source: String): MarkdownDocumentRenderProjection {
         val text = StringBuilder()
@@ -116,19 +119,21 @@ object MarkdownRenderer {
         return MarkdownRenderProjection(rendered.toString(), spans, matrix)
     }
 
-    fun copyDocument(blocks: List<ParagraphBlock>): String = buildString {
-        blocks.forEach { block ->
-            append(render(block).text)
-            append(block.separatorAfter)
-        }
-    }.trimEnd('\r', '\n')
+    /**
+     * L8: clipboard copy goes through the same document-level projection as the rendered view,
+     * so copied text can never diverge from what the user sees.
+     */
+    fun copyDocument(blocks: List<ParagraphBlock>): String =
+        renderDocument(MarkdownDocumentScanner.join(blocks)).text.trimEnd('\r', '\n')
 
     private fun renderTable(raw: String): String {
         val rows = raw.lines().mapNotNull { line ->
             val compact = line.replace(" ", "")
-            if (compact.matches(Regex("^\\|[-:|]+\\|$"))) return@mapNotNull null
-            if (!line.trim().startsWith('|') || !line.trim().endsWith('|')) return@mapNotNull null
-            splitTableLine(line.trim()).joinToString("\t") { cell ->
+            if (compact.matches(tableDelimiterRowRegex)) return@mapNotNull null
+            // M4: accept rows without outer pipes; the block was already classified as a table.
+            val trimmed = line.trim()
+            if (!trimmed.contains('|')) return@mapNotNull null
+            splitTableLine(trimmed).joinToString("\t") { cell ->
                 val parsed = MarkdownParser.parseParagraph(cell.trim())
                 render(parsed).text
             }
@@ -139,9 +144,11 @@ object MarkdownRenderer {
     private fun splitTableLine(line: String): List<String> {
         val result = mutableListOf<String>()
         val current = StringBuilder()
-        var index = 1
-        while (index < line.lastIndex) {
-            if (line[index] == '\\' && index + 1 < line.lastIndex && line[index + 1] == '|') {
+        // M4: the outer pipes are optional; only skip them when present.
+        var index = if (line.startsWith('|')) 1 else 0
+        val end = if (line.endsWith('|')) line.length - 1 else line.length
+        while (index < end) {
+            if (line[index] == '\\' && index + 1 < end && line[index + 1] == '|') {
                 current.append('|')
                 index += 2
             } else if (line[index] == '|') {

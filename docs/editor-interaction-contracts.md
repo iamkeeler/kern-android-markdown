@@ -139,6 +139,33 @@ This document records user-visible editor behavior that must survive refactors. 
 
 
 
+### Nested emphasis, link destinations, code spans, and table rows (parser correctness)
+
+- Symptom and affected release: common CommonMark constructs misparsed — `*a **b** c*` lost its bold span, Wikipedia-style `[a](b(c))` links truncated at the first `)`, double-backtick code spans like `` ``a`b`` `` rendered as garbage, and valid GFM tables without outer pipes projected to an empty string.
+- Root cause: the inline parser's italic-closer scan matched the first `*` of an inner `**` run; link destinations terminated at the first unescaped `)` with no depth counting; only single-backtick code spans were handled; `renderTable` dropped rows not starting and ending with `|` while detection accepted them.
+- Behavioral invariant: an italic closer candidate that is part of a longer delimiter run is skipped; link destinations are scanned with paren-depth counting and link text with balanced `[...]` matching; a code span's closing run must be exactly the opening run length; table rows without outer pipes render the same as piped rows.
+- Automated test names: `MarkdownParserFixesTest` (11 regression tests covering M1–M4).
+
+### Editor draft persistence across process death
+
+- Symptom and affected release: process death wiped all unsaved editor text; keystrokes inside the 1s autosave debounce window were lost permanently and the editor reopened from stale disk content with no indication.
+- Root cause: all editor content lived in memory-only state (`documentTextFieldState`, `documentText`); persistence was only the debounced `saveActiveFile`.
+- Behavioral invariant: the active draft is persisted to `SavedStateHandle` and, after process death, the unsaved draft is preferred over stale disk content; `onCleared` flushes the save via `NonCancellable`.
+- Automated test names: `EditorDraftPersistenceTest` (10 tests covering draft write/restore rules).
+
+### Back navigation no longer races the final save
+
+- Symptom and affected release: pressing back could silently drop the last ~1s of edits — the final save raced cancellation with no error.
+- Root cause: `closeFile()` launched the save on `viewModelScope`, then the navigation pop cleared the entry's `ViewModelStore`, cancelling that scope before slow saves completed.
+- Behavioral invariant: `closeFile()` is a `suspend` function that saves directly and is awaited on a scope that outlives the navigation entry before the back stack is popped.
+- Automated test names: `EditorDraftPersistenceTest` save-completion coverage.
+
+### Per-keystroke parse results are generation-guarded
+
+- Symptom and affected release: rapid typing could apply stale parse results, dropping or misordering per-keystroke word-count updates.
+- Root cause: concurrent parse jobs had no ordering guarantee, so an older job could overwrite newer UI state.
+- Behavioral invariant: an `AtomicLong` parse generation tags each job; only the latest generation applies UI state, and older jobs are never cancelled mid-delta so no word-count update is silently dropped.
+
 ## Preferred direction
 
 - Prefer state-based `TextFieldState`. The editor uses `BasicTextField` because the writing canvas intentionally does not use Material filled or outlined field decorations.

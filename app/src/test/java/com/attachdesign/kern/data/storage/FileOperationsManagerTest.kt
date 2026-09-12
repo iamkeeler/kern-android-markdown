@@ -7,7 +7,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
+import io.mockk.coEvery
+import io.mockk.mockk
 import com.attachdesign.kern.test.MainDispatcherRule
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
@@ -42,7 +45,8 @@ class FileOperationsManagerTest {
         storageManager = StorageManager(context)
         fileOpsManager = FileOperationsManager(database, storageManager, context)
         project = ProjectEntity(id = 1, name = "TestProject", path = "TestProjectDir", isExternal = false, isSelected = true)
-        sandboxDir = storageManager.getAbsoluteFile(project, "").parentFile!!
+        // L7: getAbsoluteFile is suspend with internal IO dispatch.
+        sandboxDir = runBlocking { storageManager.getAbsoluteFile(project, "").parentFile!! }
         
         database.projectDao().insertProject(project)
     }
@@ -183,6 +187,66 @@ class FileOperationsManagerTest {
         // Verify DB
         assertNull(database.fileDao().getFileByPath(project.id, "docs"))
         assertNull(database.fileDao().getFileByPath(project.id, "docs/doc1.md"))
+    }
+
+    @Test
+    fun testDeleteNodeReportsFailureAndKeepsDbRowWhenDiskDeleteFails() = runTest {
+        // M11: a failed disk delete must surface as Result.failure and must not prune the DB.
+        val failingStorage = mockk<StorageManager>()
+        coEvery { failingStorage.deleteFile(project, "note.md") } returns false
+        val ops = FileOperationsManager(database, failingStorage, context)
+
+        database.fileDao().insertFile(
+            FileEntity(
+                projectId = project.id,
+                name = "note.md",
+                relativePath = "note.md",
+                isDirectory = false,
+                lastModified = System.currentTimeMillis(),
+                syncState = "SYNCED"
+            )
+        )
+
+        val result = ops.deleteNode(project, VfsNode.File("note.md", "note.md", 8L, System.currentTimeMillis()))
+
+        assertTrue(result.isFailure)
+        assertNotNull(database.fileDao().getFileByPath(project.id, "note.md"))
+    }
+
+    @Test
+    fun testMoveToTrashAndRestoreRoundTrip() = runTest {
+        // H4: trash/restore must actually move the bytes on disk and keep the DB in sync.
+        storageManager.writeFile(project, "note.md", "trash me")
+        database.fileDao().insertFile(
+            FileEntity(
+                projectId = project.id,
+                name = "note.md",
+                relativePath = "note.md",
+                isDirectory = false,
+                lastModified = System.currentTimeMillis(),
+                syncState = "SYNCED"
+            )
+        )
+
+        val node = VfsNode.File("note.md", "note.md", 8L, System.currentTimeMillis())
+        val trashResult = fileOpsManager.moveToTrash(project, node)
+
+        assertTrue(trashResult.isSuccess)
+        val trashNode = trashResult.getOrThrow()
+        assertTrue(trashNode.relativePath.startsWith(".trash/"))
+        assertFalse(File(sandboxDir, "TestProjectDir/note.md").exists())
+        assertTrue(File(sandboxDir, "TestProjectDir/${trashNode.relativePath}").exists())
+        assertEquals("trash me", storageManager.readFile(project, trashNode.relativePath))
+        assertNotNull(database.fileDao().getFileByPath(project.id, trashNode.relativePath))
+        assertNull(database.fileDao().getFileByPath(project.id, "note.md"))
+
+        val restoreResult = fileOpsManager.restoreFromTrash(project, trashNode, "note.md")
+
+        assertTrue(restoreResult.isSuccess)
+        assertTrue(File(sandboxDir, "TestProjectDir/note.md").exists())
+        assertFalse(File(sandboxDir, "TestProjectDir/${trashNode.relativePath}").exists())
+        assertEquals("trash me", storageManager.readFile(project, "note.md"))
+        assertNotNull(database.fileDao().getFileByPath(project.id, "note.md"))
     }
 
     @Test

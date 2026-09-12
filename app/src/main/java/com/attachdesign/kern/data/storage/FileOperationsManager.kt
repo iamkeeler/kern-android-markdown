@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -44,7 +45,9 @@ class FileOperationsManager(
                     readabilityGrade = currentFile?.readabilityGrade ?: "N/A"
                 )
                 db.fileDao().insertFile(dupEntity)
-                Result.success(VfsNode.File(newName, newPath, dupEntity.characterCount.toLong(), dupEntity.lastModified, dupEntity.syncState))
+                // VfsNode.File.size is bytes on disk, not characters (L5).
+                val byteSize = content.toByteArray(Charsets.UTF_8).size.toLong()
+                Result.success(VfsNode.File(newName, newPath, byteSize, dupEntity.lastModified, dupEntity.syncState))
             } else {
                 // Directory duplication
                 storageManager.createDirectory(project, newPath)
@@ -189,7 +192,8 @@ class FileOperationsManager(
             val path = node.relativePath
             val success = storageManager.deleteFile(project, path)
             if (!success) {
-                // If it fails on disk, we might still want to prune DB, but let's log it or proceed.
+                // M11: never prune the DB when the disk delete failed — report the failure.
+                return@withContext Result.failure(IOException("Failed to delete on disk: $path"))
             }
 
             if (!node.isDirectory) {
@@ -300,12 +304,14 @@ class FileOperationsManager(
             val trashDir = ".trash"
             val newName = "${System.currentTimeMillis()}_${node.name}"
             val newPath = "$trashDir/$newName"
-            
-            val success = storageManager.renameFile(project, node.relativePath, newPath)
+
+            // H4: cross-directory move must be verified copy-then-delete on SAF,
+            // never renameTo (which only renames within the same parent).
+            val success = storageManager.moveAcrossPaths(project, node.relativePath, newPath)
             if (!success) {
                 // Try creating directory first
                 storageManager.createDirectory(project, trashDir)
-                if (!storageManager.renameFile(project, node.relativePath, newPath)) {
+                if (!storageManager.moveAcrossPaths(project, node.relativePath, newPath)) {
                     return@withContext Result.failure(Exception("Failed to move to trash on disk"))
                 }
             }
@@ -366,7 +372,8 @@ class FileOperationsManager(
 
     suspend fun restoreFromTrash(project: ProjectEntity, trashNode: VfsNode, originalPath: String): Result<VfsNode> = withContext(Dispatchers.IO) {
         try {
-            val success = storageManager.renameFile(project, trashNode.relativePath, originalPath)
+            // H4: verified copy-then-delete on SAF, never renameTo across directories.
+            val success = storageManager.moveAcrossPaths(project, trashNode.relativePath, originalPath)
             if (!success) {
                 return@withContext Result.failure(Exception("Failed to restore from trash on disk"))
             }

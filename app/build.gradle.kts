@@ -9,6 +9,22 @@ plugins {
   alias(libs.plugins.firebase.crashlytics)
 }
 
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+
+// Room schema export location; required for exportSchema = true so schema
+// JSON is emitted and checked in under app/schemas for migration review.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+val isSigningConfigured = if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    true
+} else {
+    false
+}
+
 android {
     namespace = "com.attachdesign.kern"
     compileSdk = 36
@@ -24,15 +40,6 @@ android {
         targetSdk = 36
         versionCode = vCode
         versionName = "$vMajor.$vMinor.$vPatch"
-    }
-
-    val keystorePropertiesFile = rootProject.file("keystore.properties")
-    val keystoreProperties = Properties()
-    val isSigningConfigured = if (keystorePropertiesFile.exists()) {
-        keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
-        true
-    } else {
-        false
     }
 
     signingConfigs {
@@ -74,6 +81,25 @@ android {
     }
 }
 
+// M20: never silently fall back to the debug key for release artifacts. Fail the
+// build when a release package is requested without release signing configured.
+// Checked against the task graph (not at configuration time) so non-packaging
+// tasks such as testDebugUnitTest and lint keep working without a keystore.
+gradle.taskGraph.whenReady {
+    val packagingRelease = allTasks.any { task ->
+        val name = task.name
+        name.contains("Release") &&
+            (name.startsWith("assemble") || name.startsWith("bundle") || name.startsWith("package"))
+    }
+    if (packagingRelease && !isSigningConfigured) {
+        throw GradleException(
+            "Release signing is not configured: add keystore.properties at the repository root " +
+                "(storeFile, storePassword, keyAlias, keyPassword) or supply the CI signing " +
+                "secrets. Refusing to produce a release artifact signed with the debug key."
+        )
+    }
+}
+
 kotlin {
     jvmToolchain(17)
 }
@@ -102,7 +128,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.coil.compose)
   implementation(libs.coil.network.okhttp)
-  implementation("androidx.compose.material3:material3:1.5.0-alpha01")
+  implementation(libs.androidx.compose.material3)
   implementation("androidx.compose.material:material-icons-core")
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
@@ -121,7 +147,6 @@ dependencies {
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
   androidTestImplementation(libs.androidx.test.ext.junit)
-  testImplementation("org.robolectric:robolectric:4.14.1")
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
 
@@ -147,9 +172,6 @@ dependencies {
 }
 
 android {
-    lint {
-        abortOnError = false
-    }
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

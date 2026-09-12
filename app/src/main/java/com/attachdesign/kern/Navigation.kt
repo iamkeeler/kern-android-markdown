@@ -6,11 +6,15 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import android.net.Uri
 import android.widget.Toast
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
@@ -40,6 +44,8 @@ fun MainNavigation(
     val backStack = rememberNavBackStack(Main)
     val context = LocalContext.current
     val appContext = context.applicationContext
+    // H2: outlives any single nav entry, so the final save can't be cancelled by a pop.
+    val navScope = rememberCoroutineScope()
     val fileOpsManager = androidx.compose.runtime.remember {
         FileOperationsManager(db, storageManager, appContext)
     }
@@ -49,7 +55,9 @@ fun MainNavigation(
         try {
             val importer = IncomingFileImporter(appContext, db, storageManager)
             val imported = importer.import(Uri.parse(request.uriString), request.mimeType)
-            backStack.add(EditorKey(imported.projectId, imported.filePath))
+            // M17: don't stack duplicate entries on rapid external opens.
+            val editorKey = EditorKey(imported.projectId, imported.filePath)
+            if (backStack.lastOrNull() != editorKey) backStack.add(editorKey)
             Toast.makeText(context, "Imported ${imported.fileName}", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(context, e.message ?: "Cannot open file", Toast.LENGTH_LONG).show()
@@ -114,7 +122,8 @@ fun MainNavigation(
         entryProvider = entryProvider {
             entry<Main> {
                 MainScreen(
-                    onItemClick = { navKey -> backStack.add(navKey) },
+                    // M17: ignore rapid taps that would push duplicate entries.
+                    onItemClick = { navKey -> if (backStack.lastOrNull() != navKey) backStack.add(navKey) },
                     db = db,
                     storageManager = storageManager,
                     fileOpsManager = fileOpsManager,
@@ -123,7 +132,10 @@ fun MainNavigation(
             }
             entry<EditorKey> { key ->
                 val editorViewModel: EditorViewModel = viewModel {
-                    EditorViewModel(db, storageManager, fileOpsManager, appContext)
+                    // H7: SavedStateHandle for the unsaved draft; falls back to an
+                    // in-memory handle if the entry owner doesn't provide saved state.
+                    val handle = runCatching { createSavedStateHandle() }.getOrDefault(SavedStateHandle())
+                    EditorViewModel(db, storageManager, fileOpsManager, appContext, savedStateHandle = handle)
                 }
                 EditorScreen(
                     projectId = key.projectId,
@@ -131,8 +143,11 @@ fun MainNavigation(
                     focusOnStart = key.focusOnStart,
                     viewModel = editorViewModel,
                     onBackClick = {
-                        editorViewModel.closeFile()
-                        backStack.removeLastOrNull()
+                        // H2: await the final save on a scope that outlives the entry.
+                        navScope.launch {
+                            editorViewModel.closeFile()
+                            backStack.removeLastOrNull()
+                        }
                     },
                     modifier = Modifier.fillMaxSize()
                 )

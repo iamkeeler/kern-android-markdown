@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
@@ -47,11 +48,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -85,7 +89,6 @@ import com.attachdesign.kern.parser.IndexRange
 import com.attachdesign.kern.parser.IndexTransformationMatrix
 import com.attachdesign.kern.ui.main.InputDialog
 import com.attachdesign.kern.ui.theme.AppColorTheme
-import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 import com.attachdesign.kern.ui.settings.SettingsTabsContent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,15 +112,13 @@ fun EditorScreen(
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
 
-    ApplyKernSystemBars(theme)
-
     LaunchedEffect(viewModel.documentTextFieldState) {
         snapshotFlow { viewModel.documentTextFieldState.text.toString() }
             .collectLatest(viewModel::onDocumentTextChanged)
     }
 
-    var showRenameDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by rememberSaveable { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
 
     if (showRenameDialog) {
         InputDialog(
@@ -194,7 +195,20 @@ fun EditorScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .clip(CircularRevealShape(revealProgress.value, touchPos.x, touchPos.y))
+            .drawWithContent {
+                // L2: read the animation progress in the draw phase so the 500ms
+                // reveal doesn't recompose the whole editor per frame.
+                val progress = revealProgress.value
+                if (progress >= 1f) {
+                    drawContent()
+                } else {
+                    val outline = CircularRevealShape(progress, touchPos.x, touchPos.y)
+                        .createOutline(size, layoutDirection, this)
+                    clipPath((outline as Outline.Generic).path) {
+                        drawContent()
+                    }
+                }
+            }
             .background(uiState.activeTheme.background)
     ) {
         val widthDp = maxWidth
@@ -299,7 +313,7 @@ fun EditorScreen(
                         }
                 ) {
                     // Floating Formatting Toolbar State
-                    var isToolbarMinimized by remember { mutableStateOf(false) }
+                    var isToolbarMinimized by rememberSaveable { mutableStateOf(false) }
 
                     val overscrollState = rememberElasticOverscrollState()
 
@@ -1067,7 +1081,7 @@ fun ParagraphField(
                 }
             } else if (viewMode == ViewMode.RENDERED && !isFocused && fullImage != null) {
                 val image = fullImage
-                val imageModel by produceState<String?>(image.extra, image.extra, imageResolutionKey) {
+                val imageModel by produceState<String?>(image.extra, imageResolutionKey) {
                     this.value = image.extra?.let { resolveImageModel(it) } ?: image.extra
                 }
                 SubcomposeAsyncImage(
@@ -1195,7 +1209,7 @@ private fun RenderedMarkdownText(
                     placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
                 )
             ) {
-                val imageModel by produceState<String?>(span.extra, span.extra, imageResolutionKey) {
+                val imageModel by produceState<String?>(span.extra, imageResolutionKey) {
                     this.value = span.extra?.let { resolveImageModel(it) } ?: span.extra
                 }
                 SubcomposeAsyncImage(
@@ -1238,7 +1252,8 @@ private fun BoxScope.ChecklistToggleOverlay(onChecklistToggle: () -> Unit) {
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .width(28.dp)
+                // M18: 48dp touch target; the visual checkbox affordance stays narrow.
+                .width(48.dp)
                 .fillMaxHeight()
                 .clickable(
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
@@ -1416,7 +1431,7 @@ private fun HeaderAction(theme: AppColorTheme, onHeaderClick: () -> Unit, onHead
     var expanded by remember { mutableStateOf(false) }
     Box(contentAlignment = Alignment.Center) {
         Box(
-            modifier = Modifier.size(theme.dimensions.iconHuge).combinedClickable(onClick = onHeaderClick, onLongClick = { expanded = true }).semantics { contentDescription = "Toggle header level" },
+            modifier = Modifier.size(theme.dimensions.iconHuge).combinedClickable(onClick = onHeaderClick, onLongClick = { expanded = true }).semantics { contentDescription = "Toggle header level. Long press to choose level 1 to 6." },
             contentAlignment = Alignment.Center
         ) {
             Text("H", fontWeight = FontWeight.Black, fontSize = theme.typography.subtitle)
