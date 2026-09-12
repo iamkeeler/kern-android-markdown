@@ -97,7 +97,7 @@ enum class SortMode(val displayName: String) {
     RECENT("[REC]")
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
@@ -163,9 +163,9 @@ fun MainScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     var sortMode by rememberSaveable(
-        saver = Saver(
-            save = { it.name },
-            restore = { SortMode.valueOf(it) }
+        saver = Saver<MutableState<SortMode>, String>(
+            save = { it.value.name },
+            restore = { mutableStateOf(SortMode.valueOf(it)) }
         )
     ) { mutableStateOf(SortMode.ALPHA_ASC) }
     var isSortMenuOpen by remember { mutableStateOf(false) }
@@ -264,7 +264,7 @@ fun MainScreen(
                 containerColor = theme.background,
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 bottomBar = {
-                    FlexibleBottomAppBar(
+                    BottomAppBar(
                         // L18: inverted bar derived from the theme instead of hardcoded hex.
                         containerColor = if (!theme.isDark) theme.textPrimary else theme.surface,
                         contentPadding = PaddingValues(horizontal = theme.dimensions.spacingLarge),

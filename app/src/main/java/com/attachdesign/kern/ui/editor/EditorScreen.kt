@@ -198,6 +198,9 @@ fun EditorScreen(
             .drawWithContent {
                 // L2: read the animation progress in the draw phase so the 500ms
                 // reveal doesn't recompose the whole editor per frame.
+                // drawContent() is a ContentDrawScope member; the clipPath block
+                // below only exposes DrawScope, so capture the outer scope explicitly.
+                val contentDrawScope = this
                 val progress = revealProgress.value
                 if (progress >= 1f) {
                     drawContent()
@@ -205,7 +208,7 @@ fun EditorScreen(
                     val outline = CircularRevealShape(progress, touchPos.x, touchPos.y)
                         .createOutline(size, layoutDirection, this)
                     clipPath((outline as Outline.Generic).path) {
-                        drawContent()
+                        contentDrawScope.drawContent()
                     }
                 }
             }
