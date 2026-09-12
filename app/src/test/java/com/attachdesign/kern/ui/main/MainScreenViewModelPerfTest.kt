@@ -10,7 +10,7 @@ import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.test.MainDispatcherRule
 import io.mockk.coEvery
-import io.mockk.coVerify
+import io.mockk.verify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -64,13 +64,13 @@ class MainScreenViewModelPerfTest {
         every { db.fileDao() } returns fileDao
         every { db.quoteDao() } returns mockk(relaxed = true)
 
-        coEvery { projectDao.getAllProjects() } returns projects
-        coEvery { projectDao.getAllProjectsFlow() } returns flowOf(projects)
-        coEvery { projectDao.getSelectedProjectFlow() } returns flowOf(null)
-        coEvery { projectDao.getSelectedProject() } returns null
+        every { projectDao.getAllProjects() } returns projects
+        every { projectDao.getAllProjectsFlow() } returns flowOf(projects)
+        every { projectDao.getSelectedProjectFlow() } returns flowOf(null)
+        every { projectDao.getSelectedProject() } returns null
 
         val batchedQueryCount = AtomicInteger(0)
-        coEvery { fileDao.getFilesForProjects(any()) } answers {
+        every { fileDao.getFilesForProjects(any()) } answers {
             batchedQueryCount.incrementAndGet()
             dbFiles
         }
@@ -93,7 +93,7 @@ class MainScreenViewModelPerfTest {
             batchedQueryCount.get()
         )
         // …and never the per-project query (an N+1 regression would call it once per project).
-        coVerify(exactly = 0) { fileDao.getFilesForProject(any()) }
+        verify(exactly = 0) { fileDao.getFilesForProject(any()) }
 
         // The batched rows must actually be merged into the combined list,
         // with DB metadata (sync state) enriched onto the disk nodes.
@@ -123,17 +123,17 @@ class MainScreenViewModelPerfTest {
         every { db.fileDao() } returns fileDao
         every { db.quoteDao() } returns mockk(relaxed = true)
 
-        coEvery { projectDao.getAllProjects() } returns projects
-        coEvery { projectDao.getAllProjectsFlow() } returns emptyFlow()
-        coEvery { projectDao.getSelectedProjectFlow() } returns emptyFlow()
-        coEvery { projectDao.getSelectedProject() } returns null
-        coEvery { fileDao.getFilesForProjects(any()) } returns emptyList()
+        every { projectDao.getAllProjects() } returns projects
+        every { projectDao.getAllProjectsFlow() } returns emptyFlow()
+        every { projectDao.getSelectedProjectFlow() } returns emptyFlow()
+        every { projectDao.getSelectedProject() } returns null
+        every { fileDao.getFilesForProjects(any()) } returns emptyList()
 
         val viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
         advanceUntilIdle()
 
         // The single batched query must cover every project — otherwise some
         // projects' files would silently go missing from the combined list.
-        coVerify(atLeast = 1) { fileDao.getFilesForProjects(listOf(1L, 2L)) }
+        verify(atLeast = 1) { fileDao.getFilesForProjects(listOf(1L, 2L)) }
     }
 }

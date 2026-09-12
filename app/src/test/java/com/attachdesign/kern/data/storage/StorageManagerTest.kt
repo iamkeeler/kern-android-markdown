@@ -14,7 +14,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
-import org.junit.ClassRule
+import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
@@ -28,16 +28,14 @@ import java.io.File
 @Config(sdk = [34])
 class StorageManagerTest {
 
-    companion object {
-        /**
-         * M23: per-class temp directory instead of a fixed shared real path, so
-         * parallel workers or residue from an interrupted run cannot collide.
-         * Per-test isolation is still provided by tearDown deleting [sandboxDir].
-         */
-        @ClassRule
-        @JvmField
-        val classTempDir = TemporaryFolder()
-    }
+    /**
+     * M23: per-test temp directory instead of a fixed shared real path, so
+     * parallel workers or residue from an interrupted run cannot collide.
+     * (An instance rule: @ClassRule TemporaryFolder does not initialize
+     * reliably under RobolectricTestRunner.)
+     */
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     private lateinit var context: Context
     private lateinit var storageManager: StorageManager
@@ -47,7 +45,7 @@ class StorageManagerTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        val kernRoot = File(classTempDir.root, "Kern")
+        val kernRoot = File(tempFolder.root, "Kern")
         storageManager = StorageManager(context, kernRoot)
         sandboxDir = File(kernRoot, "sandbox")
         project = ProjectEntity(name = "TestProject", path = "TestProjectDir", isExternal = false, isSelected = false)

@@ -275,6 +275,11 @@ object MarkdownParser {
                     i = closeIdx + runLength
                     continue
                 }
+                // M3: no equal-length closer — the whole run is literal text.
+                // Skip past it instead of retrying at i + 1, so `` ``a` ``
+                // can't form a code span out of the opening run's tail.
+                i = runEnd
+                continue
             }
             // Image (![text](url))
             if (text[i] == '!' && i + 1 < n && text[i + 1] == '[') {

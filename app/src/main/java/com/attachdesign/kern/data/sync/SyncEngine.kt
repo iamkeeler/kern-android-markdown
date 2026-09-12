@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import java.text.SimpleDateFormat
@@ -32,7 +33,8 @@ data class SyncStatus(
 
 class SyncEngine(
     private val fileDao: FileDao,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val _syncStatus = MutableStateFlow(SyncStatus())
     val syncStatus: StateFlow<SyncStatus> = _syncStatus.asStateFlow()
@@ -94,7 +96,7 @@ class SyncEngine(
         }
 
         try {
-            scope.launch(Dispatchers.IO) {
+            scope.launch(ioDispatcher) {
                 try {
                     _syncStatus.update {
                         it.copy(

@@ -89,7 +89,7 @@ class SyncEngineTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         val scope = TestScope(testDispatcher)
         val fakeDao = FakeErrorFileDao()
-        val syncEngine = SyncEngine(fakeDao, scope)
+        val syncEngine = SyncEngine(fakeDao, scope, testDispatcher)
 
         // Set provider so it doesn't skip
         syncEngine.setProvider(SyncProvider.GOOGLE_DRIVE)
@@ -111,7 +111,7 @@ class SyncEngineTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         val scope = TestScope(testDispatcher)
         val fakeDao = FakePendingFileDao()
-        val syncEngine = SyncEngine(fakeDao, scope)
+        val syncEngine = SyncEngine(fakeDao, scope, testDispatcher)
 
         // Provider defaults to NONE.
         syncEngine.triggerSync(testProject())
@@ -130,7 +130,7 @@ class SyncEngineTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         val scope = TestScope(testDispatcher)
         val fakeDao = FakePendingFileDao()
-        val syncEngine = SyncEngine(fakeDao, scope)
+        val syncEngine = SyncEngine(fakeDao, scope, testDispatcher)
 
         syncEngine.setProvider(SyncProvider.GOOGLE_DRIVE)
         syncEngine.triggerSync(testProject())
