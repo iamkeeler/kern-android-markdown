@@ -24,6 +24,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -80,6 +82,7 @@ class MainScreenViewModelTest {
         coEvery { projectDao.getProjectById(any()) } returns null
         coEvery { fileDao.deleteFilesForProject(any()) } returns Unit
         coEvery { fileDao.deleteFile(any(), any()) } returns Unit
+        coEvery { storageManager.createFile(any(), any()) } returns true
     }
 
     @After
@@ -230,6 +233,25 @@ class MainScreenViewModelTest {
                 it.projectId == 2L
             })
         }
+    }
+
+    @Test
+    fun `createFile does not insert into database if storageManager returns false`() = runTest {
+        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
+        coEvery { projectDao.getSelectedProject() } returns proj
+        coEvery { storageManager.createFile(any(), any()) } returns false
+
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+
+        var callbackCalled = false
+        viewModel.createFile("failed_file.md", proj) {
+            callbackCalled = true
+        }
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { storageManager.createFile(proj, "failed_file.md") }
+        coVerify(exactly = 0) { fileDao.insertFile(match { it.name == "failed_file.md" }) }
+        assertFalse(callbackCalled)
     }
 
     @Test

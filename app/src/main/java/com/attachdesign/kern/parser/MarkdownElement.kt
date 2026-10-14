@@ -14,7 +14,24 @@ enum class MarkdownElementType {
     TOKEN_LINK_URL,
     TOKEN_BLOCKQUOTE,
     TOKEN_LIST_BULLET,
-    TOKEN_ESCAPE_CHAR
+    TOKEN_ESCAPE_CHAR;
+
+    val isSyntaxToken: Boolean get() = this in syntaxTokens
+
+    companion object {
+        val syntaxTokens: Set<MarkdownElementType> = setOf(
+            TOKEN_HEADER,
+            TOKEN_BOLD,
+            TOKEN_ITALIC,
+            TOKEN_STRIKETHROUGH,
+            TOKEN_INLINE_CODE,
+            TOKEN_LINK_TEXT,
+            TOKEN_LINK_URL,
+            TOKEN_BLOCKQUOTE,
+            TOKEN_LIST_BULLET,
+            TOKEN_ESCAPE_CHAR
+        )
+    }
 }
 
 enum class MarkdownBlockType {

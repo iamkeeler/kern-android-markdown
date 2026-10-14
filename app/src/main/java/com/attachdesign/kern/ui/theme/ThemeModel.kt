@@ -6,8 +6,15 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.text.font.FontFamily
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
+import com.attachdesign.kern.data.local.AppDatabase
+import com.attachdesign.kern.data.local.SettingKeys
 
 @Serializable
 data class AppThemeJson(
@@ -189,5 +196,48 @@ object ThemeEngine {
         } catch (e: Exception) {
             null
         }
+    }
+
+    fun observeActiveTheme(db: AppDatabase): Flow<AppColorTheme> = combine(
+        db.settingDao().getSettingFlow(SettingKeys.SELECTED_THEME_ID),
+        db.settingDao().getSettingFlow(SettingKeys.EDITOR_FONT_FAMILY)
+    ) { themeIdSetting, fontSetting ->
+        val themeId = themeIdSetting?.value?.toLongOrNull()
+        val savedFont = fontSetting?.value ?: "serif"
+        var activeTheme = DefaultLight.toColorTheme()
+        if (themeId != null) {
+            val dbTheme = db.themeDao().getThemeById(themeId)
+            if (dbTheme != null) {
+                val themeJson = deserialize(dbTheme.jsonString)
+                if (themeJson != null) {
+                    activeTheme = themeJson.toColorTheme()
+                }
+            }
+        }
+        activeTheme.copy(editorFontFamily = savedFont)
+    }.flowOn(Dispatchers.IO)
+
+    fun getActiveTheme(db: AppDatabase): AppColorTheme {
+        val themeId = db.settingDao().getSetting(SettingKeys.SELECTED_THEME_ID)?.value?.toLongOrNull()
+        val savedFont = db.settingDao().getSetting(SettingKeys.EDITOR_FONT_FAMILY)?.value ?: "serif"
+        var activeTheme = DefaultLight.toColorTheme()
+        if (themeId != null) {
+            val dbTheme = db.themeDao().getThemeById(themeId)
+            if (dbTheme != null) {
+                val themeJson = deserialize(dbTheme.jsonString)
+                if (themeJson != null) {
+                    activeTheme = themeJson.toColorTheme()
+                }
+            }
+        }
+        return activeTheme.copy(editorFontFamily = savedFont)
+    }
+}
+
+fun AppColorTheme.toFontFamily(): FontFamily {
+    return when (editorFontFamily.lowercase()) {
+        "sans-serif", "sansserif" -> FontFamily.SansSerif
+        "monospace" -> FontFamily.Monospace
+        else -> FontFamily.Serif
     }
 }

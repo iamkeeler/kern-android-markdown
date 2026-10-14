@@ -45,7 +45,7 @@ object MarkdownDocumentPresentationPlanner {
                 if (start < end) {
                     elements += DocumentElementRange(element.type, start, end, block.blockType)
                 }
-                if (!hideInactiveTokens || !element.type.isSyntaxToken()) return@forEach
+                if (!hideInactiveTokens || !element.type.isSyntaxToken) return@forEach
                 if (element.type == MarkdownElementType.TOKEN_LIST_BULLET) return@forEach
                 if ((element.constructStart to element.constructEnd) in imageConstructs) return@forEach
 
@@ -79,19 +79,5 @@ object MarkdownDocumentPresentationPlanner {
         MarkdownBlockType.HEADER_6 -> MarkdownElementType.HEADER_6
         MarkdownBlockType.BLOCKQUOTE -> MarkdownElementType.BLOCKQUOTE
         else -> MarkdownElementType.LIST_BULLET
-    }
-
-    private fun MarkdownElementType.isSyntaxToken(): Boolean = when (this) {
-        MarkdownElementType.TOKEN_HEADER,
-        MarkdownElementType.TOKEN_BOLD,
-        MarkdownElementType.TOKEN_ITALIC,
-        MarkdownElementType.TOKEN_STRIKETHROUGH,
-        MarkdownElementType.TOKEN_INLINE_CODE,
-        MarkdownElementType.TOKEN_LINK_TEXT,
-        MarkdownElementType.TOKEN_LINK_URL,
-        MarkdownElementType.TOKEN_BLOCKQUOTE,
-        MarkdownElementType.TOKEN_LIST_BULLET,
-        MarkdownElementType.TOKEN_ESCAPE_CHAR -> true
-        else -> false
     }
 }

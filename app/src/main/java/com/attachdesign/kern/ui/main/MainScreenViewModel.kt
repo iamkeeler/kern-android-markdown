@@ -16,8 +16,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.attachdesign.kern.ui.common.SnackbarEvent
 import com.attachdesign.kern.data.local.QuoteEntity
 
 /** Flat list item for the unified single-scroll file index. */
@@ -52,18 +54,13 @@ class MainScreenViewModel(
         private var hasSplashRun = false
     }
 
-    private val _activeProject = MutableStateFlow<ProjectEntity?>(null)
-    private val _currentPath   = MutableStateFlow("")
-    private val _drillFiles    = MutableStateFlow<List<VfsNode>>(emptyList())
-    private val _allItems      = MutableStateFlow<List<FileListItem>>(emptyList())
-    private val _isCreateDialogOpen = MutableStateFlow(false)
-    private val _activeQuote   = MutableStateFlow<QuoteEntity?>(null)
-    private val _isLoading     = MutableStateFlow(true)
-    private val _canNavigateBack = MutableStateFlow(false)
-    private val _canNavigateForward = MutableStateFlow(false)
-    private val _showSplash     = MutableStateFlow(!hasSplashRun)
+    private val _uiState = MutableStateFlow(
+        ProjectExplorerUiState(
+            showSplash = !hasSplashRun,
+            isLoading = true
+        )
+    )
 
-    data class SnackbarEvent(val message: String, val actionLabel: String? = null, val onAction: (() -> Unit)? = null)
     private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
     val snackbarEvent = _snackbarEvent.asSharedFlow()
 
@@ -72,36 +69,14 @@ class MainScreenViewModel(
 
     val explorerState: StateFlow<ProjectExplorerUiState> = combine(
         db.projectDao().getAllProjectsFlow(),
-        _activeProject,
-        _currentPath,
-        _drillFiles,
-        _allItems,
-        _isCreateDialogOpen,
-        _activeQuote,
-        _isLoading,
-        _canNavigateBack,
-        _canNavigateForward,
-        _showSplash
-    ) { args ->
-        @Suppress("UNCHECKED_CAST")
-        ProjectExplorerUiState(
-            projects        = args[0] as List<ProjectEntity>,
-            activeProject   = args[1] as ProjectEntity?,
-            currentPath     = args[2] as String,
-            drillFiles      = args[3] as List<VfsNode>,
-            allItems        = args[4] as List<FileListItem>,
-            isCreateProjectDialogOpen = args[5] as Boolean,
-            activeQuote     = args[6] as QuoteEntity?,
-            isLoading       = args[7] as Boolean,
-            canNavigateBack = args[8] as Boolean,
-            canNavigateForward = args[9] as Boolean,
-            showSplash      = args[10] as Boolean
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProjectExplorerUiState(showSplash = !hasSplashRun))
+        _uiState
+    ) { projects, state ->
+        state.copy(projects = projects)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), _uiState.value)
 
     fun dismissSplash() {
         hasSplashRun = true
-        _showSplash.value = false
+        _uiState.update { it.copy(showSplash = false) }
     }
 
     init {
@@ -112,7 +87,7 @@ class MainScreenViewModel(
             selectRandomQuote()
             val selected = withContext(ioDispatcher) { db.projectDao().getSelectedProject() }
             if (selected != null) {
-                _activeProject.value = selected
+                _uiState.update { it.copy(activeProject = selected) }
                 if (selected.isExternal) {
                     scanProject(selected)
                 } else {
@@ -121,11 +96,11 @@ class MainScreenViewModel(
             } else {
                 val defaultProj = withContext(ioDispatcher) { db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" } }
                 if (defaultProj != null) {
-                    _activeProject.value = defaultProj
+                    _uiState.update { it.copy(activeProject = defaultProj) }
                     loadDrillFiles(defaultProj, "")
                 }
             }
-            _isLoading.value = false
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -323,14 +298,15 @@ class MainScreenViewModel(
             items += FileListItem.ProjectHeader(proj)
             enriched.forEach { items += FileListItem.FileRow(it, proj) }
         }
-        _allItems.value = items
+        _uiState.update { it.copy(allItems = items) }
     }
 
     // ── Folder drill-down ──────────────────────────────────────────────────────
 
     private fun changeDestination(project: ProjectEntity?, path: String, saveToBackStack: Boolean = true, clearForward: Boolean = true) {
-        val prevProj = _activeProject.value
-        val prevPath = _currentPath.value
+        val currentState = _uiState.value
+        val prevProj = currentState.activeProject
+        val prevPath = currentState.currentPath
 
         if (saveToBackStack) {
             val prevDest = Pair(prevProj, prevPath)
@@ -342,11 +318,14 @@ class MainScreenViewModel(
             forwardStack.clear()
         }
 
-        _activeProject.value = project
-        _currentPath.value = path
-
-        _canNavigateBack.value = backStack.isNotEmpty()
-        _canNavigateForward.value = forwardStack.isNotEmpty()
+        _uiState.update {
+            it.copy(
+                activeProject = project,
+                currentPath = path,
+                canNavigateBack = backStack.isNotEmpty(),
+                canNavigateForward = forwardStack.isNotEmpty()
+            )
+        }
 
         viewModelScope.launch {
             if (project == null) {
@@ -363,7 +342,7 @@ class MainScreenViewModel(
 
     fun navigateBack() {
         if (backStack.isEmpty()) return
-        val currentDest = Pair(_activeProject.value, _currentPath.value)
+        val currentDest = Pair(_uiState.value.activeProject, _uiState.value.currentPath)
         forwardStack.add(currentDest)
 
         val prevDest = backStack.removeAt(backStack.lastIndex)
@@ -372,7 +351,7 @@ class MainScreenViewModel(
 
     fun navigateForward() {
         if (forwardStack.isEmpty()) return
-        val currentDest = Pair(_activeProject.value, _currentPath.value)
+        val currentDest = Pair(_uiState.value.activeProject, _uiState.value.currentPath)
         backStack.add(currentDest)
 
         val nextDest = forwardStack.removeAt(forwardStack.lastIndex)
@@ -385,8 +364,8 @@ class MainScreenViewModel(
 
     fun navigateUp() {
         viewModelScope.launch {
-            val current = _currentPath.value
-            val proj = _activeProject.value
+            val current = _uiState.value.currentPath
+            val proj = _uiState.value.activeProject
             if (proj == null || (proj.isExternal && current.isEmpty())) {
                 val defaultProj = withContext(ioDispatcher) {
                     db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" }
@@ -443,7 +422,7 @@ class MainScreenViewModel(
             enriched = externalDirs + enriched
         }
 
-        _drillFiles.value = enriched
+        _uiState.update { it.copy(drillFiles = enriched) }
     }
 
     fun scanProject(project: ProjectEntity) {
@@ -462,9 +441,9 @@ class MainScreenViewModel(
             }
             
             refreshAllFiles()
-            val active = _activeProject.value
+            val active = _uiState.value.activeProject
             if (active != null && active.id == project.id) {
-                loadDrillFiles(active, _currentPath.value)
+                loadDrillFiles(active, _uiState.value.currentPath)
             }
         }
     }
@@ -496,7 +475,7 @@ class MainScreenViewModel(
 
     // ── Dialog / create ────────────────────────────────────────────────────────
 
-    fun setCreateDialogOpen(open: Boolean) { _isCreateDialogOpen.value = open }
+    fun setCreateDialogOpen(open: Boolean) { _uiState.update { it.copy(isCreateProjectDialogOpen = open) } }
 
     fun createProject(name: String, isExternal: Boolean, path: String? = null) {
         viewModelScope.launch {
@@ -525,14 +504,18 @@ class MainScreenViewModel(
     }
 
     fun createFile(name: String, targetProject: ProjectEntity? = null, onCreated: ((String) -> Unit)? = null) {
-        val destinationProject = targetProject ?: _activeProject.value
-        val destinationPath = _currentPath.value
-        val isDrillDown = _activeProject.value != null
+        val currentState = _uiState.value
+        val destinationProject = targetProject ?: currentState.activeProject
+        val destinationPath = currentState.currentPath
+        val isDrillDown = currentState.activeProject != null
         viewModelScope.launch {
             val proj = destinationProject ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
             val fileName = if (name.endsWith(".md")) name else "$name.md"
             val relativePath = if (destinationPath.isEmpty()) fileName else "$destinationPath/$fileName"
-            storageManager.createFile(proj, relativePath)
+            val created = storageManager.createFile(proj, relativePath)
+            if (!created) {
+                return@launch
+            }
             withContext(ioDispatcher) {
                 db.fileDao().insertFile(FileEntity(projectId = proj.id, name = fileName,
                     relativePath = relativePath, isDirectory = false,
@@ -549,9 +532,10 @@ class MainScreenViewModel(
     }
 
     fun createFolder(name: String, targetProject: ProjectEntity? = null) {
-        val destinationProject = targetProject ?: _activeProject.value
-        val destinationPath = _currentPath.value
-        val isDrillDown = _activeProject.value != null
+        val currentState = _uiState.value
+        val destinationProject = targetProject ?: currentState.activeProject
+        val destinationPath = currentState.currentPath
+        val isDrillDown = currentState.activeProject != null
         viewModelScope.launch {
             val proj = destinationProject ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
             val relativePath = if (destinationPath.isEmpty()) name else "$destinationPath/$name"
@@ -574,8 +558,8 @@ class MainScreenViewModel(
             val result = fileOpsManager.moveToTrash(project, node)
             val trashNode = result.getOrNull() ?: return@launch
             
-            val active = _activeProject.value
-            if (active != null) loadDrillFiles(active, _currentPath.value)
+            val active = _uiState.value.activeProject
+            if (active != null) loadDrillFiles(active, _uiState.value.currentPath)
             else refreshAllFiles()
 
             val deleteJob = viewModelScope.launch {
@@ -587,8 +571,8 @@ class MainScreenViewModel(
                 deleteJob.cancel()
                 viewModelScope.launch {
                     fileOpsManager.restoreFromTrash(project, trashNode, node.relativePath)
-                    val act = _activeProject.value
-                    if (act != null) loadDrillFiles(act, _currentPath.value)
+                    val act = _uiState.value.activeProject
+                    if (act != null) loadDrillFiles(act, _uiState.value.currentPath)
                     else refreshAllFiles()
                 }
             })
@@ -611,8 +595,8 @@ class MainScreenViewModel(
     fun renameNode(node: VfsNode, newName: String, project: ProjectEntity) {
         viewModelScope.launch {
             fileOpsManager.renameNode(project, node, newName)
-            val active = _activeProject.value
-            if (active != null) loadDrillFiles(active, _currentPath.value)
+            val active = _uiState.value.activeProject
+            if (active != null) loadDrillFiles(active, _uiState.value.currentPath)
             else refreshAllFiles()
         }
     }
@@ -620,8 +604,8 @@ class MainScreenViewModel(
     fun duplicateNode(node: VfsNode, project: ProjectEntity) {
         viewModelScope.launch {
             fileOpsManager.duplicateNode(project, node)
-            val active = _activeProject.value
-            if (active != null) loadDrillFiles(active, _currentPath.value)
+            val active = _uiState.value.activeProject
+            if (active != null) loadDrillFiles(active, _uiState.value.currentPath)
             else refreshAllFiles()
         }
     }
@@ -658,8 +642,8 @@ class MainScreenViewModel(
                     )
                 }
             }
-            val active = _activeProject.value
-            if (active != null) loadDrillFiles(active, _currentPath.value)
+            val active = _uiState.value.activeProject
+            if (active != null) loadDrillFiles(active, _uiState.value.currentPath)
             else refreshAllFiles()
         }
     }
@@ -691,8 +675,8 @@ class MainScreenViewModel(
                     }
                 }
             }
-            val active = _activeProject.value
-            if (active != null) loadDrillFiles(active, _currentPath.value)
+            val active = _uiState.value.activeProject
+            if (active != null) loadDrillFiles(active, _uiState.value.currentPath)
             else refreshAllFiles()
         }
     }
@@ -733,7 +717,7 @@ class MainScreenViewModel(
     private suspend fun selectRandomQuote() {
         val quotes = withContext(ioDispatcher) { db.quoteDao().getAllQuotes() }
         if (quotes.isNotEmpty()) {
-            _activeQuote.value = quotes.random()
+            _uiState.update { it.copy(activeQuote = quotes.random()) }
         }
     }
 }

@@ -116,4 +116,29 @@ class MarkdownDocumentScannerTest {
         assertTrue(blocks.any { it.blockType == MarkdownBlockType.CODE_BLOCK })
         assertEquals(source, MarkdownParser.joinParsedDocument(blocks))
     }
+
+    @Test
+    fun `parseCodeFence detects backtick and tilde fences with indent up to 3`() {
+        assertEquals(
+            MarkdownDocumentScanner.CodeFenceInfo('`', 3, 0),
+            MarkdownDocumentScanner.parseCodeFence("```")
+        )
+        assertEquals(
+            MarkdownDocumentScanner.CodeFenceInfo('~', 4, 2),
+            MarkdownDocumentScanner.parseCodeFence("  ~~~~kotlin")
+        )
+        assertEquals(
+            MarkdownDocumentScanner.CodeFenceInfo('`', 5, 3),
+            MarkdownDocumentScanner.parseCodeFence("   `````")
+        )
+        // 4 spaces is an indented code block, not a fence
+        assertEquals(null, MarkdownDocumentScanner.parseCodeFence("    ```"))
+        // Fewer than 3 characters is not a fence
+        assertEquals(null, MarkdownDocumentScanner.parseCodeFence("``"))
+        assertEquals(null, MarkdownDocumentScanner.parseCodeFence("~~"))
+        // Blank or non-fence
+        assertEquals(null, MarkdownDocumentScanner.parseCodeFence(""))
+        assertEquals(null, MarkdownDocumentScanner.parseCodeFence("   "))
+        assertEquals(null, MarkdownDocumentScanner.parseCodeFence("regular text"))
+    }
 }

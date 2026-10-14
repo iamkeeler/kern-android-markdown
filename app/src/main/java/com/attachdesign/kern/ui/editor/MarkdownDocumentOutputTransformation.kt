@@ -22,11 +22,13 @@ class MarkdownDocumentOutputTransformation(
     private val tokenColor: Color,
     private val codeBackgroundColor: Color
 ) : OutputTransformation {
+    private val styleProvider = MarkdownSpanStyleProvider(tokenColor, codeBackgroundColor, bodySize)
+
     override fun TextFieldBuffer.transformOutput() {
         val source = asCharSequence().toString()
         if (source.isEmpty()) return
         if (viewMode == ViewMode.RAW_PLAIN_TEXT) {
-            addStyle(SpanStyle(fontFamily = FontFamily.Monospace), 0, length)
+            addStyle(styleProvider.styleForMonospaceRaw(), 0, length)
             return
         }
 
@@ -151,55 +153,11 @@ class MarkdownDocumentOutputTransformation(
 
     private fun TextFieldBuffer.applyBlockStyle(blockType: MarkdownBlockType, start: Int, end: Int) {
         if (start >= end) return
-        val style = when (blockType) {
-            MarkdownBlockType.HEADER_1 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = bodySize * 1.75f)
-            MarkdownBlockType.HEADER_2 -> SpanStyle(fontWeight = FontWeight.Bold, fontSize = bodySize * 1.55f)
-            MarkdownBlockType.HEADER_3 -> SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = bodySize * 1.35f)
-            MarkdownBlockType.HEADER_4,
-            MarkdownBlockType.HEADER_5,
-            MarkdownBlockType.HEADER_6 -> SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = bodySize * 1.15f)
-            MarkdownBlockType.CODE_BLOCK -> SpanStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = bodySize * 0.90f,
-                background = codeBackgroundColor
-            )
-            MarkdownBlockType.BLOCKQUOTE -> SpanStyle(
-                color = tokenColor,
-                fontStyle = FontStyle.Italic
-            )
-            else -> return
-        }
-        addStyle(style, start, end)
+        styleProvider.styleForBlock(blockType)?.let { addStyle(it, start, end) }
     }
 
     private fun TextFieldBuffer.applyElementStyle(type: MarkdownElementType, start: Int, end: Int) {
         if (start >= end) return
-        val style = when (type) {
-            MarkdownElementType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
-            MarkdownElementType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
-            MarkdownElementType.STRIKETHROUGH -> SpanStyle(textDecoration = TextDecoration.LineThrough)
-            MarkdownElementType.INLINE_CODE -> SpanStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = bodySize * 0.90f,
-                background = codeBackgroundColor
-            )
-            MarkdownElementType.LINK -> SpanStyle(
-                color = tokenColor,
-                textDecoration = TextDecoration.Underline
-            )
-            MarkdownElementType.IMAGE -> SpanStyle(color = tokenColor, fontStyle = FontStyle.Italic)
-            MarkdownElementType.TOKEN_HEADER,
-            MarkdownElementType.TOKEN_BOLD,
-            MarkdownElementType.TOKEN_ITALIC,
-            MarkdownElementType.TOKEN_STRIKETHROUGH,
-            MarkdownElementType.TOKEN_INLINE_CODE,
-            MarkdownElementType.TOKEN_LINK_TEXT,
-            MarkdownElementType.TOKEN_LINK_URL,
-            MarkdownElementType.TOKEN_BLOCKQUOTE,
-            MarkdownElementType.TOKEN_LIST_BULLET,
-            MarkdownElementType.TOKEN_ESCAPE_CHAR -> SpanStyle(color = tokenColor)
-            else -> return
-        }
-        addStyle(style, start, end)
+        styleProvider.styleForElement(type)?.let { addStyle(it, start, end) }
     }
 }

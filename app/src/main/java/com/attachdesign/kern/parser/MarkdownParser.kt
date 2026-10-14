@@ -107,18 +107,18 @@ object MarkdownParser {
         } else if (fenceInfo(rawText.lineSequence().firstOrNull().orEmpty()) != null) {
             blockType = MarkdownBlockType.CODE_BLOCK
             val openingFence = fenceInfo(rawText.lineSequence().firstOrNull().orEmpty())!!
-            val fenceStart = openingFence.first
-            val fence = openingFence.second
+            val fenceStart = openingFence.indent
+            val fenceLen = openingFence.length
             val openingLineEnd = rawText.indexOfFirst { it == '\r' || it == '\n' }
             val openingEndingLength = when {
                 openingLineEnd == -1 -> 0
                 rawText[openingLineEnd] == '\r' && rawText.getOrNull(openingLineEnd + 1) == '\n' -> 2
                 else -> 1
             }
-            val contentStartIndex = if (openingLineEnd == -1) fenceStart + fence.length else openingLineEnd + openingEndingLength
-            val closeIdx = closingFenceIndex(rawText, contentStartIndex, fence)
+            val contentStartIndex = if (openingLineEnd == -1) fenceStart + fenceLen else openingLineEnd + openingEndingLength
+            val closeIdx = closingFenceIndex(rawText, contentStartIndex, openingFence.marker, openingFence.length)
             if (closeIdx != -1) {
-                val cEnd = closeIdx + fence.length
+                val cEnd = closeIdx + fenceLen
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, 0, contentStartIndex, constructStart = 0, constructEnd = cEnd))
                 elements.add(MarkdownElement(MarkdownElementType.INLINE_CODE, contentStartIndex, closeIdx, constructStart = 0, constructEnd = cEnd))
                 elements.add(MarkdownElement(MarkdownElementType.TOKEN_INLINE_CODE, closeIdx, cEnd, constructStart = 0, constructEnd = cEnd))
@@ -148,24 +148,17 @@ object MarkdownParser {
         return markers.length >= 3 && markers.all { it == markers.first() } && markers.first() in "*-_"
     }
 
-    private fun fenceInfo(line: String): Pair<Int, String>? {
-        val indent = line.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
-        if (indent > 3) return null
-        val rest = line.drop(indent)
-        val marker = rest.firstOrNull() ?: return null
-        if (marker != '`' && marker != '~') return null
-        val length = rest.takeWhile { it == marker }.length
-        return if (length >= 3) indent to rest.take(length) else null
-    }
+    private fun fenceInfo(line: String): MarkdownDocumentScanner.CodeFenceInfo? =
+        MarkdownDocumentScanner.parseCodeFence(line)
 
-    private fun closingFenceIndex(rawText: String, contentStart: Int, openingFence: String): Int {
+    private fun closingFenceIndex(rawText: String, contentStart: Int, marker: Char, minLength: Int): Int {
         var lineStart = contentStart
         while (lineStart < rawText.length) {
             val lineEnd = rawText.indexOfAny(charArrayOf('\r', '\n'), lineStart).let { if (it == -1) rawText.length else it }
             val info = fenceInfo(rawText.substring(lineStart, lineEnd))
-            if (info != null && info.second.first() == openingFence.first() && info.second.length >= openingFence.length &&
-                rawText.substring(lineStart + info.first + info.second.length, lineEnd).isBlank()) {
-                return lineStart + info.first
+            if (info != null && info.marker == marker && info.length >= minLength &&
+                rawText.substring(lineStart + info.indent + info.length, lineEnd).isBlank()) {
+                return lineStart + info.indent
             }
             lineStart = if (lineEnd >= rawText.length) rawText.length else lineEnd + if (rawText[lineEnd] == '\r' && rawText.getOrNull(lineEnd + 1) == '\n') 2 else 1
         }
@@ -190,51 +183,20 @@ object MarkdownParser {
                 continue
             }
 
-            // Bold (**text**)
-            if (i + 1 < n && text[i] == '*' && text[i + 1] == '*') {
-                val closeIdx = findNextUnescapedString(text, "**", i + 2)
-                if (closeIdx != -1) {
-                    val innerStart = i + 2
-                    val innerEnd = closeIdx
-                    val cStart = offset + i
-                    val cEnd = offset + closeIdx + 2
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.BOLD, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + innerEnd, offset + closeIdx + 2, constructStart = cStart, constructEnd = cEnd))
-                    result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
-                    i = closeIdx + 2
-                    continue
-                }
-            }
-            // Bold (__text__)
-            if (i + 1 < n && text[i] == '_' && text[i + 1] == '_') {
-                val closeIdx = findNextUnescapedString(text, "__", i + 2)
-                if (closeIdx != -1) {
-                    val innerStart = i + 2
-                    val innerEnd = closeIdx
-                    val cStart = offset + i
-                    val cEnd = offset + closeIdx + 2
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.BOLD, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_BOLD, offset + innerEnd, offset + closeIdx + 2, constructStart = cStart, constructEnd = cEnd))
-                    result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
-                    i = closeIdx + 2
+            // Bold (**text** or __text__)
+            if (i + 1 < n && (text[i] == '*' || text[i] == '_') && text[i] == text[i + 1]) {
+                val delim = text.substring(i, i + 2)
+                val nextIdx = parseSymmetricSpan(text, delim, i, offset, MarkdownElementType.TOKEN_BOLD, MarkdownElementType.BOLD, result)
+                if (nextIdx != null) {
+                    i = nextIdx
                     continue
                 }
             }
             // Strikethrough (~~text~~)
             if (i + 1 < n && text[i] == '~' && text[i + 1] == '~') {
-                val closeIdx = findNextUnescapedString(text, "~~", i + 2)
-                if (closeIdx != -1) {
-                    val innerStart = i + 2
-                    val innerEnd = closeIdx
-                    val cStart = offset + i
-                    val cEnd = offset + closeIdx + 2
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_STRIKETHROUGH, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.STRIKETHROUGH, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_STRIKETHROUGH, offset + innerEnd, offset + closeIdx + 2, constructStart = cStart, constructEnd = cEnd))
-                    result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
-                    i = closeIdx + 2
+                val nextIdx = parseSymmetricSpan(text, "~~", i, offset, MarkdownElementType.TOKEN_STRIKETHROUGH, MarkdownElementType.STRIKETHROUGH, result)
+                if (nextIdx != null) {
+                    i = nextIdx
                     continue
                 }
             }
@@ -302,35 +264,12 @@ object MarkdownParser {
                     }
                 }
             }
-            // Italic (*text*)
-            if (text[i] == '*') {
-                val closeIdx = findNextUnescapedChar(text, '*', i + 1)
-                if (closeIdx > i + 1) {
-                    val innerStart = i + 1
-                    val innerEnd = closeIdx
-                    val cStart = offset + i
-                    val cEnd = offset + closeIdx + 1
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.ITALIC, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + innerEnd, offset + closeIdx + 1, constructStart = cStart, constructEnd = cEnd))
-                    result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
-                    i = closeIdx + 1
-                    continue
-                }
-            }
-            // Italic (_text_)
-            if (text[i] == '_') {
-                val closeIdx = findNextUnescapedChar(text, '_', i + 1)
-                if (closeIdx > i + 1) {
-                    val innerStart = i + 1
-                    val innerEnd = closeIdx
-                    val cStart = offset + i
-                    val cEnd = offset + closeIdx + 1
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + i, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.ITALIC, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
-                    result.add(MarkdownElement(MarkdownElementType.TOKEN_ITALIC, offset + innerEnd, offset + closeIdx + 1, constructStart = cStart, constructEnd = cEnd))
-                    result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
-                    i = closeIdx + 1
+            // Italic (*text* or _text_)
+            if (text[i] == '*' || text[i] == '_') {
+                val delim = text[i].toString()
+                val nextIdx = parseSymmetricSpan(text, delim, i, offset, MarkdownElementType.TOKEN_ITALIC, MarkdownElementType.ITALIC, result, requireNonEmpty = true)
+                if (nextIdx != null) {
+                    i = nextIdx
                     continue
                 }
             }
@@ -339,25 +278,8 @@ object MarkdownParser {
         return result.sortedBy { it.start }
     }
 
-    fun findNextUnescapedChar(text: String, target: Char, startIndex: Int): Int {
-        var i = startIndex
-        val n = text.length
-        while (i < n) {
-            val idx = text.indexOf(target, i)
-            if (idx == -1) return -1
-            var backslashCount = 0
-            var j = idx - 1
-            while (j >= 0 && text[j] == '\\') {
-                backslashCount++
-                j--
-            }
-            if (backslashCount % 2 == 0) {
-                return idx
-            }
-            i = idx + 1
-        }
-        return -1
-    }
+    fun findNextUnescapedChar(text: String, target: Char, startIndex: Int): Int =
+        findNextUnescapedString(text, target.toString(), startIndex)
 
     fun findNextUnescapedString(text: String, target: String, startIndex: Int): Int {
         var i = startIndex
@@ -377,5 +299,32 @@ object MarkdownParser {
             i = idx + 1
         }
         return -1
+    }
+
+    private fun parseSymmetricSpan(
+        text: String,
+        delimiter: String,
+        currentIndex: Int,
+        offset: Int,
+        tokenType: MarkdownElementType,
+        contentType: MarkdownElementType,
+        result: MutableList<MarkdownElement>,
+        requireNonEmpty: Boolean = false
+    ): Int? {
+        if (!text.startsWith(delimiter, currentIndex)) return null
+        val delimLen = delimiter.length
+        val closeIdx = findNextUnescapedString(text, delimiter, currentIndex + delimLen)
+        if (closeIdx == -1) return null
+        if (requireNonEmpty && closeIdx <= currentIndex + delimLen) return null
+
+        val innerStart = currentIndex + delimLen
+        val innerEnd = closeIdx
+        val cStart = offset + currentIndex
+        val cEnd = offset + closeIdx + delimLen
+        result.add(MarkdownElement(tokenType, offset + currentIndex, offset + innerStart, constructStart = cStart, constructEnd = cEnd))
+        result.add(MarkdownElement(contentType, offset + innerStart, offset + innerEnd, constructStart = cStart, constructEnd = cEnd))
+        result.add(MarkdownElement(tokenType, offset + innerEnd, offset + closeIdx + delimLen, constructStart = cStart, constructEnd = cEnd))
+        result.addAll(parseInline(text.substring(innerStart, innerEnd), offset + innerStart))
+        return closeIdx + delimLen
     }
 }

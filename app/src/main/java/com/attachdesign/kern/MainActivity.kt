@@ -16,15 +16,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
+import com.attachdesign.kern.data.local.SettingKeys
 import com.attachdesign.kern.data.analytics.TelemetryCollection
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.IncomingFileImportPolicy
 import com.attachdesign.kern.theme.ModernAndroidMarkdownEditorTheme
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
+import com.attachdesign.kern.ui.theme.ThemeEngine
 
 class MainActivity : ComponentActivity() {
 
@@ -44,11 +48,11 @@ class MainActivity : ComponentActivity() {
     ).build()
 
     lifecycleScope.launch(Dispatchers.IO) {
-      if (db.settingDao().getSetting("editor_font_family") == null) {
-        db.settingDao().insertSetting(SettingEntity("editor_font_family", "serif"))
+      if (db.settingDao().getSetting(SettingKeys.EDITOR_FONT_FAMILY) == null) {
+        db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_FAMILY, "serif"))
       }
-      if (db.settingDao().getSetting("view_mode") == null) {
-        db.settingDao().insertSetting(SettingEntity("view_mode", "RENDERED"))
+      if (db.settingDao().getSetting(SettingKeys.VIEW_MODE) == null) {
+        db.settingDao().insertSetting(SettingEntity(SettingKeys.VIEW_MODE, "RENDERED"))
       }
       if (db.settingDao().getSetting(TelemetryCollection.SETTING_KEY) == null) {
         db.settingDao().insertSetting(
@@ -72,7 +76,10 @@ class MainActivity : ComponentActivity() {
     window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     enableEdgeToEdge()
     setContent {
-      ModernAndroidMarkdownEditorTheme {
+      val activeTheme by ThemeEngine.observeActiveTheme(db)
+        .collectAsState(initial = ThemeEngine.DefaultLight.toColorTheme())
+      ApplyKernSystemBars(activeTheme)
+      ModernAndroidMarkdownEditorTheme(activeTheme = activeTheme) {
         Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
           MainNavigation(
             db = db,

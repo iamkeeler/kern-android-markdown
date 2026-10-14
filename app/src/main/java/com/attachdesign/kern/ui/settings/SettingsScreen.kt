@@ -22,11 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
+import com.attachdesign.kern.data.local.SettingKeys
 import com.attachdesign.kern.data.local.ThemeEntity
 import com.attachdesign.kern.data.stats.StatsRepository
 import com.attachdesign.kern.data.analytics.TelemetryCollection
 import com.attachdesign.kern.domain.stats.UserStats
 import com.attachdesign.kern.ui.theme.ThemeEngine
+import com.attachdesign.kern.ui.theme.toFontFamily
 import com.attachdesign.kern.ui.theme.AppThemeJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -37,7 +39,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import android.widget.Toast
-import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 
 @Composable
 fun SettingsTabsContent(
@@ -52,22 +53,22 @@ fun SettingsTabsContent(
     val uriHandler = LocalUriHandler.current
 
     // Observe global settings reactively
-    val viewModeSetting     by db.settingDao().getSettingFlow("view_mode").collectAsState(initial = null)
-    val editorFontSetting   by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
-    val editorFontSizeScaleSetting by db.settingDao().getSettingFlow("editor_font_size_scale").collectAsState(initial = null)
-    val stickySetting       by db.settingDao().getSettingFlow("sticky_selection").collectAsState(initial = null)
-    val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
-    val sentenceCapitalizationSetting by db.settingDao().getSettingFlow("sentence_capitalization").collectAsState(initial = null)
-    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow("show_workspace_intro").collectAsState(initial = null)
+    val viewModeSetting     by db.settingDao().getSettingFlow(SettingKeys.VIEW_MODE).collectAsState(initial = null)
+    val editorFontSetting   by db.settingDao().getSettingFlow(SettingKeys.EDITOR_FONT_FAMILY).collectAsState(initial = null)
+    val editorFontSizeScaleSetting by db.settingDao().getSettingFlow(SettingKeys.EDITOR_FONT_SIZE_SCALE).collectAsState(initial = null)
+    val stickySetting       by db.settingDao().getSettingFlow(SettingKeys.STICKY_SELECTION).collectAsState(initial = null)
+    val launchNewFileSetting by db.settingDao().getSettingFlow(SettingKeys.LAUNCH_NEW_FILE).collectAsState(initial = null)
+    val sentenceCapitalizationSetting by db.settingDao().getSettingFlow(SettingKeys.SENTENCE_CAPITALIZATION).collectAsState(initial = null)
+    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow(SettingKeys.SHOW_WORKSPACE_INTRO).collectAsState(initial = null)
     val telemetryCollectionSetting by db.settingDao().getSettingFlow(TelemetryCollection.SETTING_KEY).collectAsState(initial = null)
 
-    val autoHeaderSetting   by db.settingDao().getSettingFlow("auto_header_spacing").collectAsState(initial = null)
-    val autoCompleteSetting by db.settingDao().getSettingFlow("auto_complete_enabled").collectAsState(initial = null)
-    val autoCompleteQuotesSetting       by db.settingDao().getSettingFlow("auto_complete_quotes").collectAsState(initial = null)
-    val autoCompleteSingleQuotesSetting by db.settingDao().getSettingFlow("auto_complete_single_quotes").collectAsState(initial = null)
-    val autoCompleteBracesSetting       by db.settingDao().getSettingFlow("auto_complete_braces").collectAsState(initial = null)
-    val autoCompleteParensSetting       by db.settingDao().getSettingFlow("auto_complete_parens").collectAsState(initial = null)
-    val autoCompleteBracketsSetting     by db.settingDao().getSettingFlow("auto_complete_brackets").collectAsState(initial = null)
+    val autoHeaderSetting   by db.settingDao().getSettingFlow(SettingKeys.AUTO_HEADER_SPACING).collectAsState(initial = null)
+    val autoCompleteSetting by db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_ENABLED).collectAsState(initial = null)
+    val autoCompleteQuotesSetting       by db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_QUOTES).collectAsState(initial = null)
+    val autoCompleteSingleQuotesSetting by db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_SINGLE_QUOTES).collectAsState(initial = null)
+    val autoCompleteBracesSetting       by db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_BRACES).collectAsState(initial = null)
+    val autoCompleteParensSetting       by db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_PARENS).collectAsState(initial = null)
+    val autoCompleteBracketsSetting     by db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_BRACKETS).collectAsState(initial = null)
 
     val currentViewMode            = viewModeSetting?.value ?: "RENDERED"
     val currentFontFamily          = editorFontSetting?.value ?: "serif"
@@ -86,12 +87,7 @@ fun SettingsTabsContent(
     val currentAutoCompleteParens  = autoCompleteParensSetting?.value?.toBoolean() ?: true
     val currentAutoCompleteBrackets = autoCompleteBracketsSetting?.value?.toBoolean() ?: true
 
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.toFontFamily()
 
     var activeTab by remember { mutableIntStateOf(0) }
 
@@ -179,7 +175,7 @@ fun SettingsTabsContent(
                                     coroutineScope.launch(Dispatchers.IO) {
                                         val jsonString = ThemeEngine.serialize(presetJson)
                                         val id = db.themeDao().insertTheme(ThemeEntity(name = presetJson.name, jsonString = jsonString))
-                                        db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
+                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.SELECTED_THEME_ID, id.toString()))
                                     }
                                 },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
@@ -203,7 +199,7 @@ fun SettingsTabsContent(
                                 .fillMaxWidth()
                                 .clickable {
                                      coroutineScope.launch(Dispatchers.IO) {
-                                         db.settingDao().insertSetting(SettingEntity("view_mode", mode))
+                                         db.settingDao().insertSetting(SettingEntity(SettingKeys.VIEW_MODE, mode))
                                      }
                                 }
                                 .padding(vertical = theme.dimensions.spacingMedium),
@@ -215,7 +211,7 @@ fun SettingsTabsContent(
                                 selected = currentViewMode == mode,
                                 onClick = {
                                     coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("view_mode", mode))
+                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.VIEW_MODE, mode))
                                     }
                                 },
                                 colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
@@ -240,7 +236,7 @@ fun SettingsTabsContent(
                                 .fillMaxWidth()
                                 .clickable {
                                     coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
+                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_FAMILY, font))
                                     }
                                 }
                                 .padding(vertical = theme.dimensions.spacingMedium),
@@ -252,7 +248,7 @@ fun SettingsTabsContent(
                                 selected = currentFontFamily == font,
                                 onClick = {
                                     coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity("editor_font_family", font))
+                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_FAMILY, font))
                                     }
                                 },
                                 colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
@@ -287,7 +283,7 @@ fun SettingsTabsContent(
                         onValueChange = { sliderScale = it },
                         onValueChangeFinished = {
                             coroutineScope.launch(Dispatchers.IO) {
-                                db.settingDao().insertSetting(SettingEntity("editor_font_size_scale", sliderScale.toString()))
+                                db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_SIZE_SCALE, sliderScale.toString()))
                             }
                         },
                         valueRange = 0.8f..1.4f,
@@ -387,7 +383,7 @@ fun SettingsTabsContent(
                                 if (themeJson != null) {
                                     coroutineScope.launch(Dispatchers.IO) {
                                         val id = db.themeDao().insertTheme(ThemeEntity(name = themeJson.name, jsonString = inputThemeJson))
-                                        db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
+                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.SELECTED_THEME_ID, id.toString()))
                                     }
                                     Toast.makeText(context, "Theme applied", Toast.LENGTH_SHORT).show()
                                     inputThemeJson = ""
@@ -416,7 +412,7 @@ fun SettingsTabsContent(
                             .fillMaxWidth()
                             .clickable {
                                 coroutineScope.launch(Dispatchers.IO) {
-                                    db.settingDao().insertSetting(SettingEntity("sticky_selection", (!currentSticky).toString()))
+                                    db.settingDao().insertSetting(SettingEntity(SettingKeys.STICKY_SELECTION, (!currentSticky).toString()))
                                 }
                             }
                             .padding(vertical = theme.dimensions.spacingMedium),
@@ -442,7 +438,7 @@ fun SettingsTabsContent(
                               checked = currentSticky,
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("sticky_selection", value.toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.STICKY_SELECTION, value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
@@ -461,7 +457,7 @@ fun SettingsTabsContent(
                               .fillMaxWidth()
                               .clickable {
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("launch_new_file", (!currentLaunchNewFile).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.LAUNCH_NEW_FILE, (!currentLaunchNewFile).toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -487,7 +483,7 @@ fun SettingsTabsContent(
                               checked = currentLaunchNewFile,
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("launch_new_file", value.toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.LAUNCH_NEW_FILE, value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
@@ -516,7 +512,7 @@ fun SettingsTabsContent(
                               .fillMaxWidth()
                               .clickable {
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("auto_header_spacing", (!currentAutoHeader).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_HEADER_SPACING, (!currentAutoHeader).toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -542,7 +538,7 @@ fun SettingsTabsContent(
                               checked = currentAutoHeader,
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("auto_header_spacing", value.toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_HEADER_SPACING, value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
@@ -562,7 +558,7 @@ fun SettingsTabsContent(
                               .fillMaxWidth()
                               .clickable {
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("sentence_capitalization", (!currentSentenceCapitalization).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SENTENCE_CAPITALIZATION, (!currentSentenceCapitalization).toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -588,7 +584,7 @@ fun SettingsTabsContent(
                               checked = currentSentenceCapitalization,
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("sentence_capitalization", value.toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SENTENCE_CAPITALIZATION, value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
@@ -607,7 +603,7 @@ fun SettingsTabsContent(
                               .fillMaxWidth()
                               .clickable {
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("show_workspace_intro", (!currentShowWorkspaceIntro).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SHOW_WORKSPACE_INTRO, (!currentShowWorkspaceIntro).toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -633,7 +629,7 @@ fun SettingsTabsContent(
                               checked = currentShowWorkspaceIntro,
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("show_workspace_intro", value.toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SHOW_WORKSPACE_INTRO, value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
@@ -652,7 +648,7 @@ fun SettingsTabsContent(
                               .fillMaxWidth()
                               .clickable {
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", (!currentAutoComplete).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_ENABLED, (!currentAutoComplete).toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -678,7 +674,7 @@ fun SettingsTabsContent(
                               checked = currentAutoComplete,
                               onCheckedChange = { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", value.toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_ENABLED, value.toString()))
                                   }
                               },
                               colors = SwitchDefaults.colors(
@@ -697,19 +693,19 @@ fun SettingsTabsContent(
                               horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
                           ) {
                               MinimalOutlinedButtonSmall(text = "\"\"", selected = currentAutoCompleteQuotes, onClick = {
-                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity("auto_complete_quotes", (!currentAutoCompleteQuotes).toString())) }
+                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_QUOTES, (!currentAutoCompleteQuotes).toString())) }
                               }, theme = theme)
                               MinimalOutlinedButtonSmall(text = "''", selected = currentAutoCompleteSingleQuotes, onClick = {
-                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity("auto_complete_single_quotes", (!currentAutoCompleteSingleQuotes).toString())) }
+                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_SINGLE_QUOTES, (!currentAutoCompleteSingleQuotes).toString())) }
                               }, theme = theme)
                               MinimalOutlinedButtonSmall(text = "{}", selected = currentAutoCompleteBraces, onClick = {
-                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity("auto_complete_braces", (!currentAutoCompleteBraces).toString())) }
+                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_BRACES, (!currentAutoCompleteBraces).toString())) }
                               }, theme = theme)
                               MinimalOutlinedButtonSmall(text = "()", selected = currentAutoCompleteParens, onClick = {
-                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity("auto_complete_parens", (!currentAutoCompleteParens).toString())) }
+                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_PARENS, (!currentAutoCompleteParens).toString())) }
                               }, theme = theme)
                               MinimalOutlinedButtonSmall(text = "[]", selected = currentAutoCompleteBrackets, onClick = {
-                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity("auto_complete_brackets", (!currentAutoCompleteBrackets).toString())) }
+                                  coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_BRACKETS, (!currentAutoCompleteBrackets).toString())) }
                               }, theme = theme)
                           }
                       }
@@ -935,40 +931,9 @@ fun SettingsScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Observe global settings reactively (only theme is needed for status bar and background)
-    val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsState(initial = null)
-    val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
-    var theme by remember { mutableStateOf(ThemeEngine.DefaultLight.toColorTheme()) }
+    val theme by ThemeEngine.observeActiveTheme(db).collectAsState(initial = ThemeEngine.DefaultLight.toColorTheme())
 
-    LaunchedEffect(selectedThemeIdSetting, editorFontSetting) {
-        withContext(Dispatchers.IO) {
-            val themeId = selectedThemeIdSetting?.value?.toLongOrNull()
-            val savedFont = editorFontSetting?.value ?: "serif"
-            var activeTheme = ThemeEngine.DefaultLight.toColorTheme()
-            if (themeId != null) {
-                val dbTheme = db.themeDao().getThemeById(themeId)
-                if (dbTheme != null) {
-                    val themeJson = ThemeEngine.deserialize(dbTheme.jsonString)
-                    if (themeJson != null) {
-                        activeTheme = themeJson.toColorTheme()
-                    }
-                }
-            }
-            activeTheme = activeTheme.copy(editorFontFamily = savedFont)
-            withContext(Dispatchers.Main) {
-                theme = activeTheme
-            }
-        }
-    }
-
-    ApplyKernSystemBars(theme)
-
-     val appFont = when (theme.editorFontFamily.lowercase()) {
-         "serif" -> FontFamily.Serif
-         "sans-serif", "sansserif" -> FontFamily.SansSerif
-         "monospace" -> FontFamily.Monospace
-         else -> FontFamily.Default
-     }
+    val appFont = theme.toFontFamily()
 
      var isVisible by remember { mutableStateOf(false) }
      LaunchedEffect(Unit) { isVisible = true }
@@ -1027,12 +992,7 @@ fun MinimalOutlinedButton(
     modifier: Modifier = Modifier,
     isPrimary: Boolean = false
 ) {
-     val appFont = when (theme.editorFontFamily.lowercase()) {
-         "serif" -> FontFamily.Serif
-         "sans-serif", "sansserif" -> FontFamily.SansSerif
-         "monospace" -> FontFamily.Monospace
-         else -> FontFamily.Default
-     }
+    val appFont = theme.toFontFamily()
     val bgColor = if (isPrimary) theme.accent else Color.Transparent
     val textColor = if (isPrimary) theme.background else theme.textPrimary
     val borderColor = if (isPrimary) theme.accent else theme.textMuted.copy(alpha = 0.3f)

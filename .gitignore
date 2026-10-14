@@ -31,3 +31,6 @@ __pycache__/
 
 # Kotlin tooling metadata
 .kotlin/
+
+# Local reviewer journals
+.reviews/

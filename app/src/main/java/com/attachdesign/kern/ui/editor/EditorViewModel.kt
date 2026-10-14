@@ -7,6 +7,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.ViewModel
+import com.attachdesign.kern.ui.common.launchShare
+import com.attachdesign.kern.ui.common.SnackbarEvent
+import com.attachdesign.kern.data.local.SettingKeys
+import com.attachdesign.kern.utils.TextAnalysisUtils
 import com.attachdesign.kern.utils.TextAnalysisUtils.countWords
 import androidx.lifecycle.viewModelScope
 import com.attachdesign.kern.analysis.HemingwayAnalyzer
@@ -118,7 +122,7 @@ class EditorViewModel(
 
     private var saveJob: Job? = null
 
-    data class SnackbarEvent(val message: String, val actionLabel: String? = null, val onAction: (() -> Unit)? = null)
+
     private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
     val snackbarEvent = _snackbarEvent.asSharedFlow()
 
@@ -130,7 +134,7 @@ class EditorViewModel(
         }
         // Reactively observe setting changes to keep ViewModel in sync
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("editor_font_size_scale").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.EDITOR_FONT_SIZE_SCALE).collect { setting ->
                 val scale = setting?.value?.toFloatOrNull() ?: 1.0f
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(editorFontSizeScale = scale)
@@ -138,33 +142,30 @@ class EditorViewModel(
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("selected_theme_id").collect { _ ->
-                loadSelectedTheme()
+            ThemeEngine.observeActiveTheme(db).collect { activeTheme ->
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(activeTheme = activeTheme)
+                }
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("editor_font_family").collect { _ ->
-                loadSelectedTheme()
-            }
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("auto_header_spacing").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.AUTO_HEADER_SPACING).collect { setting ->
                 val autoHeader = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(autoHeaderSpacing = autoHeader)
                 }
             }
         }
-                viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("sentence_capitalization").collect { setting ->
+        viewModelScope.launch(Dispatchers.IO) {
+            db.settingDao().getSettingFlow(SettingKeys.SENTENCE_CAPITALIZATION).collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(sentenceCapitalization = enabled)
                 }
             }
         }
-viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("auto_complete_enabled").collect { setting ->
+        viewModelScope.launch(Dispatchers.IO) {
+            db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_ENABLED).collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(autoCompleteEnabled = enabled)
@@ -172,7 +173,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("auto_complete_quotes").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_QUOTES).collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(autoCompleteQuotes = enabled)
@@ -180,7 +181,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("auto_complete_single_quotes").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_SINGLE_QUOTES).collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(autoCompleteSingleQuotes = enabled)
@@ -188,7 +189,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("auto_complete_braces").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_BRACES).collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(autoCompleteBraces = enabled)
@@ -196,7 +197,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("auto_complete_parens").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_PARENS).collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(autoCompleteParens = enabled)
@@ -204,7 +205,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("auto_complete_brackets").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.AUTO_COMPLETE_BRACKETS).collect { setting ->
                 val enabled = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(autoCompleteBrackets = enabled)
@@ -212,7 +213,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("view_mode").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.VIEW_MODE).collect { setting ->
                 val mode = setting?.value ?: "RENDERED"
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(viewMode = ViewMode.valueOf(mode))
@@ -220,7 +221,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("sticky_selection").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.STICKY_SELECTION).collect { setting ->
                 val sticky = setting?.value?.toBoolean() ?: true
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(stickySelection = sticky)
@@ -228,7 +229,7 @@ viewModelScope.launch(Dispatchers.IO) {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().getSettingFlow("sync_provider").collect { setting ->
+            db.settingDao().getSettingFlow(SettingKeys.SYNC_PROVIDER).collect { setting ->
                 val provider = setting?.value ?: "NONE"
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(syncProvider = SyncProvider.valueOf(provider))
@@ -238,18 +239,18 @@ viewModelScope.launch(Dispatchers.IO) {
     }
 
     private suspend fun loadSettings() = withContext(Dispatchers.IO) {
-        val viewModeSetting = db.settingDao().getSetting("view_mode")?.value ?: "RENDERED"
-        val stickySetting = db.settingDao().getSetting("sticky_selection")?.value ?: "true"
-        val syncProviderSetting = db.settingDao().getSetting("sync_provider")?.value ?: "NONE"
-        val autoHeaderSetting = db.settingDao().getSetting("auto_header_spacing")?.value ?: "true"
-        val autoCompleteSetting = db.settingDao().getSetting("auto_complete_enabled")?.value ?: "true"
-        val autoCompleteQuotesSetting = db.settingDao().getSetting("auto_complete_quotes")?.value ?: "true"
-        val autoCompleteSingleQuotesSetting = db.settingDao().getSetting("auto_complete_single_quotes")?.value ?: "true"
-        val autoCompleteBracesSetting = db.settingDao().getSetting("auto_complete_braces")?.value ?: "true"
-        val autoCompleteParensSetting = db.settingDao().getSetting("auto_complete_parens")?.value ?: "true"
-        val autoCompleteBracketsSetting = db.settingDao().getSetting("auto_complete_brackets")?.value ?: "true"
-        val sentenceCapitalizationSetting = db.settingDao().getSetting("sentence_capitalization")?.value ?: "true"
-        val editorFontSizeScaleSetting = db.settingDao().getSetting("editor_font_size_scale")?.value ?: "1.0"
+        val viewModeSetting = db.settingDao().getSetting(SettingKeys.VIEW_MODE)?.value ?: "RENDERED"
+        val stickySetting = db.settingDao().getSetting(SettingKeys.STICKY_SELECTION)?.value ?: "true"
+        val syncProviderSetting = db.settingDao().getSetting(SettingKeys.SYNC_PROVIDER)?.value ?: "NONE"
+        val autoHeaderSetting = db.settingDao().getSetting(SettingKeys.AUTO_HEADER_SPACING)?.value ?: "true"
+        val autoCompleteSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_ENABLED)?.value ?: "true"
+        val autoCompleteQuotesSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_QUOTES)?.value ?: "true"
+        val autoCompleteSingleQuotesSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_SINGLE_QUOTES)?.value ?: "true"
+        val autoCompleteBracesSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_BRACES)?.value ?: "true"
+        val autoCompleteParensSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_PARENS)?.value ?: "true"
+        val autoCompleteBracketsSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_BRACKETS)?.value ?: "true"
+        val sentenceCapitalizationSetting = db.settingDao().getSetting(SettingKeys.SENTENCE_CAPITALIZATION)?.value ?: "true"
+        val editorFontSizeScaleSetting = db.settingDao().getSetting(SettingKeys.EDITOR_FONT_SIZE_SCALE)?.value ?: "1.0"
 
         withContext(Dispatchers.Main) {
             _uiState.value = _uiState.value.copy(
@@ -271,21 +272,7 @@ viewModelScope.launch(Dispatchers.IO) {
     }
 
     private suspend fun loadSelectedTheme() = withContext(Dispatchers.IO) {
-        val themeId = db.settingDao().getSetting("selected_theme_id")?.value?.toLongOrNull()
-        val savedFontFamily = db.settingDao().getSetting("editor_font_family")?.value
-        var activeTheme = ThemeEngine.DefaultLight.toColorTheme()
-        if (themeId != null) {
-            val dbTheme = db.themeDao().getThemeById(themeId)
-            if (dbTheme != null) {
-                val themeJson = ThemeEngine.deserialize(dbTheme.jsonString)
-                if (themeJson != null) {
-                    activeTheme = themeJson.toColorTheme()
-                }
-            }
-        }
-        if (savedFontFamily != null) {
-            activeTheme = activeTheme.copy(editorFontFamily = savedFontFamily)
-        }
+        val activeTheme = ThemeEngine.getActiveTheme(db)
         withContext(Dispatchers.Main) {
             _uiState.value = _uiState.value.copy(activeTheme = activeTheme)
         }
@@ -298,7 +285,7 @@ viewModelScope.launch(Dispatchers.IO) {
         
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("editor_font_family", fontFamily))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_FAMILY, fontFamily))
             }
         }
     }
@@ -346,8 +333,6 @@ viewModelScope.launch(Dispatchers.IO) {
                 replace(0, length, content)
                 selection = TextRange(if (focusOnStart) 0 else content.length)
             }
-            
-            addLog("Loaded file: $filePath")
         }
     }
 
@@ -791,13 +776,13 @@ viewModelScope.launch(Dispatchers.IO) {
         val charCount = documentContent.length
 
         // Readability ARI approximation for caching
-        val sentenceCount = countSentences(documentContent)
-        val ari = 4.71 * (charCount.toDouble() / maxOf(1, wordCount)) + 0.5 * (wordCount.toDouble() / sentenceCount) - 21.43
-        val gradeLevel = when {
-            ari <= 0 -> "N/A"
-            ari >= 14 -> "Post-Graduate"
-            else -> "Grade ${Math.round(ari)}"
-        }
+        val sentenceCount = maxOf(1, TextAnalysisUtils.countSentences(documentContent))
+        val nonWhitespaceCharCount = documentContent.count { !it.isWhitespace() }
+        val gradeLevel = TextAnalysisUtils.calculateAriGrade(
+            wordCount = wordCount,
+            charCount = nonWhitespaceCharCount,
+            sentenceCount = sentenceCount
+        )
 
         // Update database FileEntity
         val fileEntity = db.fileDao().getFileByPath(project.id, filePath)
@@ -859,7 +844,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(viewMode = viewMode)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("view_mode", viewMode.name))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.VIEW_MODE, viewMode.name))
             }
         }
     }
@@ -868,7 +853,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(stickySelection = sticky)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("sticky_selection", sticky.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.STICKY_SELECTION, sticky.toString()))
             }
         }
     }
@@ -877,7 +862,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(autoHeaderSpacing = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("auto_header_spacing", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_HEADER_SPACING, enabled.toString()))
             }
         }
     }
@@ -886,7 +871,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(autoCompleteEnabled = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("auto_complete_enabled", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_ENABLED, enabled.toString()))
             }
         }
     }
@@ -895,7 +880,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(autoCompleteQuotes = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("auto_complete_quotes", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_QUOTES, enabled.toString()))
             }
         }
     }
@@ -904,7 +889,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(autoCompleteSingleQuotes = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("auto_complete_single_quotes", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_SINGLE_QUOTES, enabled.toString()))
             }
         }
     }
@@ -913,7 +898,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(autoCompleteBraces = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("auto_complete_braces", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_BRACES, enabled.toString()))
             }
         }
     }
@@ -922,7 +907,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(autoCompleteParens = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("auto_complete_parens", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_PARENS, enabled.toString()))
             }
         }
     }
@@ -931,7 +916,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(autoCompleteBrackets = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("auto_complete_brackets", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_BRACKETS, enabled.toString()))
             }
         }
     }
@@ -940,7 +925,7 @@ viewModelScope.launch(Dispatchers.IO) {
         _uiState.value = _uiState.value.copy(sentenceCapitalization = enabled)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("sentence_capitalization", enabled.toString()))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.SENTENCE_CAPITALIZATION, enabled.toString()))
             }
         }
     }
@@ -952,7 +937,7 @@ viewModelScope.launch(Dispatchers.IO) {
             if (themeJson != null) {
                 _uiState.value = _uiState.value.copy(activeTheme = themeJson.toColorTheme())
                 withContext(Dispatchers.IO) {
-                    db.settingDao().insertSetting(SettingEntity("selected_theme_id", themeEntity.id.toString()))
+                    db.settingDao().insertSetting(SettingEntity(SettingKeys.SELECTED_THEME_ID, themeEntity.id.toString()))
                 }
             }
         }
@@ -967,7 +952,7 @@ viewModelScope.launch(Dispatchers.IO) {
                 }
                 _uiState.value = _uiState.value.copy(activeTheme = themeJson.toColorTheme())
                 withContext(Dispatchers.IO) {
-                    db.settingDao().insertSetting(SettingEntity("selected_theme_id", id.toString()))
+                    db.settingDao().insertSetting(SettingEntity(SettingKeys.SELECTED_THEME_ID, id.toString()))
                 }
             }
             true
@@ -981,7 +966,7 @@ viewModelScope.launch(Dispatchers.IO) {
         syncEngine.setProvider(provider)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                db.settingDao().insertSetting(SettingEntity("sync_provider", provider.name))
+                db.settingDao().insertSetting(SettingEntity(SettingKeys.SYNC_PROVIDER, provider.name))
             }
         }
     }
@@ -1042,7 +1027,7 @@ viewModelScope.launch(Dispatchers.IO) {
         }
     }
 
-    fun shareCurrentFile() {
+    fun shareCurrentFile(context: Context) {
         val currentState = _uiState.value
         val project = currentState.activeProject ?: return
         val filePath = currentState.activeFilePath
@@ -1058,7 +1043,9 @@ viewModelScope.launch(Dispatchers.IO) {
                 size = 0,
                 lastModified = System.currentTimeMillis()
             )
-            fileOpsManager.shareNode(project, fileNode)
+            fileOpsManager.shareNode(project, fileNode).onSuccess { payload ->
+                context.launchShare(payload)
+            }
         }
     }
 
@@ -1159,35 +1146,13 @@ viewModelScope.launch(Dispatchers.IO) {
 
 
 
-    private fun countSentences(s: CharSequence): Int {
-        var count = 0
-        var hasContent = false
-        for (i in 0 until s.length) {
-            val c = s[i]
-            if (c == '.' || c == '!' || c == '?') {
-                if (hasContent) {
-                    count++
-                    hasContent = false
-                }
-            } else if (!c.isWhitespace()) {
-                hasContent = true
-            }
-        }
-        if (hasContent) {
-            count++
-        }
-        return maxOf(1, count)
-    }
+
 
     private fun reparse(block: com.attachdesign.kern.parser.ParagraphBlock, rawText: String) =
         MarkdownParser.parseParagraph(rawText, block.id, block.separatorAfter)
 
     private fun separatorFor(previousText: String, nextText: String): String =
         if (MarkdownParser.isListLine(previousText) && MarkdownParser.isListLine(nextText)) "\n" else "\n\n"
-
-    private fun addLog(message: String) {
-        // Simple internal logging
-    }
 
     // Testing Helpers
     internal fun setTestParagraphs(paragraphs: List<ImmutableParagraphBlock>) {

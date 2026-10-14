@@ -56,8 +56,6 @@ object HemingwayAnalyzer {
         Pattern.CASE_INSENSITIVE
     )
 
-    private val sentencePattern = Pattern.compile("([^.!?]+[.!?]*)")
-
     fun analyze(text: String): HemingwayMetrics {
         if (text.isBlank()) {
             return HemingwayMetrics(
@@ -129,16 +127,11 @@ object HemingwayAnalyzer {
 
         // 6. Readability Grade Level (ARI)
         // Formula: 4.71 * (chars / words) + 0.5 * (words / sentences) - 21.43
-        val ari = if (wordCount > 0 && sentenceCount > 0) {
-            4.71 * (charCount.toDouble() / wordCount) + 0.5 * (wordCount.toDouble() / sentenceCount) - 21.43
-        } else {
-            0.0
-        }
-        val gradeLevel = when {
-            ari <= 0 -> "N/A"
-            ari >= 14 -> "Post-Graduate"
-            else -> "Grade ${Math.round(ari)}"
-        }
+        val gradeLevel = com.attachdesign.kern.utils.TextAnalysisUtils.calculateAriGrade(
+            wordCount = wordCount,
+            charCount = charCount,
+            sentenceCount = sentenceCount
+        )
 
         return HemingwayMetrics(
             wordCount = wordCount,
@@ -153,9 +146,14 @@ object HemingwayAnalyzer {
         )
     }
 
-    private data class SentenceSpan(val text: String, val start: Int, val end: Int)
+    fun countSentences(text: CharSequence): Int {
+        if (text.isBlank()) return 0
+        return splitSentencesWithIndices(text.toString()).size
+    }
 
-    private fun splitSentencesWithIndices(text: String): List<SentenceSpan> {
+    internal data class SentenceSpan(val text: String, val start: Int, val end: Int)
+
+    internal fun splitSentencesWithIndices(text: String): List<SentenceSpan> {
         if (text.isBlank()) return emptyList()
 
         val abbreviations = setOf(

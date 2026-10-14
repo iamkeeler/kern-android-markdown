@@ -129,6 +129,8 @@ fun MainNavigation(
                     projectId = key.projectId,
                     filePath = key.filePath,
                     focusOnStart = key.focusOnStart,
+                    touchOriginX = key.touchOriginX,
+                    touchOriginY = key.touchOriginY,
                     viewModel = editorViewModel,
                     onBackClick = {
                         editorViewModel.closeFile()

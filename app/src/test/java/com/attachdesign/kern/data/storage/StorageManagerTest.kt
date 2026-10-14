@@ -183,4 +183,13 @@ class StorageManagerTest {
         val examplesContent = storageManager.readAssetFile("Formatting Examples.md")
         assertTrue(examplesContent.contains("Formatting Examples"))
     }
+
+    @Test
+    fun testCreateFile_alreadyExistsReturnsFalse() = runTest {
+        val firstCreate = storageManager.createFile(project, "duplicate.md")
+        assertTrue(firstCreate)
+
+        val secondCreate = storageManager.createFile(project, "duplicate.md")
+        assertFalse(secondCreate)
+    }
 }

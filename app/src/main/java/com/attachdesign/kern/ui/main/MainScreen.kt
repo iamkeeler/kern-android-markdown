@@ -27,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import com.attachdesign.kern.ui.common.launchShare
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
@@ -56,12 +57,16 @@ import com.attachdesign.kern.SettingsKey
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.local.SettingEntity
+import com.attachdesign.kern.data.local.SettingKeys
 import kotlinx.coroutines.Dispatchers
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.ui.theme.ThemeEngine
-import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
+import com.attachdesign.kern.ui.theme.toFontFamily
 import com.attachdesign.kern.ui.theme.AppColorTheme
+import com.attachdesign.kern.ui.main.dialogs.InputDialog
+import com.attachdesign.kern.ui.main.dialogs.NodeActionsDialog
+import com.attachdesign.kern.ui.main.dialogs.CreateProjectDialog
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
@@ -126,7 +131,7 @@ fun MainScreen(
 
     var isIntroDialogOpen by remember { mutableStateOf(false) }
     var dontShowAgainCheck by remember { mutableStateOf(false) }
-    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow("show_workspace_intro").collectAsState(initial = null)
+    val showWorkspaceIntroSetting by db.settingDao().getSettingFlow(SettingKeys.SHOW_WORKSPACE_INTRO).collectAsState(initial = null)
     val showWorkspaceIntro = showWorkspaceIntroSetting?.value?.toBoolean() ?: true
 
     var createFileDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
@@ -178,34 +183,9 @@ fun MainScreen(
         }
     }
 
-    val selectedThemeIdSetting by db.settingDao().getSettingFlow("selected_theme_id").collectAsState(initial = null)
-    val editorFontSetting by db.settingDao().getSettingFlow("editor_font_family").collectAsState(initial = null)
-    val launchNewFileSetting by db.settingDao().getSettingFlow("launch_new_file").collectAsState(initial = null)
+    val launchNewFileSetting by db.settingDao().getSettingFlow(SettingKeys.LAUNCH_NEW_FILE).collectAsState(initial = null)
     val shouldLaunchNewFile = launchNewFileSetting?.value?.toBoolean() ?: true
-    var theme by remember { mutableStateOf(ThemeEngine.DefaultLight.toColorTheme()) }
-
-    LaunchedEffect(selectedThemeIdSetting, editorFontSetting) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val themeId = selectedThemeIdSetting?.value?.toLongOrNull()
-            val savedFont = editorFontSetting?.value ?: "serif"
-            var activeTheme = ThemeEngine.DefaultLight.toColorTheme()
-            if (themeId != null) {
-                val dbTheme = db.themeDao().getThemeById(themeId)
-                if (dbTheme != null) {
-                    val themeJson = ThemeEngine.deserialize(dbTheme.jsonString)
-                    if (themeJson != null) {
-                        activeTheme = themeJson.toColorTheme()
-                    }
-                }
-            }
-            activeTheme = activeTheme.copy(editorFontFamily = savedFont)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                theme = activeTheme
-            }
-        }
-    }
-
-    ApplyKernSystemBars(theme)
+    val theme by ThemeEngine.observeActiveTheme(db).collectAsState(initial = ThemeEngine.DefaultLight.toColorTheme())
 
     val typedText = remember { mutableStateOf("K") }
     val splashAlpha = remember { Animatable(1f) }
@@ -238,12 +218,7 @@ fun MainScreen(
         }
     }
 
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.toFontFamily()
 
     Box(modifier = modifier.fillMaxSize()) {
         if (!state.showSplash || splashAlpha.value < 1f) {
@@ -614,7 +589,7 @@ fun MainScreen(
                                             onItemClick(EditorKey(item.project.id, item.node.relativePath))
                                         }
                                     },
-                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(item.project, item.node) } },
+                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(item.project, item.node).onSuccess { context.launchShare(it) } } },
                                     onEdit = { nodeToRename = Pair(item.node, item.project) },
                                     onDelete = { nodeToDelete = Pair(item.node, item.project) }
                                 )
@@ -657,7 +632,7 @@ fun MainScreen(
                                     theme = theme,
                                     appFont = appFont,
                                     onClick = { vm.navigateToFolderRoot(proj) },
-                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(proj, VfsNode.Directory(name = proj.name, relativePath = "")) } },
+                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(proj, VfsNode.Directory(name = proj.name, relativePath = "")).onSuccess { context.launchShare(it) } } },
                                     onEdit = { projectToRename = proj },
                                     onDelete = { projectToDelete = proj }
                                 )
@@ -734,12 +709,13 @@ fun MainScreen(
                                             } else if (node.isDirectory) {
                                                 vm.navigateToFolder(node, activeProj)
                                             } else {
-                                                onItemClick(EditorKey(activeProj.id, node.relativePath))
+                                                val bounds = folderBounds[node.relativePath]
+                                                onItemClick(EditorKey(activeProj.id, node.relativePath, touchOriginX = bounds?.center?.x, touchOriginY = bounds?.center?.y))
                                             }
                                         },
                                         onShare = {
                                             if (!node.relativePath.startsWith("external:")) {
-                                                coroutineScope.launch { fileOpsManager.shareNode(activeProj, node) }
+                                                coroutineScope.launch { fileOpsManager.shareNode(activeProj, node).onSuccess { context.launchShare(it) } }
                                             }
                                         },
                                         onEdit = {
@@ -873,7 +849,7 @@ fun MainScreen(
                         isIntroDialogOpen = false
                         if (dontShowAgainCheck) {
                             coroutineScope.launch(Dispatchers.IO) {
-                                db.settingDao().insertSetting(SettingEntity("show_workspace_intro", "false"))
+                                db.settingDao().insertSetting(SettingEntity(SettingKeys.SHOW_WORKSPACE_INTRO, "false"))
                             }
                         }
                         openDocumentTreeLauncher.launch(null)
@@ -1000,7 +976,7 @@ fun MainScreen(
                 when (action) {
                     "duplicate" -> vm.duplicateNode(node, project)
                     "rename" -> nodeToRename = Pair(node, project)
-                    "share" -> coroutineScope.launch { fileOpsManager.shareNode(project, node) }
+                    "share" -> coroutineScope.launch { fileOpsManager.shareNode(project, node).onSuccess { context.launchShare(it) } }
                     "delete" -> nodeToDelete = Pair(node, project)
                 }
             },
@@ -1094,12 +1070,7 @@ private fun EmptyStateHint(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null
 ) {
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.toFontFamily()
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = theme.dimensions.iconHuge),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1337,8 +1308,6 @@ fun SwipeableFileRow(
                             if (offsetX.value != 0f) {
                                 scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                             } else {
-                                val globalPos = rowPositionInRoot + offset
-                                com.attachdesign.kern.TouchTracker.lastTouchPosition = globalPos
                                 onClick()
                             }
                         },
@@ -1581,168 +1550,12 @@ fun VfsNodeRow(
     SwipeableFileRow(
         node = node,
         theme = theme,
-        appFont = when (theme.editorFontFamily.lowercase()) {
-            "serif" -> FontFamily.Serif
-            "sans-serif", "sansserif" -> FontFamily.SansSerif
-            "monospace" -> FontFamily.Monospace
-            else -> FontFamily.Default
-        },
+        appFont = theme.toFontFamily(),
         isExternalProject = isExternalProject,
         onClick = { onNodeClick(node) },
         onShare = { onShareClick(node) },
         onEdit = { onEditClick(node) },
         onDelete = { onDeleteClick(node) }
-    )
-}
-
-@Composable
-fun InputDialog(
-    title: String,
-    label: String,
-    confirmText: String,
-    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var value by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-        text = {
-            OutlinedTextField(
-                value         = value,
-                onValueChange = { value = it },
-                label         = { Text(label, color = theme.textMuted) },
-                textStyle     = androidx.compose.ui.text.TextStyle(color = theme.textPrimary),
-                colors        = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor     = theme.textPrimary,
-                    unfocusedTextColor   = theme.textPrimary,
-                    focusedContainerColor   = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedBorderColor   = theme.accent,
-                    unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
-                    focusedLabelColor    = theme.accent,
-                    unfocusedLabelColor  = theme.textMuted,
-                    cursorColor          = theme.accent
-                )
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (value.isNotBlank()) onConfirm(value) },
-                enabled = value.isNotBlank()
-            ) {
-                Text(
-                    text = confirmText,
-                    color = if (value.isNotBlank()) theme.accent else theme.textMuted.copy(alpha = 0.5f)
-                )
-            }
-        },
-        dismissButton = { 
-            TextButton(onClick = onDismiss) { 
-                Text("Cancel", color = theme.textMuted) 
-            } 
-        },
-        containerColor = theme.surface
-    )
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-fun NodeActionsDialog(
-    node: VfsNode,
-    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    onAction: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = theme.surface) {
-        Text(
-            text = node.name,
-            color = theme.textPrimary,
-            fontSize = theme.typography.subtitle,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = theme.dimensions.spacingExtraLarge, vertical = theme.dimensions.spacingMedium)
-        )
-        listOf("duplicate" to "Duplicate", "rename" to "Rename", "share" to "Share", "delete" to "Delete").forEach { (action, label) ->
-            ListItem(
-                headlineContent = { Text(label, color = if (action == "delete") theme.danger else theme.textPrimary) },
-                modifier = Modifier.fillMaxWidth().clickable { onAction(action) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-            )
-        }
-        Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-    }
-}
-
-@Composable
-fun CreateProjectDialog(
-    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
-    selectedUri: String,
-    onSelectFolder: () -> Unit,
-    onDismiss: () -> Unit,
-    onCreate: (name: String, uri: String) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    val context = LocalContext.current
-    LaunchedEffect(selectedUri) {
-        if (name.isBlank() && selectedUri.isNotEmpty()) {
-            val doc = DocumentFile.fromTreeUri(context, Uri.parse(selectedUri))
-            doc?.name?.let { name = it }
-        }
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add Project Workspace", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)) {
-                OutlinedTextField(
-                    value         = name,
-                    onValueChange = { name = it },
-                    label         = { Text("Project Name", color = theme.textMuted) },
-                    textStyle     = androidx.compose.ui.text.TextStyle(color = theme.textPrimary),
-                    colors        = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor     = theme.textPrimary,
-                        unfocusedTextColor   = theme.textPrimary,
-                        focusedContainerColor   = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedBorderColor   = theme.accent,
-                        unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
-                        focusedLabelColor    = theme.accent,
-                        unfocusedLabelColor  = theme.textMuted,
-                        cursorColor          = theme.accent
-                    )
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)) {
-                    OutlinedButton(onClick = onSelectFolder) {
-                        Text(if (selectedUri.isEmpty()) "Link local directory" else "Change linked folder")
-                    }
-                    if (selectedUri.isNotEmpty()) {
-                        Text(
-                            text = "Linked folder: ${Uri.parse(selectedUri).lastPathSegment?.substringAfterLast(":") ?: ""}",
-                            color = theme.accent,
-                            fontSize = theme.typography.body,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    if (selectedUri.isNotEmpty()) {
-                        Text(
-                            text = "Files in this directory will be loaded.",
-                            color = theme.textMuted,
-                            fontSize = theme.typography.tiny
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { if (name.isNotBlank()) onCreate(name, selectedUri) }, enabled = name.isNotBlank()) {
-                Text("Create", color = theme.accent)
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = theme.textMuted) } },
-        containerColor = theme.surface
     )
 }
 
@@ -1756,12 +1569,7 @@ fun SearchVfsNodeRow(
     onEditClick: (VfsNode) -> Unit,
     onDeleteClick: (VfsNode) -> Unit
 ) {
-    val appFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val appFont = theme.toFontFamily()
     val density = LocalDensity.current
     val revealWidthPx = with(density) { theme.dimensions.swipeActionRevealWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
@@ -1817,8 +1625,6 @@ fun SearchVfsNodeRow(
                             if (offsetX.value != 0f) {
                                 scope.launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
                             } else {
-                                val globalPos = rowPositionInRoot + offset
-                                com.attachdesign.kern.TouchTracker.lastTouchPosition = globalPos
                                 onNodeClick(node)
                             }
                         }

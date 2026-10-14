@@ -56,7 +56,7 @@ object MarkdownEditorEngine {
     fun continueDocumentList(source: String, newlineOffset: Int, lineBreak: String): DocumentContinuation? {
         if (lineBreak != "\n" && lineBreak != "\r\n") return null
         val offset = newlineOffset.coerceIn(0, source.length)
-        if (isInsideCodeBlock(source, offset)) return null
+        if (isOffsetInCodeBlock(source, offset)) return null
 
         val lineStart = source.lastIndexOf('\n', offset - 1).let { if (it == -1) 0 else it + 1 }
         val lineEnd = source.indexOf('\n', offset).let { if (it == -1) source.length else it }
@@ -80,14 +80,34 @@ object MarkdownEditorEngine {
         }
     }
 
-    private fun isInsideCodeBlock(source: String, offset: Int): Boolean {
-        var blockStart = 0
-        MarkdownDocumentScanner.scan(source).forEach { block ->
-            val blockEnd = blockStart + block.rawText.length
-            if (offset in blockStart..blockEnd) return block.blockType == MarkdownBlockType.CODE_BLOCK
-            blockStart = blockEnd + block.separatorAfter.length
+    internal fun isOffsetInCodeBlock(source: CharSequence, offset: Int): Boolean {
+        var inCodeBlock = false
+        var activeFenceMarker: Char? = null
+        var activeFenceLength = 0
+        var lineStart = 0
+        while (lineStart < offset && lineStart < source.length) {
+            val lineEnd = source.indexOf('\n', lineStart).let { if (it == -1) source.length else it }
+            val line = source.subSequence(lineStart, lineEnd).toString().removeSuffix("\r")
+            val fence = MarkdownDocumentScanner.parseCodeFence(line)
+            if (!inCodeBlock) {
+                if (fence != null) {
+                    inCodeBlock = true
+                    activeFenceMarker = fence.marker
+                    activeFenceLength = fence.length
+                }
+            } else {
+                if (fence != null && fence.marker == activeFenceMarker && fence.length >= activeFenceLength) {
+                    val remainder = line.dropWhile { it.isWhitespace() }.drop(fence.length)
+                    if (remainder.isBlank()) {
+                        inCodeBlock = false
+                        activeFenceMarker = null
+                        activeFenceLength = 0
+                    }
+                }
+            }
+            lineStart = lineEnd + 1
         }
-        return false
+        return inCodeBlock
     }
 
     data class TransformResult(

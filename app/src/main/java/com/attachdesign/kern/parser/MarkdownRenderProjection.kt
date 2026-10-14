@@ -72,7 +72,7 @@ object MarkdownRenderer {
             return MarkdownRenderProjection(renderTable(block.rawText), emptyList(), IndexTransformationMatrix(emptyList()))
         }
 
-        val tokens = block.elements.filter { it.type.isSyntaxToken() }.sortedBy { it.start }
+        val tokens = block.elements.filter { it.type.isSyntaxToken }.sortedBy { it.start }
         val removedRanges = mutableListOf<IndexRange>()
         val rendered = StringBuilder()
         var sourceIndex = 0
@@ -108,7 +108,7 @@ object MarkdownRenderer {
 
         val matrix = IndexTransformationMatrix(removedRanges)
         val spans = block.elements.mapNotNull { element ->
-            if (element.type.isSyntaxToken() || element.start >= element.end) return@mapNotNull null
+            if (element.type.isSyntaxToken || element.start >= element.end) return@mapNotNull null
             val start = matrix.originalToTransformed(element.start).coerceIn(0, rendered.length)
             val end = matrix.originalToTransformed(element.end).coerceIn(start, rendered.length)
             if (start == end) null else RenderSpan(element.type, start, end, element.extra)
@@ -154,19 +154,5 @@ object MarkdownRenderer {
         }
         result += current.toString()
         return result
-    }
-
-    private fun MarkdownElementType.isSyntaxToken(): Boolean = when (this) {
-        MarkdownElementType.TOKEN_HEADER,
-        MarkdownElementType.TOKEN_BOLD,
-        MarkdownElementType.TOKEN_ITALIC,
-        MarkdownElementType.TOKEN_STRIKETHROUGH,
-        MarkdownElementType.TOKEN_INLINE_CODE,
-        MarkdownElementType.TOKEN_LINK_TEXT,
-        MarkdownElementType.TOKEN_LINK_URL,
-        MarkdownElementType.TOKEN_BLOCKQUOTE,
-        MarkdownElementType.TOKEN_LIST_BULLET,
-        MarkdownElementType.TOKEN_ESCAPE_CHAR -> true
-        else -> false
     }
 }

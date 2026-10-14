@@ -8,6 +8,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.os.Environment
 import java.io.File
+import java.io.FileInputStream
+import java.io.InputStream
+import java.io.IOException
 import com.attachdesign.kern.parser.MarkdownResourcePathResolver
 
 class StorageManager(private val context: Context) {
@@ -100,15 +103,6 @@ class StorageManager(private val context: Context) {
             }
         }
 
-        // Test writability of the resolved directory (important for Android 10+ scoped storage restrictions)
-        try {
-            val testFile = File(finalRootDir, ".write_test")
-            testFile.createNewFile()
-            testFile.delete()
-        } catch (e: Exception) {
-            finalRootDir = oldRootDir
-        }
-
         if (!finalRootDir.exists()) {
             finalRootDir.mkdirs()
         }
@@ -130,27 +124,47 @@ class StorageManager(private val context: Context) {
             projectDir.mkdirs()
         }
 
-        // Test writability of the final project directory to handle reinstall ownership conflicts
-        var isProjectDirWritable = false
-        try {
-            val testFile = File(projectDir, ".write_test")
-            testFile.createNewFile()
-            testFile.delete()
-            isProjectDirWritable = true
-        } catch (e: Exception) {
-            isProjectDirWritable = false
-        }
-
-        if (!isProjectDirWritable && finalRootDir != oldRootDir) {
-            val fallbackRootDir = oldRootDir
-            val fallbackProjectDir = getSafeFile(fallbackRootDir, project.path)
-            if (!fallbackProjectDir.exists()) {
-                fallbackProjectDir.mkdirs()
-            }
-            return fallbackProjectDir
-        }
-
         return projectDir
+    }
+
+    private inline fun <T> withProjectRoot(
+        project: ProjectEntity,
+        action: (File) -> T
+    ): T? {
+        val projectRoot = getProjectRootFile(project)
+        try {
+            return action(projectRoot)
+        } catch (e: SecurityException) {
+            throw e
+        } catch (_: Exception) {
+            val fallbackRoot = getInternalFallbackProjectRootFile(project)
+            if (fallbackRoot != projectRoot) {
+                return try {
+                    action(fallbackRoot)
+                } catch (e: SecurityException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            return null
+        }
+    }
+
+    private inline fun <T> withProjectFile(
+        project: ProjectEntity,
+        relativePath: String,
+        ensureParent: Boolean = false,
+        action: (File) -> T
+    ): T? = withProjectRoot(project) { root ->
+        val file = getSafeFile(root, relativePath)
+        if (ensureParent) {
+            val parent = file.parentFile
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs()
+            }
+        }
+        action(file)
     }
 
     /**
@@ -226,24 +240,72 @@ class StorageManager(private val context: Context) {
     }
 
     /**
+     * Resolves the app-private internal storage fallback directory for a project
+     * when external/public Documents directory operations fail due to OS permissions.
+     */
+    private fun getInternalFallbackProjectRootFile(project: ProjectEntity): File {
+        val rootDirName = if (project.isExternal) "external_saf" else "sandbox"
+        val fallbackRootDir = File(context.filesDir, rootDirName)
+        if (!fallbackRootDir.exists()) {
+            fallbackRootDir.mkdirs()
+        }
+        val fallbackProjectDir = getSafeFile(fallbackRootDir, project.path)
+        if (!fallbackProjectDir.exists()) {
+            fallbackProjectDir.mkdirs()
+        }
+        return fallbackProjectDir
+    }
+
+    /**
+     * Opens an InputStream for reading raw bytes from a file.
+     * Supports both SAF content:// URIs and filesystem sandbox files with fallback.
+     */
+    fun openInputStream(project: ProjectEntity, relativePath: String): InputStream? {
+        if (project.path.startsWith("content://")) {
+            val doc = getDocumentFile(project, relativePath) ?: return null
+            return context.contentResolver.openInputStream(doc.uri)
+        }
+        val projectRoot = getProjectRootFile(project)
+        val file = getSafeFile(projectRoot, relativePath)
+        if (file.exists() && file.isFile) {
+            return try {
+                FileInputStream(file)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val fallbackRoot = getInternalFallbackProjectRootFile(project)
+        if (fallbackRoot != projectRoot) {
+            val fallbackFile = getSafeFile(fallbackRoot, relativePath)
+            if (fallbackFile.exists() && fallbackFile.isFile) {
+                return try {
+                    FileInputStream(fallbackFile)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+        return null
+    }
+
+    /**
      * Writes UTF-8 string content to a file on Dispatchers.IO.
      */
     suspend fun writeFile(project: ProjectEntity, relativePath: String, content: String): Unit = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
             val doc = getOrCreateDocumentFile(project, relativePath, isDirectory = false) ?: return@withContext
-            context.contentResolver.openOutputStream(doc.uri, "rwt")?.use { outputStream ->
-                outputStream.bufferedWriter().use { it.write(content) }
+            try {
+                context.contentResolver.openOutputStream(doc.uri, "rwt")?.use { outputStream ->
+                    outputStream.bufferedWriter().use { it.write(content) }
+                }
+            } catch (_: Exception) {
             }
             return@withContext
         }
 
-        val projectRoot = getProjectRootFile(project)
-        val file = getSafeFile(projectRoot, relativePath)
-        val parent = file.parentFile
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs()
+        withProjectFile(project, relativePath, ensureParent = true) { file ->
+            file.writeText(content, Charsets.UTF_8)
         }
-        file.writeText(content, Charsets.UTF_8)
     }
 
     /**
@@ -251,21 +313,20 @@ class StorageManager(private val context: Context) {
      */
     suspend fun createFile(project: ProjectEntity, relativePath: String): Boolean = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
+            val existing = getDocumentFile(project, relativePath)
+            if (existing != null) return@withContext false
             val doc = getOrCreateDocumentFile(project, relativePath, isDirectory = false)
             return@withContext doc != null
         }
 
-        val projectRoot = getProjectRootFile(project)
-        val file = getSafeFile(projectRoot, relativePath)
-        val parent = file.parentFile
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs()
+        val result = withProjectFile(project, relativePath, ensureParent = true) { file ->
+            if (!file.exists()) {
+                file.createNewFile()
+            } else {
+                false
+            }
         }
-        if (!file.exists()) {
-            file.createNewFile()
-        } else {
-            false
-        }
+        result ?: false
     }
 
     /**
@@ -277,9 +338,14 @@ class StorageManager(private val context: Context) {
             return@withContext doc != null
         }
 
-        val projectRoot = getProjectRootFile(project)
-        val file = getSafeFile(projectRoot, relativePath)
-        file.mkdirs()
+        val result = withProjectFile(project, relativePath) { file ->
+            val created = file.mkdirs()
+            if (!created && !file.exists()) {
+                throw IOException("Failed to create directory in root: ${file.path}")
+            }
+            true
+        }
+        result ?: false
     }
 
     /**
@@ -288,16 +354,17 @@ class StorageManager(private val context: Context) {
     suspend fun deleteFile(project: ProjectEntity, relativePath: String): Boolean = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
             val doc = getDocumentFile(project, relativePath) ?: return@withContext false
-            return@withContext doc.delete()
+            return@withContext runCatching { doc.delete() }.getOrDefault(false)
         }
 
-        val projectRoot = getProjectRootFile(project)
-        val file = getSafeFile(projectRoot, relativePath)
-        if (file.exists()) {
-            file.deleteRecursively()
-        } else {
-            false
+        val result = withProjectFile(project, relativePath) { file ->
+            if (file.exists()) {
+                file.deleteRecursively()
+            } else {
+                throw NoSuchFileException(file, reason = "File does not exist")
+            }
         }
+        result ?: false
     }
 
     /**
@@ -307,16 +374,22 @@ class StorageManager(private val context: Context) {
         if (project.path.startsWith("content://")) {
             val doc = getDocumentFile(project, oldPath) ?: return@withContext false
             val newName = newPath.substringAfterLast('/')
-            return@withContext doc.renameTo(newName)
+            return@withContext runCatching { doc.renameTo(newName) }.getOrDefault(false)
         }
-        val projectRoot = getProjectRootFile(project)
-        val oldFile = getSafeFile(projectRoot, oldPath)
-        val newFile = getSafeFile(projectRoot, newPath)
-        if (oldFile.exists()) {
+
+        val result = withProjectRoot(project) { root ->
+            val oldFile = getSafeFile(root, oldPath)
+            if (!oldFile.exists()) {
+                throw NoSuchFileException(oldFile, reason = "Source file does not exist")
+            }
+            val newFile = getSafeFile(root, newPath)
+            val destParent = newFile.parentFile
+            if (destParent != null && !destParent.exists()) {
+                destParent.mkdirs()
+            }
             oldFile.renameTo(newFile)
-        } else {
-            false
         }
+        result ?: false
     }
 
     /**

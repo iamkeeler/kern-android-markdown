@@ -1,9 +1,9 @@
 package com.attachdesign.kern.data.storage
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import com.attachdesign.kern.ui.common.SharePayload
 import androidx.core.content.FileProvider
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
@@ -140,42 +140,7 @@ class FileOperationsManager(
                 }
                 Result.success(VfsNode.File(cleanName, newPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
             } else {
-                // Rename directory in DB and update all nested child paths
-                val allProjectFiles = db.fileDao().getFilesForProject(project.id)
-                val oldPrefix = "$oldPath/"
-                val newPrefix = "$newPath/"
-                val childrenToUpdate = allProjectFiles.filter { it.relativePath.startsWith(oldPrefix) }
-                val currentDir = db.fileDao().getFileByPath(project.id, oldPath)
-
-                db.runInTransaction {
-                    // Update main directory entity
-                    if (currentDir != null) {
-                        db.fileDao().deleteFile(project.id, oldPath)
-                        db.fileDao().insertFile(
-                            currentDir.copy(
-                                id = 0,
-                                name = cleanName,
-                                relativePath = newPath,
-                                lastModified = System.currentTimeMillis(),
-                                syncState = "SYNCED"
-                            )
-                        )
-                    }
-
-                    // Update child paths recursively
-                    for (child in childrenToUpdate) {
-                        val suffix = child.relativePath.removePrefix(oldPrefix)
-                        val childNewPath = "$newPrefix$suffix"
-                        db.fileDao().deleteFile(project.id, child.relativePath)
-                        db.fileDao().insertFile(
-                            child.copy(
-                                id = 0,
-                                relativePath = childNewPath,
-                                lastModified = System.currentTimeMillis()
-                            )
-                        )
-                    }
-                }
+                updateNodeAndDescendantsInDb(project.id, oldPath, newPath, cleanName, updateSyncState = "SYNCED")
                 Result.success(VfsNode.Directory(cleanName, newPath))
             }
         } catch (e: Exception) {
@@ -213,7 +178,7 @@ class FileOperationsManager(
         }
     }
 
-    suspend fun shareNode(project: ProjectEntity, node: VfsNode): Result<Uri> = withContext(Dispatchers.IO) {
+    suspend fun shareNode(project: ProjectEntity, node: VfsNode): Result<SharePayload> = withContext(Dispatchers.IO) {
         try {
             val cacheDir = context.cacheDir
             val shareDir = File(cacheDir, "shared_exports")
@@ -229,6 +194,14 @@ class FileOperationsManager(
             }
 
             var textContent: String? = null
+            val mimeType = if (node.isDirectory) {
+                "application/zip"
+            } else if (node.name.endsWith(".md", ignoreCase = true) || node.name.endsWith(".markdown", ignoreCase = true)) {
+                "text/markdown"
+            } else {
+                "text/plain"
+            }
+
             val uriToShare: Uri? = if (node.isDirectory) {
                 val zipFile = File(shareDir, "${node.name}_${System.currentTimeMillis()}.zip")
                 ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
@@ -242,8 +215,9 @@ class FileOperationsManager(
                                 addDirToZip(child, entryName)
                             } else {
                                 zos.putNextEntry(ZipEntry(entryName))
-                                val contentBytes = storageManager.readFile(project, child.relativePath).toByteArray(Charsets.UTF_8)
-                                zos.write(contentBytes)
+                                storageManager.openInputStream(project, child.relativePath)?.use { inputStream ->
+                                    inputStream.copyTo(zos)
+                                }
                                 zos.closeEntry()
                             }
                         }
@@ -260,32 +234,14 @@ class FileOperationsManager(
             }
 
             if (uriToShare != null) {
-                withContext(Dispatchers.Main) {
-                    val mimeType = if (node.isDirectory) {
-                        "application/zip"
-                    } else if (node.name.endsWith(".md", ignoreCase = true) || node.name.endsWith(".markdown", ignoreCase = true)) {
-                        "text/markdown"
-                    } else {
-                        "text/plain"
-                    }
-
-                    val shareIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_STREAM, uriToShare)
-                        if (!node.isDirectory && !textContent.isNullOrEmpty()) {
-                            putExtra(Intent.EXTRA_TEXT, textContent)
-                        }
-                        type = mimeType
-                        clipData = android.content.ClipData.newRawUri(node.name, uriToShare)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    val chooser = Intent.createChooser(shareIntent, "Share ${node.name}").apply {
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(chooser)
-                }
-                Result.success(uriToShare)
+                Result.success(
+                    SharePayload(
+                        uri = uriToShare,
+                        mimeType = mimeType,
+                        textContent = if (!node.isDirectory) textContent else null,
+                        title = "Share ${node.name}"
+                    )
+                )
             } else {
                 Result.failure(IllegalStateException("Could not generate URI for ${node.name}"))
             }
@@ -326,36 +282,7 @@ class FileOperationsManager(
                 }
                 Result.success(VfsNode.File(newName, newPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
             } else {
-                val allProjectFiles = db.fileDao().getFilesForProject(project.id)
-                val oldPrefix = "${node.relativePath}/"
-                val newPrefix = "$newPath/"
-                val childrenToUpdate = allProjectFiles.filter { it.relativePath.startsWith(oldPrefix) }
-                val currentDir = db.fileDao().getFileByPath(project.id, node.relativePath)
-
-                db.runInTransaction {
-                    if (currentDir != null) {
-                        db.fileDao().deleteFile(project.id, node.relativePath)
-                        db.fileDao().insertFile(
-                            currentDir.copy(
-                                id = 0,
-                                relativePath = newPath,
-                                lastModified = System.currentTimeMillis()
-                            )
-                        )
-                    }
-                    for (child in childrenToUpdate) {
-                        val suffix = child.relativePath.removePrefix(oldPrefix)
-                        val childNewPath = "$newPrefix$suffix"
-                        db.fileDao().deleteFile(project.id, child.relativePath)
-                        db.fileDao().insertFile(
-                            child.copy(
-                                id = 0,
-                                relativePath = childNewPath,
-                                lastModified = System.currentTimeMillis()
-                            )
-                        )
-                    }
-                }
+                updateNodeAndDescendantsInDb(project.id, node.relativePath, newPath, newName)
                 Result.success(VfsNode.Directory(newName, newPath))
             }
         } catch (e: Exception) {
@@ -387,37 +314,9 @@ class FileOperationsManager(
                 }
                 Result.success(VfsNode.File(originalPath.substringAfterLast('/'), originalPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
             } else {
-                val allProjectFiles = db.fileDao().getFilesForProject(project.id)
-                val oldPrefix = "${trashNode.relativePath}/"
-                val newPrefix = "$originalPath/"
-                val childrenToUpdate = allProjectFiles.filter { it.relativePath.startsWith(oldPrefix) }
-                val currentDir = db.fileDao().getFileByPath(project.id, trashNode.relativePath)
-
-                db.runInTransaction {
-                    if (currentDir != null) {
-                        db.fileDao().deleteFile(project.id, trashNode.relativePath)
-                        db.fileDao().insertFile(
-                            currentDir.copy(
-                                id = 0,
-                                relativePath = originalPath,
-                                lastModified = System.currentTimeMillis()
-                            )
-                        )
-                    }
-                    for (child in childrenToUpdate) {
-                        val suffix = child.relativePath.removePrefix(oldPrefix)
-                        val childNewPath = "$newPrefix$suffix"
-                        db.fileDao().deleteFile(project.id, child.relativePath)
-                        db.fileDao().insertFile(
-                            child.copy(
-                                id = 0,
-                                relativePath = childNewPath,
-                                lastModified = System.currentTimeMillis()
-                            )
-                        )
-                    }
-                }
-                Result.success(VfsNode.Directory(originalPath.substringAfterLast('/'), originalPath))
+                val restoredName = originalPath.substringAfterLast('/')
+                updateNodeAndDescendantsInDb(project.id, trashNode.relativePath, originalPath, restoredName)
+                Result.success(VfsNode.Directory(restoredName, originalPath))
             }
         } catch (e: Exception) {
             Log.e("FileOpsManager", "Failed to restore from trash", e)
@@ -441,5 +340,46 @@ class FileOperationsManager(
             candidatePath = if (dir.isEmpty()) candidateName else "$dir/$candidateName"
         }
         return candidatePath
+    }
+
+    private fun updateNodeAndDescendantsInDb(
+        projectId: Long,
+        oldPath: String,
+        newPath: String,
+        newName: String,
+        updateSyncState: String? = null
+    ) {
+        val allProjectFiles = db.fileDao().getFilesForProject(projectId)
+        val oldPrefix = "$oldPath/"
+        val newPrefix = "$newPath/"
+        val childrenToUpdate = allProjectFiles.filter { it.relativePath.startsWith(oldPrefix) }
+        val currentDir = db.fileDao().getFileByPath(projectId, oldPath)
+
+        db.runInTransaction {
+            if (currentDir != null) {
+                db.fileDao().deleteFile(projectId, oldPath)
+                db.fileDao().insertFile(
+                    currentDir.copy(
+                        id = 0,
+                        name = newName,
+                        relativePath = newPath,
+                        lastModified = System.currentTimeMillis(),
+                        syncState = updateSyncState ?: currentDir.syncState
+                    )
+                )
+            }
+            for (child in childrenToUpdate) {
+                val suffix = child.relativePath.removePrefix(oldPrefix)
+                val childNewPath = "$newPrefix$suffix"
+                db.fileDao().deleteFile(projectId, child.relativePath)
+                db.fileDao().insertFile(
+                    child.copy(
+                        id = 0,
+                        relativePath = childNewPath,
+                        lastModified = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
     }
 }

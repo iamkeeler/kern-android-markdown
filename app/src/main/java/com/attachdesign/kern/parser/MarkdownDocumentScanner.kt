@@ -69,12 +69,12 @@ object MarkdownDocumentScanner {
     }
 
     private fun consumeFence(lines: List<SourceLine>, start: Int): Int {
-        val opening = fenceMarker(lines[start].content) ?: return start + 1
+        val opening = parseCodeFence(lines[start].content) ?: return start + 1
         var index = start + 1
         while (index < lines.size) {
-            val closing = fenceMarker(lines[index].content)
-            val isClosingFence = closing != null && closing.first == opening.first && closing.second >= opening.second &&
-                lines[index].content.dropWhile { it.isWhitespace() }.drop(closing.second).isBlank()
+            val closing = parseCodeFence(lines[index].content)
+            val isClosingFence = closing != null && closing.marker == opening.marker && closing.length >= opening.length &&
+                lines[index].content.dropWhile { it.isWhitespace() }.drop(closing.length).isBlank()
             index++
             if (isClosingFence) break
         }
@@ -111,7 +111,7 @@ object MarkdownDocumentScanner {
         val trimmed = line.trim()
         val trimmedStart = line.trimStart()
         return when {
-            fenceMarker(line) != null -> LineKind.FENCE
+            parseCodeFence(line) != null -> LineKind.FENCE
             trimmedStart.matches(Regex("#{1,6}\\s+.*")) -> LineKind.STRUCTURAL
             MarkdownParser.isThematicBreak(line) -> LineKind.STRUCTURAL
             trimmedStart.startsWith(">") -> LineKind.STRUCTURAL
@@ -124,13 +124,15 @@ object MarkdownDocumentScanner {
         index + 1 < lines.size && lines[index].content.contains('|') &&
             lines[index + 1].content.matches(Regex("^\\s*\\|?\\s*:?-{1,}:?\\s*(?:\\|\\s*:?-{1,}:?\\s*)+\\|?\\s*$"))
 
-    private fun fenceMarker(line: String): Pair<Char, Int>? {
-        val indent = line.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
-        if (indent > 3) return null
-        val marker = line.getOrNull(indent) ?: return null
+    data class CodeFenceInfo(val marker: Char, val length: Int, val indent: Int)
+
+    fun parseCodeFence(line: String): CodeFenceInfo? {
+        val indent = line.indexOfFirst { !it.isWhitespace() }
+        if (indent == -1 || indent > 3) return null
+        val marker = line[indent]
         if (marker != '`' && marker != '~') return null
         val length = line.drop(indent).takeWhile { it == marker }.length
-        return if (length >= 3) marker to length else null
+        return if (length >= 3) CodeFenceInfo(marker, length, indent) else null
     }
 
     private fun tokenize(source: String): List<SourceLine> {

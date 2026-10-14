@@ -5,7 +5,14 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object Main : NavKey
 
-@Serializable data class EditorKey(val projectId: Long, val filePath: String, val focusOnStart: Boolean = false) : NavKey
+@Serializable
+data class EditorKey(
+    val projectId: Long,
+    val filePath: String,
+    val focusOnStart: Boolean = false,
+    val touchOriginX: Float? = null,
+    val touchOriginY: Float? = null
+) : NavKey
 
 @Serializable data object SettingsKey : NavKey
 

@@ -33,6 +33,8 @@ class MarkdownVisualTransformation(
     val codeBackgroundColor: Color
 ) : VisualTransformation {
 
+    private val styleProvider = MarkdownSpanStyleProvider(tokenColor, codeBackgroundColor)
+
     override fun filter(text: AnnotatedString): TransformedText {
         val rawText = text.text
         val paragraph = MarkdownParser.parseParagraph(rawText)
@@ -41,7 +43,7 @@ class MarkdownVisualTransformation(
             ViewMode.RAW_PLAIN_TEXT -> {
                 val styledText = AnnotatedString(
                     rawText,
-                    spanStyles = listOf(AnnotatedString.Range(SpanStyle(fontFamily = FontFamily.Monospace), 0, rawText.length))
+                    spanStyles = listOf(AnnotatedString.Range(styleProvider.styleForMonospaceRaw(), 0, rawText.length))
                 )
                 TransformedText(styledText, OffsetMapping.Identity)
             }
@@ -78,7 +80,7 @@ class MarkdownVisualTransformation(
         builder: AnnotatedString.Builder
     ) {
         if (paragraph.blockType == MarkdownBlockType.CODE_BLOCK) {
-            builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackgroundColor), 0, paragraph.rawText.length)
+            builder.addStyle(styleProvider.styleForRawCodeBlock(), 0, paragraph.rawText.length)
         }
 
         for (element in paragraph.elements) {
@@ -86,38 +88,8 @@ class MarkdownVisualTransformation(
             val end = element.end
             if (start >= end) continue
 
-            when (element.type) {
-                MarkdownElementType.BOLD -> {
-                    builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
-                }
-                MarkdownElementType.ITALIC -> {
-                    builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
-                }
-                MarkdownElementType.STRIKETHROUGH -> {
-                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), start, end)
-                }
-                MarkdownElementType.INLINE_CODE -> {
-                    builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackgroundColor), start, end)
-                }
-                MarkdownElementType.LINK -> {
-                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = tokenColor), start, end)
-                }
-                MarkdownElementType.IMAGE -> {
-                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = tokenColor, fontStyle = FontStyle.Italic), start, end)
-                }
-                MarkdownElementType.TOKEN_HEADER,
-                MarkdownElementType.TOKEN_BOLD,
-                MarkdownElementType.TOKEN_ITALIC,
-                MarkdownElementType.TOKEN_STRIKETHROUGH,
-                MarkdownElementType.TOKEN_INLINE_CODE,
-                MarkdownElementType.TOKEN_LINK_TEXT,
-                MarkdownElementType.TOKEN_LINK_URL,
-                MarkdownElementType.TOKEN_BLOCKQUOTE,
-                MarkdownElementType.TOKEN_LIST_BULLET,
-                MarkdownElementType.TOKEN_ESCAPE_CHAR -> {
-                    builder.addStyle(SpanStyle(color = tokenColor, fontWeight = FontWeight.Normal), start, end)
-                }
-                else -> {}
+            styleProvider.styleForElement(element.type)?.let { style ->
+                builder.addStyle(style, start, end)
             }
         }
     }
@@ -127,20 +99,7 @@ class MarkdownVisualTransformation(
     ): Pair<String, IndexTransformationMatrix> {
         val raw = paragraph.rawText
         val tokensToProcess = paragraph.elements.filter { element ->
-            val isToken = when (element.type) {
-                MarkdownElementType.TOKEN_HEADER,
-                MarkdownElementType.TOKEN_BOLD,
-                MarkdownElementType.TOKEN_ITALIC,
-                MarkdownElementType.TOKEN_STRIKETHROUGH,
-                MarkdownElementType.TOKEN_INLINE_CODE,
-                MarkdownElementType.TOKEN_LINK_TEXT,
-                MarkdownElementType.TOKEN_LINK_URL,
-                MarkdownElementType.TOKEN_BLOCKQUOTE,
-                MarkdownElementType.TOKEN_LIST_BULLET,
-                MarkdownElementType.TOKEN_ESCAPE_CHAR -> true
-                else -> false
-            }
-            if (!isToken) return@filter false
+            if (!element.type.isSyntaxToken) return@filter false
 
             // If focused, reveal token if active selection intersects or is inside the construct range
             if (isFocused) {
@@ -194,14 +153,14 @@ class MarkdownVisualTransformation(
         matrix: IndexTransformationMatrix
     ) {
         if (paragraph.blockType == MarkdownBlockType.CODE_BLOCK) {
-            builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackgroundColor), 0, builder.length)
+            builder.addStyle(styleProvider.styleForRawCodeBlock(), 0, builder.length)
             return
         }
 
         if (paragraph.blockType == MarkdownBlockType.TASK_LIST) {
             val isChecked = paragraph.elements.any { it.type == MarkdownElementType.TOKEN_LIST_BULLET && it.extra == "checked" }
             if (isChecked && builder.length > 2) {
-                builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = tokenColor.copy(alpha = 0.6f)), 2, builder.length)
+                builder.addStyle(styleProvider.styleForCheckedTaskItem(), 2, builder.length)
             }
         }
 
@@ -210,72 +169,18 @@ class MarkdownVisualTransformation(
             val end = element.end
             if (start >= end) continue
 
-            when (element.type) {
-                MarkdownElementType.BOLD -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), tStart, tEnd)
-                    }
+            val style = if (element.type == MarkdownElementType.TOKEN_LIST_BULLET) {
+                styleProvider.styleForTokenBulletBold()
+            } else {
+                styleProvider.styleForElement(element.type)
+            }
+
+            if (style != null) {
+                val tStart = matrix.originalToTransformed(start)
+                val tEnd = matrix.originalToTransformed(end)
+                if (tStart < tEnd) {
+                    builder.addStyle(style, tStart, tEnd)
                 }
-                MarkdownElementType.ITALIC -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), tStart, tEnd)
-                    }
-                }
-                MarkdownElementType.STRIKETHROUGH -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), tStart, tEnd)
-                    }
-                }
-                MarkdownElementType.INLINE_CODE -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackgroundColor), tStart, tEnd)
-                    }
-                }
-                MarkdownElementType.LINK -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = tokenColor), tStart, tEnd)
-                    }
-                }
-                MarkdownElementType.IMAGE -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(color = tokenColor, fontStyle = FontStyle.Italic, textDecoration = TextDecoration.Underline), tStart, tEnd)
-                    }
-                }
-                MarkdownElementType.TOKEN_LIST_BULLET -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(color = tokenColor, fontWeight = FontWeight.Bold), tStart, tEnd)
-                    }
-                }
-                MarkdownElementType.TOKEN_HEADER,
-                MarkdownElementType.TOKEN_BOLD,
-                MarkdownElementType.TOKEN_ITALIC,
-                MarkdownElementType.TOKEN_STRIKETHROUGH,
-                MarkdownElementType.TOKEN_INLINE_CODE,
-                MarkdownElementType.TOKEN_LINK_TEXT,
-                MarkdownElementType.TOKEN_LINK_URL,
-                MarkdownElementType.TOKEN_BLOCKQUOTE,
-                MarkdownElementType.TOKEN_ESCAPE_CHAR -> {
-                    val tStart = matrix.originalToTransformed(start)
-                    val tEnd = matrix.originalToTransformed(end)
-                    if (tStart < tEnd) {
-                        builder.addStyle(SpanStyle(color = tokenColor, fontWeight = FontWeight.Normal), tStart, tEnd)
-                    }
-                }
-                else -> {}
             }
         }
     }

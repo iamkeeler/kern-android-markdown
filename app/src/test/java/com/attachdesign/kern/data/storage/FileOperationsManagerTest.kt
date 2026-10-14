@@ -53,6 +53,13 @@ class FileOperationsManagerTest {
         if (sandboxDir.exists()) {
             sandboxDir.deleteRecursively()
         }
+        try {
+            val sCacheField = androidx.core.content.FileProvider::class.java.getDeclaredField("sCache")
+            sCacheField.isAccessible = true
+            (sCacheField.get(null) as? MutableMap<*, *>)?.clear()
+        } catch (_: Exception) {
+            // Ignored if field is unavailable
+        }
     }
 
 
@@ -195,13 +202,52 @@ class FileOperationsManagerTest {
         val result = fileOpsManager.shareNode(project, node)
 
         assertTrue(result.isSuccess)
-        val uri = result.getOrThrow()
-        assertNotNull(uri)
-        assertTrue(uri.toString().contains("com.attachdesign.kern.fileprovider"))
+        val payload = result.getOrThrow()
+        assertNotNull(payload)
+        assertEquals("text/markdown", payload.mimeType)
+        assertEquals("# Shared Content\nHello World", payload.textContent)
+        assertTrue(payload.uri.toString().contains("com.attachdesign.kern.fileprovider"))
 
         // Check shared file in exports cache directory
         val exportFile = File(context.cacheDir, "shared_exports/$fileName")
         assertTrue(exportFile.exists())
         assertEquals("# Shared Content\nHello World", exportFile.readText())
+    }
+
+    @Test
+    fun testShareNodeDirectory_preservesBinaryAssets() = runTest {
+        storageManager.createDirectory(project, "assets")
+        val binaryBytes = byteArrayOf(0x00, 0xFF.toByte(), 0x7F, 0x80.toByte(), 0x12, 0x34)
+        val imageFile = storageManager.getAbsoluteFile(project, "assets/test.png")
+        imageFile.writeBytes(binaryBytes)
+
+        val dirNode = VfsNode.Directory("assets", "assets")
+        val result = fileOpsManager.shareNode(project, dirNode)
+
+        assertTrue(result.isSuccess)
+        val payload = result.getOrThrow()
+        assertEquals("application/zip", payload.mimeType)
+
+        // Read back the zip entry and verify exact byte equality
+        val exportsDir = File(context.cacheDir, "shared_exports")
+        val zipFiles = exportsDir.listFiles { _, name -> name.startsWith("assets_") && name.endsWith(".zip") }
+        assertNotNull(zipFiles)
+        assertTrue(zipFiles!!.isNotEmpty())
+        val zipFile = zipFiles.first()
+
+        java.util.zip.ZipInputStream(zipFile.inputStream()).use { zis ->
+            var entry = zis.nextEntry
+            var found = false
+            while (entry != null) {
+                if (entry.name == "test.png") {
+                    val readBytes = zis.readBytes()
+                    assertArrayEquals(binaryBytes, readBytes)
+                    found = true
+                    break
+                }
+                entry = zis.nextEntry
+            }
+            assertTrue("Expected to find test.png in zip", found)
+        }
     }
 }

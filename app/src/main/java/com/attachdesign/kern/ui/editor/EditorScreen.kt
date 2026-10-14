@@ -59,6 +59,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import com.attachdesign.kern.ui.theme.toFontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -83,9 +84,8 @@ import com.attachdesign.kern.parser.MarkdownRenderer
 import com.attachdesign.kern.parser.MarkdownElementType
 import com.attachdesign.kern.parser.IndexRange
 import com.attachdesign.kern.parser.IndexTransformationMatrix
-import com.attachdesign.kern.ui.main.InputDialog
+import com.attachdesign.kern.ui.main.dialogs.InputDialog
 import com.attachdesign.kern.ui.theme.AppColorTheme
-import com.attachdesign.kern.ui.theme.ApplyKernSystemBars
 import com.attachdesign.kern.ui.settings.SettingsTabsContent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -102,14 +102,14 @@ fun EditorScreen(
     viewModel: EditorViewModel,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
-    focusOnStart: Boolean = false
+    focusOnStart: Boolean = false,
+    touchOriginX: Float? = null,
+    touchOriginY: Float? = null
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
-
-    ApplyKernSystemBars(theme)
 
     LaunchedEffect(viewModel.documentTextFieldState) {
         snapshotFlow { viewModel.documentTextFieldState.text.toString() }
@@ -187,14 +187,12 @@ fun EditorScreen(
         }
     }
 
-    val touchPos = remember(projectId, filePath) { com.attachdesign.kern.TouchTracker.lastTouchPosition }
-
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .clip(CircularRevealShape(revealProgress.value, touchPos.x, touchPos.y))
+            .clip(CircularRevealShape(revealProgress.value, touchOriginX, touchOriginY))
             .background(uiState.activeTheme.background)
     ) {
         val widthDp = maxWidth
@@ -247,7 +245,7 @@ fun EditorScreen(
                                         viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
                                     }
                                     "Share" -> {
-                                        viewModel.shareCurrentFile()
+                                        viewModel.shareCurrentFile(context)
                                     }
                                     "Copy Markdown" -> {
                                         val markdown = MarkdownParser.joinParsedDocument(uiState.paragraphs.items.map { it.block })
@@ -682,11 +680,7 @@ private fun DocumentEditorField(
 ) {
     val theme = state.activeTheme
     val scrollState = rememberScrollState()
-    val editorFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.SansSerif
-    }
+    val editorFont = theme.toFontFamily()
     val inputTransformation = remember { MarkdownDocumentInputTransformation() }
     val bottomScrollPadding = if (isToolbarMinimized) 100.dp else 220.dp
 
@@ -810,22 +804,9 @@ fun splitTableLine(line: String): List<String> {
 }
 
 fun renderCellText(text: String, theme: com.attachdesign.kern.ui.theme.AppColorTheme): AnnotatedString {
+    val styleProvider = MarkdownSpanStyleProvider(theme.textMuted, theme.codeBackground)
     val elements = MarkdownParser.parseInline(text, 0)
-    val tokensToProcess = elements.filter {
-        when (it.type) {
-            MarkdownElementType.TOKEN_HEADER,
-            MarkdownElementType.TOKEN_BOLD,
-            MarkdownElementType.TOKEN_ITALIC,
-            MarkdownElementType.TOKEN_STRIKETHROUGH,
-            MarkdownElementType.TOKEN_INLINE_CODE,
-            MarkdownElementType.TOKEN_LINK_TEXT,
-            MarkdownElementType.TOKEN_LINK_URL,
-            MarkdownElementType.TOKEN_BLOCKQUOTE,
-            MarkdownElementType.TOKEN_LIST_BULLET,
-            MarkdownElementType.TOKEN_ESCAPE_CHAR -> true
-            else -> false
-        }
-    }.sortedBy { it.start }
+    val tokensToProcess = elements.filter { it.type.isSyntaxToken }.sortedBy { it.start }
 
     val strippedRanges = mutableListOf<IndexRange>()
     val sb = StringBuilder()
@@ -849,50 +830,12 @@ fun renderCellText(text: String, theme: com.attachdesign.kern.ui.theme.AppColorT
         val end = element.end
         if (start >= end) continue
 
-        when (element.type) {
-            MarkdownElementType.BOLD -> {
-                val tStart = matrix.originalToTransformed(start)
-                val tEnd = matrix.originalToTransformed(end)
-                if (tStart < tEnd) {
-                    builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), tStart, tEnd)
-                }
+        styleProvider.styleForElement(element.type)?.let { style ->
+            val tStart = matrix.originalToTransformed(start)
+            val tEnd = matrix.originalToTransformed(end)
+            if (tStart < tEnd) {
+                builder.addStyle(style, tStart, tEnd)
             }
-            MarkdownElementType.ITALIC -> {
-                val tStart = matrix.originalToTransformed(start)
-                val tEnd = matrix.originalToTransformed(end)
-                if (tStart < tEnd) {
-                    builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), tStart, tEnd)
-                }
-            }
-            MarkdownElementType.STRIKETHROUGH -> {
-                val tStart = matrix.originalToTransformed(start)
-                val tEnd = matrix.originalToTransformed(end)
-                if (tStart < tEnd) {
-                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), tStart, tEnd)
-                }
-            }
-            MarkdownElementType.INLINE_CODE -> {
-                val tStart = matrix.originalToTransformed(start)
-                val tEnd = matrix.originalToTransformed(end)
-                if (tStart < tEnd) {
-                    builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = theme.codeBackground), tStart, tEnd)
-                }
-            }
-            MarkdownElementType.LINK -> {
-                val tStart = matrix.originalToTransformed(start)
-                val tEnd = matrix.originalToTransformed(end)
-                if (tStart < tEnd) {
-                    builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline, color = theme.textMuted), tStart, tEnd)
-                }
-            }
-            MarkdownElementType.IMAGE -> {
-                val tStart = matrix.originalToTransformed(start)
-                val tEnd = matrix.originalToTransformed(end)
-                if (tStart < tEnd) {
-                    builder.addStyle(SpanStyle(color = theme.textMuted, fontStyle = FontStyle.Italic, textDecoration = TextDecoration.Underline), tStart, tEnd)
-                }
-            }
-            else -> {}
         }
     }
     return builder.toAnnotatedString()
@@ -977,12 +920,7 @@ fun ParagraphField(
 ) {
     val focusRequester = remember { FocusRequester() }
 
-    val editorFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val editorFont = theme.toFontFamily()
 
     val textStyle = if (viewMode == ViewMode.RAW_PLAIN_TEXT) {
         TextStyle(fontFamily = FontFamily.Monospace, fontSize = (theme.typography.h4.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (theme.typography.h2.value * fontSizeScale).sp)
@@ -1455,12 +1393,7 @@ fun SidebarPane(
     modifier: Modifier = Modifier
 ) {
     val theme = state.activeTheme
-    val editorFont = when (theme.editorFontFamily.lowercase()) {
-        "serif" -> FontFamily.Serif
-        "sans-serif", "sansserif" -> FontFamily.SansSerif
-        "monospace" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    val editorFont = theme.toFontFamily()
     val title = when (state.sidebarMode) {
         SidebarMode.METRICS -> "Readability"
         SidebarMode.SETTINGS -> "Settings"
