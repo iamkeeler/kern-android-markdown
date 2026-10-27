@@ -17,4 +17,7 @@ object SettingKeys {
     const val SENTENCE_CAPITALIZATION = "sentence_capitalization"
     const val SHOW_WORKSPACE_INTRO = "show_workspace_intro"
     const val LAUNCH_NEW_FILE = "launch_new_file"
+    const val FOLD_TO_SPLIT = "fold_to_split"
+    const val FOLD_HAPTICS = "fold_haptics"
+    const val FOLD_SOUND = "fold_sound"
 }

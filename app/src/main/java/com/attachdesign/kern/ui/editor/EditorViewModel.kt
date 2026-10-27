@@ -104,6 +104,50 @@ class EditorViewModel(
 
     val syncEngine = SyncEngine(db.fileDao(), viewModelScope)
 
+    val companion = CompanionWorkspace(viewModelScope, read = { key ->
+        val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(key.projectId) }
+            ?: error("Reference project unavailable")
+        storageManager.readReferenceFile(project, key.path)
+    }, dispatcher = defaultDispatcher)
+    val foldToSplit = db.settingDao().getSettingFlow(SettingKeys.FOLD_TO_SPLIT)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val foldHaptics = db.settingDao().getSettingFlow(SettingKeys.FOLD_HAPTICS)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val foldSound = db.settingDao().getSettingFlow(SettingKeys.FOLD_SOUND)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private var sidebarBeforeCompanion = SidebarMode.CLOSED
+
+    fun toggleCompanion() {
+        val opening = !companion.state.value.isOpen
+        if (opening) {
+            sidebarBeforeCompanion = _uiState.value.sidebarMode
+            toggleSidebar(SidebarMode.CLOSED)
+        } else toggleSidebar(sidebarBeforeCompanion)
+        companion.setOpen(opening)
+    }
+
+    fun setFoldToSplit(enabled: Boolean) = setFoldPreference(SettingKeys.FOLD_TO_SPLIT, enabled)
+    fun setFoldHaptics(enabled: Boolean) = setFoldPreference(SettingKeys.FOLD_HAPTICS, enabled)
+    fun setFoldSound(enabled: Boolean) = setFoldPreference(SettingKeys.FOLD_SOUND, enabled)
+
+    private fun setFoldPreference(key: String, enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.settingDao().insertSetting(SettingEntity(key, enabled.toString()))
+        }
+    }
+
+    suspend fun listReferenceFiles(projectId: Long, path: String): kotlinx.collections.immutable.ImmutableList<VfsNode> {
+        val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) }
+            ?: error("Project unavailable")
+        return storageManager.listDirectory(project, path).toImmutableList()
+    }
+
+    suspend fun resolveCompanionImage(target: String): String? {
+        val key = companion.state.value.reference ?: return null
+        val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(key.projectId) } ?: return null
+        return storageManager.resolveMarkdownImage(project, key.path, target)
+    }
+
     suspend fun resolveMarkdownImage(target: String): String? {
         val state = _uiState.value
         val project = state.activeProject ?: return null
@@ -121,6 +165,8 @@ class EditorViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private var saveJob: Job? = null
+    private var fileLoadJob: Job? = null
+    private var loadingFile: Pair<Long, String>? = null
 
 
     private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
@@ -290,8 +336,14 @@ class EditorViewModel(
         }
     }
 
-    fun loadFile(projectId: Long, filePath: String, focusOnStart: Boolean = false) {
-        viewModelScope.launch {
+    fun loadFile(projectId: Long, filePath: String, focusOnStart: Boolean = false): Job? {
+        // Re-entering composition after rotation must not reload over the live draft.
+        if (_uiState.value.activeProject?.id == projectId && _uiState.value.activeFilePath == filePath) return fileLoadJob
+        val requestedFile = projectId to filePath
+        if (loadingFile == requestedFile && fileLoadJob?.isActive == true) return fileLoadJob
+        fileLoadJob?.cancel()
+        loadingFile = requestedFile
+        return viewModelScope.launch {
             val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) } ?: return@launch
             val content = storageManager.readFile(project, filePath)
             
@@ -333,7 +385,7 @@ class EditorViewModel(
                 replace(0, length, content)
                 selection = TextRange(if (focusOnStart) 0 else content.length)
             }
-        }
+        }.also { fileLoadJob = it }
     }
 
     fun navigateExplorerToFolder(node: VfsNode) {

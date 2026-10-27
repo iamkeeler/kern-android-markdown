@@ -46,8 +46,10 @@ class MarkdownRenderingInstrumentedTest {
         composeTestRule.onNodeWithContentDescription("Rendered markdown probe")
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action -> action(layouts) }
 
+        // The shared fenced-code projection retains its closing line boundary in
+        // addition to the paragraph separator. Source text must remain exact below.
         assertEquals(
-            "Title\n\n│ Quote\n• Bullet\n1. Ordered\n☑ Done\n\nval code = true\n\n**bold** and italic with code",
+            "Title\n\n│ Quote\n• Bullet\n1. Ordered\n☑ Done\n\nval code = true\n\n\n**bold** and italic with code",
             layouts.single().layoutInput.text.text
         )
         assertEquals("# Title\n\n> Quote\n- Bullet\n1. Ordered\n- [x] Done\n\n~~~kotlin\nval code = true\n~~~\n\n**bold** and *italic* with `code`", state.text.toString())

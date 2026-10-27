@@ -130,6 +130,8 @@ This document records user-visible editor behavior that must survive refactors. 
 - Feature and release: added dedicated Undo and Redo actions to the floating formatting toolbar.
 - Behavioral invariant: Undo and Redo buttons reflect the transactional state of `TextFieldState.undoState` (`canUndo`, `canRedo`). Inactive states are disabled with dimmed opacity (`0.35f`), active states are fully interactive. Applying formatting commands or editing text immediately enables Undo.
 - Automated test name: `EditorViewModelTest.undo and redo modify documentTextFieldState correctly`.
+- Narrow-pane regression: the fixed eight-action row could place the collapse control outside a phone or split writer pane. The root cause was fitting eight 48dp controls plus spacing into less than their required width. Retain the six primary formatting/menu/collapse controls in one compact row with native touch targets; expose dedicated Undo/Redo menu items with their enabled states in overflow when the full history row cannot fit. Wide panes retain history buttons in the row.
+- Regression coverage: `EditorScreenTest.testFloatingFormattingToolbarInteraction` (also reproduced on the original commit), plus `testCompanionTogglePreservesDraftSelectionUndoAndFocus` for split-pane operation. The editor's bottom clearance remains unchanged.
 
 ### Elastic document overscroll bounce-back and end indicators
 
@@ -138,6 +140,31 @@ This document records user-visible editor behavior that must survive refactors. 
 - Automated test names: `ElasticOverscrollTest`, `EditorScreenTest.testElasticOverscrollBouncePreservesEditorState`.
 
 
+
+### Foldable companion preserves the writing session
+
+- Feature: book-style foldables and sufficiently wide windows expose an explicit Split view command. A companion offers a clean reading preview or a separately loaded, read-only project file. Diff and editing a second file are follow-on features.
+- Behavioral invariant: split open/close, sidebar substitution, and width changes never replace the primary `TextFieldState`, clear undo/selection, steal focus, or write rendered/reference text over the draft. Preview derives from current in-memory source. Reference loading, cancellation, permission failures, and image resolution have separate ownership.
+- Repeating the command restores the previous sidebar. Preview/reference choice and reading positions survive hiding or compact-window suspension. Each pane owns its IME inset; the editor toolbar retains its clearance.
+- The manual command requires >=720dp and >=340dp per pane, with minimum pane width increasing for large fonts. Vertical separating hinges are excluded from pane bounds. Horizontal folds do not enable this feature.
+- The shortcut is initially off and requires a standard angle sensor, vertical fold geometry, and a resumed editor. Stable flat baseline, deliberate brief bend, stable reopening, and cooldown produce one toggle. Initial unfolding, sustained postures, full closure, invalid/stale samples, geometry changes, modal UI, and lifecycle interruption must not toggle. Never interrupt pointer selection or IME composition to commit.
+- Platform deviation: a custom recognizer implements the explicitly requested physical toggle. Native editing/selection/focus, Material 3 supporting-pane layout/animation, system haptics, and disabled-animation behavior remain platform-owned.
+- Automated coverage: `FoldGestureRecognizerTest`, `CompanionWorkspaceTest`, `EditorViewModelTest.split restores prior sidebar without changing document state`, `StorageManagerTest.referenceRead_distinguishesEmptyFromMissingFile`, and `EditorScreenTest.testCompanion*`, `testReferenceSelectionNeverReplacesPrimaryDraft`, and `testInjectedHingeGestureTogglesCompanionExactlyOnceEachWay`.
+
+### Fold feedback follows the committed action and device preferences
+
+- Feature: the fold shortcut may pair its native confirmation haptic with StudyCompanion's short paper-crease sound. Haptics default on, optional sound defaults off; each preference is persisted independently. A Try feedback control previews the selected combination without changing layout or document state.
+- Behavioral invariant: a successful fold/reopen produces exactly one feedback request with current preferences. Initial unfolding, cancellation, background/resume, raw angle changes, and manual Split view must not produce gesture feedback.
+- Haptics use `View.performHapticFeedback(CONFIRM)` on API 30+ (native clock-tick fallback below), without ignore-setting flags or direct vibrator access. Device touch-feedback settings and intensity remain platform-owned; no vibration permission is added.
+- Paper audio is preloaded only while opted in, never loops, never queues pending gestures, and never changes system volume or requests audio focus. Silent/vibrate mode, any DND filter other than ALL, disabled system touch sounds, zero/muted system volume, unknown policy, unready/failed loads, and disposed helpers suppress audio. Pausing stops active playback; disposal releases resources and stale callbacks cannot revive them.
+- Automated coverage: `TactileFeedbackHelperTest`, `EditorScreenTest.testFoldFeedbackPreferencesPersistAndPreviewDoesNotChangeLayout`, and `testInjectedHingeGestureTogglesCompanionExactlyOnceEachWay` (two commits, exactly two feedback requests; lifecycle cancellation adds none).
+
+### Re-entering an open document does not reload over live state
+
+- Symptom: activity/composition recreation could reload from disk and overwrite unsaved source, selection, and undo during foldable rotation or window adaptation.
+- Root cause: the screen's load effect executes again on recreation; `EditorViewModel.loadFile` previously replaced the buffer even when that same project/file was already loaded.
+- Behavioral invariant: loading the already-active document is idempotent; repeated requests during its initial load share the pending job. Layout/configuration changes preserve the live document session.
+- Automated test: `EditorViewModelTest.reentering same file preserves live text selection and undo history`.
 
 ## Preferred direction
 

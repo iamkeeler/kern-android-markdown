@@ -108,6 +108,16 @@ class StorageManagerTest {
     }
 
     @Test
+    fun referenceRead_distinguishesEmptyFromMissingFile() = runTest {
+        storageManager.writeFile(project, "empty.md", "")
+        assertEquals("", storageManager.readReferenceFile(project, "empty.md"))
+        try {
+            storageManager.readReferenceFile(project, "absent.md")
+            fail("Missing references must not be presented as empty documents")
+        } catch (_: java.io.IOException) { }
+    }
+
+    @Test
     fun testWriteAndReadFile_internal() = runTest {
         val content = "Hello, world!\nMarkdown content."
         val filename = "hello.md"

@@ -239,6 +239,18 @@ class StorageManager(private val context: Context) {
         }
     }
 
+    /** A reference must distinguish an empty document from missing/revoked storage. */
+    suspend fun readReferenceFile(project: ProjectEntity, relativePath: String): String = withContext(Dispatchers.IO) {
+        if (project.path.startsWith("content://")) {
+            val doc = getDocumentFile(project, relativePath)?.takeIf { it.isFile }
+                ?: throw IOException("Reference unavailable")
+            context.contentResolver.openInputStream(doc.uri)?.bufferedReader()?.use { it.readText() }
+                ?: throw IOException("Reference unavailable")
+        } else {
+            getSafeFile(getProjectRootFile(project), relativePath).readText(Charsets.UTF_8)
+        }
+    }
+
     /**
      * Resolves the app-private internal storage fallback directory for a project
      * when external/public Documents directory operations fail due to OS permissions.

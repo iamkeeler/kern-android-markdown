@@ -23,6 +23,14 @@ A high-performance, minimal, and typography-first Markdown editor designed for m
     * Tapping `[Parent Folder]` filters the modal view to show only files and sub-folders at the immediate directory level of the active file.
 * **Adaptive Dual-Pane Navigation (Foldables / Tablets):** When the application detects an unfolded screen state, large-screen layout, or landscape orientation, the UI automatically transitions to a persistent split-screen view. The project directory tree locks to the left margin, and the active editor maps to the right pane.
 
+#### Foldable companion workspace
+* On book-style foldables and wide windows, an explicit Split view command toggles a companion beside the existing writer. Default content is a read-only preview of the current in-memory draft; the user can choose another project file for read-only reference.
+* The companion uses two readable panes rather than adding a third file-tree column. It shares the supporting slot with Metrics/Settings and restores the previous sidebar when closed.
+* Split eligibility requires >=720dp available width and >=340dp per pane, increasing for large fonts. This is distinct from the existing 600dp utility-sidebar breakpoint. Narrowing suspends the companion without discarding its choice or document state.
+* An optional, initially disabled partial-fold/reopen shortcut invokes the same command. It requires standard hinge-angle sensing and vertical fold geometry; manual Split view remains available without sensors. Initial unfolding and sustained book/tabletop use do not invoke it.
+* Fold feedback offers independently persisted haptics (on initially) and paper-crease sound (off initially), with a non-destructive preview. Sound respects device quiet modes and touch-sound settings; feedback occurs only when a recognized gesture commits or the user explicitly previews it.
+* Source, selection, undo, focus, IME composition, and saves remain owned by the primary document session. Reference loading cannot replace it. Diff and a second editable document are follow-on features.
+
 #### 2.3 Storage Architecture & Cloud Sync Engine
 * **Dual Storage Modalities:**
     1. **App-Sandbox Storage (Internal):** High-speed, local-first operational sandbox. This storage tier supports the full suite of automated cloud synchronization pipelines.

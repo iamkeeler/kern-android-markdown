@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi::class)
 
 package com.attachdesign.kern.ui.editor
 
@@ -93,6 +93,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.DocumentEditEngine
 import kotlinx.coroutines.flow.collectLatest
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.outlined.VerticalSplit
+import androidx.compose.material3.adaptive.layout.AnimatedPane
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
+import androidx.compose.material3.adaptive.layout.PaneScaffoldDirective
+import androidx.compose.material3.adaptive.layout.SupportingPaneScaffold
+import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldValue
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.semantics.stateDescription
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -110,6 +125,31 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
+    val companion by viewModel.companion.state.collectAsStateWithLifecycle()
+    val foldSetting by viewModel.foldToSplit.collectAsStateWithLifecycle()
+    val foldHaptics by viewModel.foldHaptics.collectAsStateWithLifecycle()
+    val foldSound by viewModel.foldSound.collectAsStateWithLifecycle()
+    val hapticsEnabled = foldHaptics?.value != "false"
+    val soundEnabled = foldSound?.value == "true"
+    val tactileFeedback = rememberTactileFeedbackHelper(soundEnabled)
+    val foldEnvironment = rememberFoldEnvironment()
+    val foldGeometry by foldEnvironment.geometry.collectAsStateWithLifecycle(initialValue = null)
+    var showReferencePicker by remember { mutableStateOf(false) }
+    var showFoldSettings by remember { mutableStateOf(false) }
+    var headerMenuOpen by remember { mutableStateOf(false) }
+    var pointerHeld by remember { mutableStateOf(false) }
+    val companionSavedState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    val platformView = LocalView.current
+    if (showReferencePicker) ReferencePicker(viewModel) { showReferencePicker = false }
+    if (showFoldSettings) FoldShortcutDialog(
+        theme = theme,
+        enabled = foldSetting?.value == "true", available = foldEnvironment.sensorAvailable,
+        onEnabledChange = viewModel::setFoldToSplit,
+        hapticsEnabled = hapticsEnabled, soundEnabled = soundEnabled,
+        onHapticsChanged = viewModel::setFoldHaptics, onSoundChanged = viewModel::setFoldSound,
+        onTryFeedback = { tactileFeedback.triggerFoldFeedback(hapticsEnabled, soundEnabled) },
+        onDismiss = { showFoldSettings = false }
+    )
 
     LaunchedEffect(viewModel.documentTextFieldState) {
         snapshotFlow { viewModel.documentTextFieldState.text.toString() }
@@ -197,261 +237,296 @@ fun EditorScreen(
     ) {
         val widthDp = maxWidth
         val isDualPane = widthDp >= theme.dimensions.dualPaneBreakpoint
+        val density = LocalDensity.current
+        var windowBounds by remember { mutableStateOf(Rect.Zero) }
+        val geometry = foldGeometry
+        val firstPaneDp = geometry?.takeIf { it.isVertical }?.let { (it.left - windowBounds.left) / density.density }
+            ?: (widthDp.value / 2)
+        val secondPaneDp = geometry?.takeIf { it.isVertical }?.let { (windowBounds.right - it.right) / density.density }
+            ?: (widthDp.value / 2)
+        val canSplit = CompanionLayoutPolicy.canSplit(widthDp.value, firstPaneDp, secondPaneDp,
+            density.fontScale * uiState.editorFontSizeScale, geometry?.isVertical == false)
+        val companionVisible = canSplit && companion.isOpen && !uiState.isSidebarOpen
+        val supportingVisible = companionVisible || (isDualPane && uiState.isSidebarOpen)
+        val imeVisible = WindowInsets.ime.getBottom(density) > 0
+        BackHandler(enabled = companion.isOpen && !imeVisible && !showReferencePicker && !showFoldSettings && !headerMenuOpen) {
+            if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED) else viewModel.toggleCompanion()
+        }
+        val bend = rememberFoldGestureProgress(
+            environment = foldEnvironment, enabled = foldSetting?.value == "true",
+            eligible = canSplit && geometry?.isVertical == true && !showRenameDialog && !showDeleteDialog &&
+                !showReferencePicker && !showFoldSettings && !headerMenuOpen,
+            resetKey = Pair(windowBounds, geometry?.copy(isSeparating = false)),
+            inputSafe = { !pointerHeld && viewModel.documentTextFieldState.composition == null },
+            onToggle = {
+                viewModel.toggleCompanion()
+                tactileFeedback.triggerFoldFeedback(hapticsEnabled, soundEnabled)
+                platformView.announceForAccessibility(if (viewModel.companion.state.value.isOpen) "Split view opened" else "Split view closed")
+            }
+        )
 
-        Row(modifier = Modifier.fillMaxSize()) {
-            val editorWeight by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (isDualPane && uiState.isSidebarOpen) 0.65f else 1f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                ),
-                label = "editorWeight"
-            )
-
-            // Editor Canvas (Main container)
-            Column(
-                modifier = Modifier
-                    .then(if (isDualPane) Modifier.weight(editorWeight) else Modifier.fillMaxSize())
-                    .fillMaxHeight()
-            ) {
-                // Header (Breadcrumbs)
-                Box {
-                    Column {
-                        EditorHeader(
-                            filePath = filePath,
-                            theme = uiState.activeTheme,
-                            isMetricsActive = uiState.sidebarMode == SidebarMode.METRICS,
-                            onBackClick = onBackClick,
-                            onCopyClick = {
-                                val fullText = MarkdownRenderer.copyDocument(uiState.paragraphs.items.map { it.block })
-                                clipboardManager.setText(AnnotatedString(fullText))
-                                Toast.makeText(context, "Copied rendered text", Toast.LENGTH_SHORT).show()
-                            },
-                            onMetricsToggle = {
-                                val currentMode = uiState.sidebarMode
-                                viewModel.toggleSidebar(if (currentMode == SidebarMode.METRICS) SidebarMode.CLOSED else SidebarMode.METRICS)
-                            },
-                            onSettingsToggle = {
-                                val currentMode = uiState.sidebarMode
-                                viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
-                            },
-                            onTitleClick = {
-                                showRenameDialog = true
-                            },
-                            onMoreOptionsAction = { action ->
-                                when(action) {
-                                    "Settings" -> {
+        SupportingPaneScaffold(
+            directive = PaneScaffoldDirective.Default.copy(
+                maxHorizontalPartitions = if (supportingVisible) 2 else 1,
+                horizontalPartitionSpacerSize = theme.dimensions.spacingMedium,
+                defaultPanePreferredWidth = if (companionVisible) maxWidth / 2 else theme.dimensions.sidebarWidth,
+                excludedBounds = geometry?.takeIf { it.isSeparating && it.isVertical }?.let {
+                    listOf(Rect(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()))
+                } ?: emptyList()
+            ),
+            value = ThreePaneScaffoldValue(
+                primary = PaneAdaptedValue.Expanded,
+                secondary = if (supportingVisible) PaneAdaptedValue.Expanded else PaneAdaptedValue.Hidden,
+                tertiary = PaneAdaptedValue.Hidden
+            ),
+            modifier = Modifier.fillMaxSize().onGloballyPositioned { windowBounds = it.boundsInWindow() }
+                .pointerInput(Unit) {
+                    try {
+                        awaitPointerEventScope {
+                            while (true) pointerHeld = awaitPointerEvent(PointerEventPass.Initial).changes.any { it.pressed }
+                        }
+                    } finally { pointerHeld = false }
+                }
+                .drawBehind {
+                    if (bend.value > 0f) {
+                        val hingeX = geometry?.let { it.left - windowBounds.left } ?: size.width / 2
+                        drawLine(theme.accent.copy(alpha = bend.value * 0.6f),
+                            androidx.compose.ui.geometry.Offset(hingeX, 0f),
+                            androidx.compose.ui.geometry.Offset(hingeX, size.height),
+                            theme.dimensions.borderWidth.toPx())
+                    }
+                },
+            mainPane = {
+                AnimatedPane {
+                    Column(Modifier.fillMaxSize()) {
+                        // Header (Breadcrumbs)
+                        Box {
+                            Column {
+                                EditorHeader(
+                                    filePath = filePath,
+                                    theme = uiState.activeTheme,
+                                    isMetricsActive = uiState.sidebarMode == SidebarMode.METRICS,
+                                    canSplit = canSplit,
+                                    isCompanionOpen = companion.isOpen,
+                                    onSplitToggle = viewModel::toggleCompanion,
+                                    onFoldSettings = { showFoldSettings = true },
+                                    onMenuVisibilityChanged = { headerMenuOpen = it },
+                                    onBackClick = {
+                                        if (companion.isOpen) {
+                                            if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED)
+                                            else viewModel.toggleCompanion()
+                                        } else onBackClick()
+                                    },
+                                    onCopyClick = {
+                                        val fullText = MarkdownRenderer.copyDocument(uiState.paragraphs.items.map { it.block })
+                                        clipboardManager.setText(AnnotatedString(fullText))
+                                        Toast.makeText(context, "Copied rendered text", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onMetricsToggle = {
+                                        val currentMode = uiState.sidebarMode
+                                        viewModel.toggleSidebar(if (currentMode == SidebarMode.METRICS) SidebarMode.CLOSED else SidebarMode.METRICS)
+                                    },
+                                    onSettingsToggle = {
                                         val currentMode = uiState.sidebarMode
                                         viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
-                                    }
-                                    "Share" -> {
-                                        viewModel.shareCurrentFile(context)
-                                    }
-                                    "Copy Markdown" -> {
-                                        val markdown = MarkdownParser.joinParsedDocument(uiState.paragraphs.items.map { it.block })
-                                        clipboardManager.setText(AnnotatedString(markdown))
-                                        Toast.makeText(context, "Copied Markdown source", Toast.LENGTH_SHORT).show()
-                                    }
-                                    "Rename" -> {
+                                    },
+                                    onTitleClick = {
                                         showRenameDialog = true
-                                    }
-                                    "Duplicate" -> {
-                                        viewModel.duplicateCurrentFile { newPath ->
-                                            Toast.makeText(context, "Document duplicated", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onMoreOptionsAction = { action ->
+                                        when(action) {
+                                            "Settings" -> {
+                                                val currentMode = uiState.sidebarMode
+                                                viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
+                                            }
+                                            "Share" -> {
+                                                viewModel.shareCurrentFile(context)
+                                            }
+                                            "Copy Markdown" -> {
+                                                val markdown = MarkdownParser.joinParsedDocument(uiState.paragraphs.items.map { it.block })
+                                                clipboardManager.setText(AnnotatedString(markdown))
+                                                Toast.makeText(context, "Copied Markdown source", Toast.LENGTH_SHORT).show()
+                                            }
+                                            "Rename" -> {
+                                                showRenameDialog = true
+                                            }
+                                            "Duplicate" -> {
+                                                viewModel.duplicateCurrentFile { newPath ->
+                                                    Toast.makeText(context, "Document duplicated", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                            "Delete" -> {
+                                                showDeleteDialog = true
+                                            }
                                         }
                                     }
-                                    "Delete" -> {
-                                        showDeleteDialog = true
+                                )
+
+                                HorizontalDivider(
+                                    thickness = 2.dp,
+                                    color = uiState.activeTheme.headerDivider
+                                )
+                            }
+                        }
+
+                        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+                        // Main Editor Area
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                // The editor canvas consumes the IME inset once, so the floating
+                                // palette is laid out directly above the keyboard instead of behind it.
+                                .imePadding()
+                                .padding(
+                                    top = theme.dimensions.spacingSmall,
+                                    start = if (!supportingVisible && widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge,
+                                    end = if (!supportingVisible && widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge
+                                )
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    focusManager.clearFocus()
+                                    viewModel.setParagraphFocus(-1)
+                                }
+                        ) {
+                            // Floating Formatting Toolbar State
+                            var isToolbarMinimized by remember { mutableStateOf(false) }
+
+                            val overscrollState = rememberElasticOverscrollState()
+
+                            ElasticOverscrollContainer(
+                                state = overscrollState,
+                                accentColor = theme.accent,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                if (uiState.documentEditorEnabled) {
+                                    DocumentEditorField(
+                                        state = uiState,
+                                        viewModel = viewModel,
+                                        isToolbarMinimized = isToolbarMinimized
+                                    )
+                                } else {
+                                    EditorCanvas(
+                                        state = uiState,
+                                        textFieldValues = textFieldValues,
+                                        viewModel = viewModel,
+                                        isToolbarMinimized = isToolbarMinimized
+                                    )
+                                }
+                            }
+
+                            val activeIndex = uiState.focusedParagraphIndex
+                            val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
+
+                            val density = androidx.compose.ui.platform.LocalDensity.current
+                            val isImeOpen = WindowInsets.ime.getBottom(density) > 0
+                            val targetBottomPadding = if (isImeOpen) {
+                                theme.dimensions.spacingMedium
+                            } else {
+                                theme.dimensions.spacingMedium + 28.dp
+                            }
+                            val toolbarBottomPadding by androidx.compose.animation.core.animateDpAsState(
+                                targetValue = targetBottomPadding,
+                                label = "toolbarBottomPadding"
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter)
+                                    .zIndex(1f)
+                                    .padding(bottom = toolbarBottomPadding)
+                            ) {
+                                androidx.compose.animation.AnimatedContent(
+                                    targetState = isToolbarMinimized,
+                                    transitionSpec = {
+                                        (fadeIn(animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)) +
+                                         scaleIn(initialScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)))
+                                            .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
+                                                          scaleOut(targetScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(100)))
+                                            .using(SizeTransform(clip = false) { _, _ ->
+                                                androidx.compose.animation.core.spring(
+                                                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                    stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                                )
+                                            })
+                                    },
+                                    modifier = Modifier.align(if (isToolbarMinimized) Alignment.BottomEnd else Alignment.BottomCenter),
+                                    label = "ToolbarMinimizeAnimation"
+                                ) { minimized ->
+                                    if (minimized) {
+                                        FormattingPaletteFab(
+                                            theme = uiState.activeTheme,
+                                            onClick = { isToolbarMinimized = false }
+                                        )
+                                    } else {
+                                        FloatingFormattingToolbar(
+                                            theme = uiState.activeTheme,
+                                            canUndo = if (uiState.documentEditorEnabled) viewModel.documentTextFieldState.undoState.canUndo else false,
+                                            onUndoClick = { viewModel.undo() },
+                                            canRedo = if (uiState.documentEditorEnabled) viewModel.documentTextFieldState.undoState.canRedo else false,
+                                            onRedoClick = { viewModel.redo() },
+                                            onHeaderClick = {
+                                                if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.CycleHeading)
+                                                else if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex)
+                                            },
+                                            onHeaderSet = { level ->
+                                                if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.SetHeading(level))
+                                                else if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level)
+                                            },
+                                            onIndentClick = {
+                                                if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Indent)
+                                                else if (activeIndex != -1) viewModel.indentParagraph(activeIndex)
+                                            },
+                                            onOutdentClick = {
+                                                if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Outdent)
+                                                else if (activeIndex != -1) viewModel.outdentParagraph(activeIndex)
+                                            },
+                                            onChecklistClick = {
+                                                if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleChecklist)
+                                                else if (activeIndex != -1) viewModel.toggleChecklist(activeIndex)
+                                            },
+                                            onBulletClick = {
+                                                if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleBulletList)
+                                                else if (activeIndex != -1) viewModel.toggleBulletList(activeIndex)
+                                            },
+                                            onMinimizeClick = { isToolbarMinimized = true },
+                                            onFormat = { p, s ->
+                                                if (uiState.documentEditorEnabled) {
+                                                    viewModel.applyDocumentCommand(DocumentEditEngine.Command.Wrap(p, s))
+                                                } else {
+                                                    if (activeIndex == -1) return@FloatingFormattingToolbar
+                                                    viewModel.formatParagraph(activeIndex, p, s)
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
-                        )
-
-                        HorizontalDivider(
-                            thickness = 2.dp,
-                            color = uiState.activeTheme.headerDivider
-                        )
+                        }
                     }
+
                 }
-
-                val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-                // Main Editor Area
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        // The editor canvas consumes the IME inset once, so the floating
-                        // palette is laid out directly above the keyboard instead of behind it.
-                        .imePadding()
-                        .padding(
-                            top = theme.dimensions.spacingSmall,
-                            start = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge,
-                            end = if (widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge
-                        )
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            focusManager.clearFocus()
-                            viewModel.setParagraphFocus(-1)
+            },
+            supportingPane = {
+                AnimatedPane {
+                    if (!uiState.isSidebarOpen) {
+                        companionSavedState.SaveableStateProvider("companion") {
+                            CompanionPane(companion, uiState, viewModel,
+                                onChooseReference = { showReferencePicker = true },
+                                onClose = viewModel::toggleCompanion,
+                                modifier = Modifier.fillMaxSize().statusBarsPadding())
                         }
-                ) {
-                    // Floating Formatting Toolbar State
-                    var isToolbarMinimized by remember { mutableStateOf(false) }
-
-                    val overscrollState = rememberElasticOverscrollState()
-
-                    ElasticOverscrollContainer(
-                        state = overscrollState,
-                        accentColor = theme.accent,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        if (uiState.documentEditorEnabled) {
-                            DocumentEditorField(
-                                state = uiState,
-                                viewModel = viewModel,
-                                isToolbarMinimized = isToolbarMinimized
-                            )
-                        } else {
-                            EditorCanvas(
-                                state = uiState,
-                                textFieldValues = textFieldValues,
-                                viewModel = viewModel,
-                                isToolbarMinimized = isToolbarMinimized
-                            )
-                        }
-                    }
-
-                    val activeIndex = uiState.focusedParagraphIndex
-                    val activeValue = if (activeIndex != -1) textFieldValues[activeIndex] else null
-
-                    val density = androidx.compose.ui.platform.LocalDensity.current
-                    val isImeOpen = WindowInsets.ime.getBottom(density) > 0
-                    val targetBottomPadding = if (isImeOpen) {
-                        theme.dimensions.spacingMedium
-                    } else {
-                        theme.dimensions.spacingMedium + 28.dp
-                    }
-                    val toolbarBottomPadding by androidx.compose.animation.core.animateDpAsState(
-                        targetValue = targetBottomPadding,
-                        label = "toolbarBottomPadding"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .zIndex(1f)
-                            .padding(bottom = toolbarBottomPadding)
-                    ) {
-                        androidx.compose.animation.AnimatedContent(
-                            targetState = isToolbarMinimized,
-                            transitionSpec = {
-                                (fadeIn(animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)) +
-                                 scaleIn(initialScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(150, delayMillis = 50)))
-                                    .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)) +
-                                                  scaleOut(targetScale = 0.92f, animationSpec = androidx.compose.animation.core.tween(100)))
-                                    .using(SizeTransform(clip = false) { _, _ ->
-                                        androidx.compose.animation.core.spring(
-                                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                                            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-                                        )
-                                    })
-                            },
-                            modifier = Modifier.align(if (isToolbarMinimized) Alignment.BottomEnd else Alignment.BottomCenter),
-                            label = "ToolbarMinimizeAnimation"
-                        ) { minimized ->
-                            if (minimized) {
-                                FormattingPaletteFab(
-                                    theme = uiState.activeTheme,
-                                    onClick = { isToolbarMinimized = false }
-                                )
-                            } else {
-                                FloatingFormattingToolbar(
-                                    theme = uiState.activeTheme,
-                                    canUndo = if (uiState.documentEditorEnabled) viewModel.documentTextFieldState.undoState.canUndo else false,
-                                    onUndoClick = { viewModel.undo() },
-                                    canRedo = if (uiState.documentEditorEnabled) viewModel.documentTextFieldState.undoState.canRedo else false,
-                                    onRedoClick = { viewModel.redo() },
-                                    onHeaderClick = {
-                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.CycleHeading)
-                                        else if (activeIndex != -1) viewModel.cycleHeaderLevel(activeIndex)
-                                    },
-                                    onHeaderSet = { level ->
-                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.SetHeading(level))
-                                        else if (activeIndex != -1) viewModel.setHeaderLevel(activeIndex, level)
-                                    },
-                                    onIndentClick = {
-                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Indent)
-                                        else if (activeIndex != -1) viewModel.indentParagraph(activeIndex)
-                                    },
-                                    onOutdentClick = {
-                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.Outdent)
-                                        else if (activeIndex != -1) viewModel.outdentParagraph(activeIndex)
-                                    },
-                                    onChecklistClick = {
-                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleChecklist)
-                                        else if (activeIndex != -1) viewModel.toggleChecklist(activeIndex)
-                                    },
-                                    onBulletClick = {
-                                        if (uiState.documentEditorEnabled) viewModel.applyDocumentCommand(DocumentEditEngine.Command.ToggleBulletList)
-                                        else if (activeIndex != -1) viewModel.toggleBulletList(activeIndex)
-                                    },
-                                    onMinimizeClick = { isToolbarMinimized = true },
-                                    onFormat = { p, s ->
-                                        if (uiState.documentEditorEnabled) {
-                                            viewModel.applyDocumentCommand(DocumentEditEngine.Command.Wrap(p, s))
-                                        } else {
-                                            if (activeIndex == -1) return@FloatingFormattingToolbar
-                                            viewModel.formatParagraph(activeIndex, p, s)
-                                        }
-                                    }
-                                )
-                            }
-                        }
+                    } else if (isDualPane && uiState.isSidebarOpen) {
+                        SidebarPane(state = uiState, viewModel = viewModel,
+                            onCloseClick = { viewModel.toggleSidebar(SidebarMode.CLOSED) },
+                            modifier = Modifier.fillMaxSize().background(theme.surface).statusBarsPadding())
                     }
                 }
             }
-
-            // Dual-pane Collapsible Sidebar (Metrics, Settings, Themes, Sync Logs)
-            if (isDualPane) {
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = uiState.isSidebarOpen,
-                    enter = androidx.compose.animation.slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                        )
-                    ) + androidx.compose.animation.fadeIn(
-                        animationSpec = androidx.compose.animation.core.spring(
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                        )
-                    ),
-                    exit = androidx.compose.animation.slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = androidx.compose.animation.core.spring(
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                        )
-                    ) + androidx.compose.animation.fadeOut(
-                        animationSpec = androidx.compose.animation.core.spring(
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                        )
-                    )
-                ) {
-                    SidebarPane(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(theme.dimensions.sidebarWidth)
-                            .background(uiState.activeTheme.surface)
-                            .statusBarsPadding(),
-                        state = uiState,
-                        viewModel = viewModel,
-                        onCloseClick = { viewModel.toggleSidebar(SidebarMode.CLOSED) }
-                    )
-                }
-            }
-        }
+        )
 
         // Single-pane Readability Sheet (ModalBottomSheet)
         if (!isDualPane && uiState.sidebarMode == SidebarMode.METRICS) {
@@ -528,7 +603,12 @@ fun EditorHeader(
     onSettingsToggle: () -> Unit,
     isMetricsActive: Boolean = false,
     onMoreOptionsAction: (String) -> Unit = {},
-    onTitleClick: () -> Unit = {}
+    onTitleClick: () -> Unit = {},
+    canSplit: Boolean = false,
+    isCompanionOpen: Boolean = false,
+    onSplitToggle: () -> Unit = {},
+    onFoldSettings: () -> Unit = {},
+    onMenuVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val fileName = filePath.split('/').last()
 
@@ -562,6 +642,14 @@ fun EditorHeader(
             }
         },
         actions = {
+            if (canSplit || isCompanionOpen) {
+                IconButton(onClick = onSplitToggle,
+                    modifier = Modifier.semantics { stateDescription = if (isCompanionOpen) "Open" else "Closed" }) {
+                    Icon(Icons.Outlined.VerticalSplit,
+                        contentDescription = if (isCompanionOpen) "Close split view" else "Open split view",
+                        tint = if (isCompanionOpen) theme.accent else theme.textMuted)
+                }
+            }
             IconButton(
                 onClick = onCopyClick,
                 modifier = Modifier.semantics { contentDescription = "Copy all document text" }
@@ -585,6 +673,7 @@ fun EditorHeader(
                 )
             }
             var showMenu by remember { mutableStateOf(false) }
+            LaunchedEffect(showMenu) { onMenuVisibilityChanged(showMenu) }
             Box {
                 IconButton(onClick = { showMenu = true }) {
                     Icon(
@@ -595,6 +684,7 @@ fun EditorHeader(
                     )
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(text = { Text("Fold shortcut") }, onClick = { showMenu = false; onFoldSettings() })
                     DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; onMoreOptionsAction("Settings") })
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
                     DropdownMenuItem(text = { Text("Copy Markdown") }, onClick = { showMenu = false; onMoreOptionsAction("Copy Markdown") })
@@ -1106,7 +1196,7 @@ fun ParagraphField(
 }
 
 @Composable
-private fun RenderedMarkdownText(
+internal fun RenderedMarkdownText(
     rawText: String,
     renderedText: AnnotatedString,
     textStyle: TextStyle,
@@ -1221,62 +1311,78 @@ fun FloatingFormattingToolbar(
     onMinimizeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier.wrapContentWidth(),
-        shape = RoundedCornerShape(theme.dimensions.cornerRadiusLarge),
-        color = theme.surface,
-        contentColor = theme.textPrimary,
-        shadowElevation = theme.dimensions.elevationMedium
-    ) {
-        PaletteRow(theme, Modifier.padding(theme.dimensions.spacingSmall)) {
-            FormatAction(
-                description = "Undo",
-                icon = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Undo,
-                        contentDescription = "Undo",
-                        tint = if (canUndo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
-                        modifier = Modifier.size(theme.dimensions.iconMedium)
+    BoxWithConstraints(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val fullPaletteWidth = theme.dimensions.buttonHeight * 8 + theme.dimensions.spacingSmall * 10 +
+            theme.dimensions.spacingTiny * 2 + theme.dimensions.dividerThickness
+        val showHistory = maxWidth >= fullPaletteWidth
+        // Six native 48dp controls fit the narrow writer pane; do not shrink touch targets.
+        val compactSpacing = if (maxWidth >= theme.dimensions.buttonHeight * 6 + theme.dimensions.spacingTiny * 7)
+            theme.dimensions.spacingTiny else 0.dp
+        val palettePadding = if (showHistory) theme.dimensions.spacingSmall else compactSpacing
+        val paletteSpacing = if (showHistory) theme.dimensions.spacingSmall else compactSpacing
+        Surface(
+            modifier = Modifier.wrapContentWidth(),
+            shape = RoundedCornerShape(theme.dimensions.cornerRadiusLarge),
+            color = theme.surface,
+            contentColor = theme.textPrimary,
+            shadowElevation = theme.dimensions.elevationMedium
+        ) {
+            PaletteRow(theme, Modifier.padding(palettePadding), spacing = paletteSpacing) {
+                if (showHistory) {
+                    FormatAction(
+                        description = "Undo",
+                        icon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Undo,
+                                contentDescription = "Undo",
+                                tint = if (canUndo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
+                                modifier = Modifier.size(theme.dimensions.iconMedium)
+                            )
+                        },
+                        enabled = canUndo,
+                        onClick = onUndoClick
                     )
-                },
-                enabled = canUndo,
-                onClick = onUndoClick
-            )
-            FormatAction(
-                description = "Redo",
-                icon = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Redo,
-                        contentDescription = "Redo",
-                        tint = if (canRedo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
-                        modifier = Modifier.size(theme.dimensions.iconMedium)
+                    FormatAction(
+                        description = "Redo",
+                        icon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Redo,
+                                contentDescription = "Redo",
+                                tint = if (canRedo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
+                                modifier = Modifier.size(theme.dimensions.iconMedium)
+                            )
+                        },
+                        enabled = canRedo,
+                        onClick = onRedoClick
                     )
-                },
-                enabled = canRedo,
-                onClick = onRedoClick
-            )
-            VerticalDivider(
-                modifier = Modifier
-                    .height(20.dp)
-                    .padding(horizontal = 2.dp),
-                thickness = 1.dp,
-                color = theme.textMuted.copy(alpha = 0.2f)
-            )
-            HeaderAction(theme, onHeaderClick, onHeaderSet)
-            FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }, onClick = { onFormat("**", "**") })
-            FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }, onClick = { onFormat("*", "*") })
-            FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onClick = onBulletClick)
-            OverflowFormattingActions(theme, onFormat, onChecklistClick, onIndentClick, onOutdentClick)
-            FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onClick = onMinimizeClick)
+                    VerticalDivider(
+                        modifier = Modifier
+                            .height(20.dp)
+                            .padding(horizontal = 2.dp),
+                        thickness = 1.dp,
+                        color = theme.textMuted.copy(alpha = 0.2f)
+                    )
+                }
+                HeaderAction(theme, onHeaderClick, onHeaderSet)
+                FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }, onClick = { onFormat("**", "**") })
+                FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }, onClick = { onFormat("*", "*") })
+                FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onClick = onBulletClick)
+                OverflowFormattingActions(theme, onFormat, onChecklistClick, onIndentClick, onOutdentClick,
+                    showHistory = !showHistory, canUndo = canUndo, canRedo = canRedo,
+                    onUndoClick = onUndoClick, onRedoClick = onRedoClick)
+                FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onClick = onMinimizeClick)
+            }
         }
     }
 }
 
 @Composable
-private fun PaletteRow(theme: AppColorTheme, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+private fun PaletteRow(theme: AppColorTheme, modifier: Modifier = Modifier,
+    spacing: androidx.compose.ui.unit.Dp = theme.dimensions.spacingSmall,
+    content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall),
+        horizontalArrangement = Arrangement.spacedBy(spacing),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
@@ -1288,7 +1394,12 @@ private fun OverflowFormattingActions(
     onFormat: (String, String) -> Unit,
     onChecklistClick: () -> Unit,
     onIndentClick: () -> Unit,
-    onOutdentClick: () -> Unit
+    onOutdentClick: () -> Unit,
+    showHistory: Boolean = false,
+    canUndo: Boolean = false,
+    canRedo: Boolean = false,
+    onUndoClick: () -> Unit = {},
+    onRedoClick: () -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -1298,6 +1409,12 @@ private fun OverflowFormattingActions(
             onDismissRequest = { expanded = false },
             properties = androidx.compose.ui.window.PopupProperties(focusable = false)
         ) {
+            if (showHistory) {
+                DropdownMenuItem(text = { Text("Undo") }, enabled = canUndo,
+                    onClick = { expanded = false; onUndoClick() })
+                DropdownMenuItem(text = { Text("Redo") }, enabled = canRedo,
+                    onClick = { expanded = false; onRedoClick() })
+            }
             DropdownMenuItem(
                 text = { Text("Strikethrough") },
                 leadingIcon = { Text("S", textDecoration = TextDecoration.LineThrough) },

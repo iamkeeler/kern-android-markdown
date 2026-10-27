@@ -10,6 +10,12 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -18,6 +24,21 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.DeviceConfigurationOverride
+import androidx.compose.ui.test.ForcedSize
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.room.Room
@@ -36,10 +57,13 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestName
 
+@OptIn(ExperimentalTestApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 class EditorScreenTest {
 
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+  @get:Rule val testName = TestName()
 
   private lateinit var db: AppDatabase
   private lateinit var storageManager: StorageManager
@@ -98,6 +122,11 @@ class EditorScreenTest {
 
   @After
   fun tearDown() {
+    if (testName.methodName.startsWith("testCompanion") || testName.methodName.startsWith("testInjected") || testName.methodName.startsWith("testReference")) {
+      captureScreenshot(testName.methodName)
+    }
+    // Dispose direct Room observers in the UI before the fixture's database closes.
+    composeTestRule.activityRule.scenario.close()
     if (::viewModel.isInitialized) {
       runBlocking {
         viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
@@ -106,11 +135,218 @@ class EditorScreenTest {
     if (::db.isInitialized) db.close()
   }
 
+  private fun captureScreenshot(name: String) {
+    runCatching {
+      val command = "screencap -p /sdcard/Download/kern-$name.png"
+      android.os.ParcelFileDescriptor.AutoCloseInputStream(
+          InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+      ).use { it.readBytes() }
+    }
+  }
+
   private fun waitForDocument(text: String) {
     composeTestRule.waitUntil(timeoutMillis = 15_000) {
       viewModel.uiState.value.paragraphs.items.any { text in it.block.rawText }
     }
     composeTestRule.waitForIdle()
+  }
+
+  private fun wideEditor(feedback: FoldFeedback? = null) {
+    composeTestRule.setContent {
+      // ForcedSize rescales the phone density but leaves the real keyboard's pixel inset
+      // intact. Reserve enough virtual height to test editing with that real IME open.
+      DeviceConfigurationOverride(DeviceConfigurationOverride.ForcedSize(DpSize(900.dp, 1400.dp))) {
+        val editorState by viewModel.uiState.collectAsStateWithLifecycle()
+        com.attachdesign.kern.theme.ModernAndroidMarkdownEditorTheme(activeTheme = editorState.activeTheme) {
+          CompositionLocalProvider(LocalFoldFeedback provides feedback) {
+            EditorScreen(project.id, file.relativePath, viewModel, onBackClick = {})
+          }
+        }
+      }
+    }
+    waitForDocument("Introduction")
+  }
+
+  @Test fun testCompanionTogglePreservesDraftSelectionUndoAndFocus() {
+    wideEditor()
+    val editor = composeTestRule.onNodeWithContentDescription("Document editor")
+    editor.performClick().performTextInput(" An unsaved addition.")
+    val imeWasVisible = composeTestRule.runOnIdle {
+      androidx.core.view.ViewCompat.getRootWindowInsets(composeTestRule.activity.window.decorView)
+          ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())
+    }
+    val text = viewModel.documentTextFieldState.text.toString()
+    composeTestRule.runOnIdle { viewModel.documentTextFieldState.edit { selection = TextRange(3, 7) } }
+    val canUndo = viewModel.documentTextFieldState.undoState.canUndo
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
+    composeTestRule.onNode(hasText("An unsaved addition.", substring = true) and
+        hasAnyAncestor(hasContentDescription("Reading preview"))).assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Close companion").performClick()
+    editor.assertIsFocused()
+    composeTestRule.runOnIdle {
+      assertEquals(text, viewModel.documentTextFieldState.text.toString())
+      assertEquals(TextRange(3, 7), viewModel.documentTextFieldState.selection)
+      assertEquals(canUndo, viewModel.documentTextFieldState.undoState.canUndo)
+      assertEquals(imeWasVisible, androidx.core.view.ViewCompat.getRootWindowInsets(composeTestRule.activity.window.decorView)
+          ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()))
+      viewModel.undo()
+      assertTrue(viewModel.documentTextFieldState.text.toString() != text)
+    }
+  }
+
+  @Test fun testReferenceSelectionNeverReplacesPrimaryDraft() {
+    runBlocking { storageManager.writeFile(project, "outline.md", "# Outline for the draft\n\nKeep these notes beside the writing.") }
+    wideEditor()
+    val original = viewModel.documentTextFieldState.text.toString()
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.onNodeWithText("Open reference").performClick()
+    composeTestRule.onNodeWithText("outline.md").performClick()
+    composeTestRule.waitUntil(15_000) { !viewModel.companion.state.value.isLoading }
+    composeTestRule.onNodeWithText("Outline for the draft").assertIsDisplayed()
+    assertEquals(original, viewModel.documentTextFieldState.text.toString())
+    assertEquals(file.relativePath, viewModel.uiState.value.activeFilePath)
+    composeTestRule.onNodeWithContentDescription("Close companion").performClick()
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.onNodeWithText("Outline for the draft").assertIsDisplayed()
+  }
+
+  @Test fun testCompanionSuspendsOnNarrowWidthAndRestoresPreviousSidebar() {
+    var wide by mutableStateOf(true)
+    composeTestRule.setContent {
+      DeviceConfigurationOverride(DeviceConfigurationOverride.ForcedSize(DpSize(if (wide) 900.dp else 400.dp, 700.dp))) {
+        EditorScreen(project.id, file.relativePath, viewModel, onBackClick = {})
+      }
+    }
+    waitForDocument("Introduction")
+    composeTestRule.runOnIdle { viewModel.toggleSidebar(SidebarMode.METRICS) }
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
+    composeTestRule.runOnIdle { wide = false }
+    composeTestRule.onNodeWithContentDescription("Reading preview").assertDoesNotExist()
+    assertTrue(viewModel.companion.state.value.isOpen)
+    composeTestRule.runOnIdle { wide = true }
+    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Close companion").performClick()
+    composeTestRule.runOnIdle { assertEquals(SidebarMode.METRICS, viewModel.uiState.value.sidebarMode) }
+  }
+
+  @Test fun testInjectedHingeGestureTogglesCompanionExactlyOnceEachWay() {
+    db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
+    val angles = MutableStateFlow(180f)
+    val geometry = MutableStateFlow<FoldGeometry?>(null)
+    val gestureClock = java.util.concurrent.atomic.AtomicLong(0)
+    val feedbackCalls = mutableListOf<Pair<Boolean, Boolean>>()
+    val feedback = object : FoldFeedback {
+      override fun triggerFoldFeedback(hapticsEnabled: Boolean, soundEnabled: Boolean) {
+        feedbackCalls += hapticsEnabled to soundEnabled
+      }
+    }
+    val environment = object : FoldEnvironment {
+      override val sensorAvailable = true
+      override val angles = angles
+      override val geometry = geometry
+      override fun monotonicTimeMillis() = gestureClock.get()
+    }
+    composeTestRule.setContent {
+      DeviceConfigurationOverride(DeviceConfigurationOverride.ForcedSize(DpSize(900.dp, 700.dp))) {
+        val density = LocalDensity.current
+        LaunchedEffect(density) {
+          geometry.value = FoldGeometry(with(density) { 440.dp.roundToPx() }, 0,
+              with(density) { 460.dp.roundToPx() }, with(density) { 700.dp.roundToPx() }, true, true)
+        }
+        CompositionLocalProvider(LocalFoldEnvironment provides environment, LocalFoldFeedback provides feedback) {
+          EditorScreen(project.id, file.relativePath, viewModel, onBackClick = {})
+        }
+      }
+    }
+    waitForDocument("Introduction")
+    composeTestRule.waitUntil(10_000) { angles.subscriptionCount.value > 0 }
+    fun holdFor(duration: Long) {
+      repeat((duration / 50).toInt()) {
+        gestureClock.addAndGet(50)
+        composeTestRule.mainClock.advanceTimeBy(50)
+        composeTestRule.waitForIdle()
+      }
+    }
+    holdFor(450)
+    angles.value = 145f
+    holdFor(250)
+    angles.value = 180f
+    holdFor(200)
+    composeTestRule.waitUntil(10_000) { viewModel.companion.state.value.isOpen }
+    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
+    val writerBounds = composeTestRule.onNodeWithContentDescription("Document editor").fetchSemanticsNode().boundsInRoot
+    val readerBounds = composeTestRule.onNodeWithContentDescription("Reading preview").fetchSemanticsNode().boundsInRoot
+    assertTrue("Writer must stay before the hinge", writerBounds.right <= geometry.value!!.left)
+    assertTrue("Reader must stay after the hinge", readerBounds.left >= geometry.value!!.right)
+    holdFor(1300)
+    angles.value = 145f
+    holdFor(250)
+    angles.value = 180f
+    holdFor(200)
+    composeTestRule.waitUntil(10_000) { !viewModel.companion.state.value.isOpen }
+    composeTestRule.onNodeWithContentDescription("Open split view").assertIsDisplayed()
+    holdFor(1200)
+    angles.value = 145f
+    holdFor(200)
+    composeTestRule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
+    composeTestRule.waitUntil(5_000) { angles.subscriptionCount.value == 0 }
+    angles.value = 180f
+    composeTestRule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+    holdFor(600)
+    assertTrue("Resuming must not complete an old gesture", !viewModel.companion.state.value.isOpen)
+    composeTestRule.runOnIdle { assertEquals(listOf(true to false, true to false), feedbackCalls) }
+  }
+
+  @Test fun testFoldFeedbackPreferencesPersistAndPreviewDoesNotChangeLayout() {
+    val calls = mutableListOf<Pair<Boolean, Boolean>>()
+    val feedback = object : FoldFeedback {
+      override fun triggerFoldFeedback(hapticsEnabled: Boolean, soundEnabled: Boolean) {
+        calls += hapticsEnabled to soundEnabled
+      }
+    }
+    wideEditor(feedback)
+    val draft = viewModel.documentTextFieldState.text.toString()
+    composeTestRule.onNodeWithContentDescription("More Options").performClick()
+    composeTestRule.onNodeWithText("Fold shortcut").performClick()
+    composeTestRule.onNodeWithContentDescription("Fold haptics").assertIsOn()
+    composeTestRule.onNodeWithContentDescription("Paper crease sound").assertIsOff()
+    composeTestRule.onNodeWithText("Try feedback").performClick()
+    composeTestRule.runOnIdle { assertEquals(listOf(true to false), calls) }
+    composeTestRule.onNodeWithContentDescription("Fold haptics").performClick()
+    composeTestRule.onNodeWithContentDescription("Paper crease sound").performClick()
+    composeTestRule.waitUntil(10_000) {
+      viewModel.foldHaptics.value?.value == "false" && viewModel.foldSound.value?.value == "true"
+    }
+    composeTestRule.onNodeWithText("Try feedback").performClick()
+    composeTestRule.runOnIdle {
+      assertEquals(listOf(true to false, false to true), calls)
+      assertEquals(draft, viewModel.documentTextFieldState.text.toString())
+      assertTrue(!viewModel.companion.state.value.isOpen)
+    }
+    composeTestRule.onNodeWithText("Done").performClick()
+    composeTestRule.onNodeWithContentDescription("More Options").performClick()
+    composeTestRule.onNodeWithText("Fold shortcut").performClick()
+    composeTestRule.onNodeWithContentDescription("Fold haptics").assertIsOff()
+    composeTestRule.onNodeWithContentDescription("Paper crease sound").assertIsOn()
+    assertEquals("false", db.settingDao().getSetting("fold_haptics")?.value)
+    assertEquals("true", db.settingDao().getSetting("fold_sound")?.value)
+    captureScreenshot("fold-feedback-dialog")
+    composeTestRule.onNodeWithText("Done").performClick()
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.runOnIdle { assertEquals(2, calls.size) }
+  }
+
+  @Test fun testFoldShortcutUnavailableKeepsManualSplitControl() {
+    wideEditor()
+    composeTestRule.onNodeWithContentDescription("Open split view").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("More Options").performClick()
+    composeTestRule.onNodeWithText("Fold shortcut").performClick()
+    composeTestRule.onNodeWithContentDescription("Fold shortcut").assertIsNotEnabled()
+    composeTestRule.onNodeWithText("Done").performClick()
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
   }
 
   @Test
@@ -190,10 +426,14 @@ class EditorScreenTest {
     composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
 
     composeTestRule.onNodeWithContentDescription("More formatting actions").performClick()
+    composeTestRule.onNodeWithText("Undo").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Redo").assertIsDisplayed()
     composeTestRule.onNodeWithText("Indent").assertIsDisplayed()
+    // Complete the menu interaction before tapping a control behind its popup.
+    composeTestRule.onNodeWithText("Indent").performClick()
 
     // Toggle minimize/expand toolbar
-    composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()
+    composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").assertIsDisplayed().performClick()
     composeTestRule.onNodeWithContentDescription("Expand formatting toolbar").performClick()
   }
 

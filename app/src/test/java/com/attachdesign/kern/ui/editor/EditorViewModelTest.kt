@@ -79,6 +79,59 @@ class EditorViewModelTest {
     }
 
     @Test
+    fun `reentering same file preserves live text selection and undo history`() = runTest {
+        val project = com.attachdesign.kern.data.local.ProjectEntity(id = 3, name = "Drafts", path = "drafts", isExternal = false, isSelected = true)
+        every { projectDao.getProjectById(3) } returns project
+        every { fileDao.getFilesForProject(3) } returns emptyList()
+        every { settingDao.insertSetting(any()) } returns Unit
+        // Empty saved source also avoids invoking Android Bundle-backed word telemetry
+        // in this plain JVM test; the invariant is that live text survives re-entry.
+        coEvery { storageManager.readFile(project, "draft.md") } returns ""
+        coEvery { storageManager.listDirectory(project, "") } returns emptyList()
+        viewModel.loadFile(3, "draft.md")?.join()
+        viewModel.documentTextFieldState.edit {
+            replace(0, length, "Live unsaved draft")
+            selection = androidx.compose.ui.text.TextRange(2, 6)
+        }
+        val canUndo = viewModel.documentTextFieldState.undoState.canUndo
+        viewModel.loadFile(3, "draft.md")?.join()
+        advanceUntilIdle()
+        assertEquals("Live unsaved draft", viewModel.documentTextFieldState.text.toString())
+        assertEquals(androidx.compose.ui.text.TextRange(2, 6), viewModel.documentTextFieldState.selection)
+        assertEquals(canUndo, viewModel.documentTextFieldState.undoState.canUndo)
+        io.mockk.coVerify(exactly = 1) { storageManager.readFile(project, "draft.md") }
+    }
+
+    @Test
+    fun `reentering while the same document loads shares the pending read`() = runTest {
+        val project = com.attachdesign.kern.data.local.ProjectEntity(id = 3, name = "Drafts", path = "drafts", isExternal = false, isSelected = true)
+        every { projectDao.getProjectById(3) } returns project
+        every { fileDao.getFilesForProject(3) } returns emptyList()
+        every { settingDao.insertSetting(any()) } returns Unit
+        val content = kotlinx.coroutines.CompletableDeferred<String>()
+        coEvery { storageManager.readFile(project, "draft.md") } coAnswers { content.await() }
+        coEvery { storageManager.listDirectory(project, "") } returns emptyList()
+        val original = viewModel.loadFile(3, "draft.md")
+        val repeated = viewModel.loadFile(3, "draft.md")
+        org.junit.Assert.assertSame(original, repeated)
+        content.complete("")
+        original?.join()
+        io.mockk.coVerify(exactly = 1) { storageManager.readFile(project, "draft.md") }
+    }
+
+    @Test
+    fun `split restores prior sidebar without changing document state`() = runTest {
+        viewModel.documentTextFieldState.edit { replace(0, length, "Unsaved **draft**") }
+        viewModel.toggleSidebar(SidebarMode.SETTINGS)
+        viewModel.toggleCompanion()
+        assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
+        assertTrue(viewModel.companion.state.value.isOpen)
+        viewModel.toggleCompanion()
+        assertEquals(SidebarMode.SETTINGS, viewModel.uiState.value.sidebarMode)
+        assertEquals("Unsaved **draft**", viewModel.documentTextFieldState.text.toString())
+    }
+
+    @Test
     fun `toggleBulletList adds hyphen prefix when bullet list is not present`() = runTest {
         // Setup initial paragraphs state
         val paragraphBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph("Hello world", "1")

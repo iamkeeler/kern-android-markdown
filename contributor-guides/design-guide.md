@@ -85,6 +85,15 @@ When writing UI bindings, you must adhere strictly to the parameters defined in 
 * **Adaptive Split-States:** Implement the adaptive split-screen layout for width constraints >= 600dp (35% left file tree rail, 65% central document workspace canvas capped at a max text line width of 680dp).
 * **Animations:** For inline-reveal animations, use an instantaneous alpha fade pipeline (0ms to 50ms). Do not use sliding or spatial displacement dampening curves.
 
+### Foldable companion extension
+
+- While explicitly open, the companion extends the legacy 35/65 navigation layout into a balanced writer/supporting pair through Material 3 `SupportingPaneScaffold` and `AnimatedPane`, respecting separating hinge bounds. Do not add a third column to a book-style device.
+- Its 720dp/340dp eligibility and large-font adjustment are separate from the 600dp sidebar breakpoint. Suspend the companion when it cannot remain readable; preserve its mode/session for re-expansion.
+- Keep a stable primary editor composition and `TextFieldState`. Native pane bounds animation must not recreate or scale the editable text buffer. Standard Compose motion observes the platform animation-duration setting.
+- An armed fold may draw a restrained hinge cue; raw angles must not drive text measurement or parsing. Commit only after reopening. Use one platform haptic at recognition, honoring system preferences.
+- Fold feedback uses the native confirmation haptic and an optional short paper-crease sound. Haptics and sound have independent persistent controls; sound is off initially. A Try feedback action previews them without changing layout. Audio must respect silent/vibrate mode, DND, system touch sounds and volume, and must stop when backgrounded. Never queue a cue until an asynchronous sound load completes.
+- Use current theme tokens and root-owned system bars. Companion title, read-only role, open/close labels, reference failures, and a visible manual command must remain accessible.
+
 ## 8. Performance & Concurrency Invariants
 The text insertion loop operates at a targeted threshold under **11 milliseconds** per character stroke. To guarantee frame drops are prevented:
 * All parsed paragraph block representations must pass through Jetpack Compose explicitly wrapped or annotated using `@Immutable` or `@Stable`.

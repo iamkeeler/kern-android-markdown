@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
@@ -22,6 +23,10 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 
 /** UI tests for [com.attachdesign.kern.ui.main.MainScreen]. */
 class MainScreenTest {
@@ -35,7 +40,7 @@ class MainScreenTest {
   private val project = ProjectEntity(
       id = 1L,
       name = "Main Project",
-      path = "main_project",
+      path = "main_project_${System.nanoTime()}",
       isExternal = false,
       isSelected = true
   )
@@ -58,7 +63,27 @@ class MainScreenTest {
 
   @After
   fun tearDown() {
+    val viewModel = composeTestRule.runOnIdle {
+      ViewModelProvider(composeTestRule.activity)[MainScreenViewModel::class.java]
+    }
+    composeTestRule.activityRule.scenario.close()
+    runBlocking { viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
     db.close()
+  }
+
+  private fun waitForText(text: String) {
+    composeTestRule.waitUntil(15_000) {
+      composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.waitForIdle()
+  }
+
+  private fun waitForStartup() {
+    val viewModel = composeTestRule.runOnIdle {
+      ViewModelProvider(composeTestRule.activity)[MainScreenViewModel::class.java]
+    }
+    composeTestRule.waitUntil(30_000) { !viewModel.explorerState.value.isLoading }
+    waitForText("files")
   }
 
   @Test
@@ -73,9 +98,19 @@ class MainScreenTest {
       )
     }
 
-    // Verify empty state warning is displayed
+    // Startup now seeds a default workspace. Construct a genuinely empty state
+    // in this test's in-memory database after startup has completed.
+    waitForStartup()
+    composeTestRule.runOnIdle {
+      db.projectDao().getAllProjects().forEach {
+        db.fileDao().deleteFilesForProject(it.id)
+        db.projectDao().deleteProjectById(it.id)
+      }
+    }
+    composeTestRule.onNodeWithText("files").performClick()
+    waitForText("No workspaces")
     composeTestRule.onNodeWithText("No workspaces").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Tap [+ workspace] above to add a local folder.").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Tap [+ workspace] above or button below to add a folder.").assertIsDisplayed()
   }
 
   @Test
@@ -108,12 +143,15 @@ class MainScreenTest {
     }
 
     // Click on 'files' to navigate up/back to workspaces list
+    waitForStartup()
     composeTestRule.onNodeWithText("files").performClick()
 
     // Click on the project item to navigate into the workspace directory
+    waitForText("Main Project")
     composeTestRule.onNodeWithText("Main Project").performClick()
 
     // Assert that the drill down view list is displaying files/subfolders
+    waitForText("readme.md")
     composeTestRule.onNodeWithText("readme.md").assertIsDisplayed()
   }
 
@@ -132,8 +170,12 @@ class MainScreenTest {
       )
     }
 
-    // Verify that directory floating control options are displayed
-    composeTestRule.onNodeWithText("+ File").assertIsDisplayed()
-    composeTestRule.onNodeWithText("+ Folder").assertIsDisplayed()
+    // The current toolbar exposes semantic icon controls rather than text FABs.
+    waitForStartup()
+    composeTestRule.onNodeWithContentDescription("New Document").assertIsDisplayed().performClick()
+    composeTestRule.onNodeWithText("New File in Main Project").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Cancel").performClick()
+    composeTestRule.onNodeWithContentDescription("New Folder").assertIsDisplayed().performClick()
+    composeTestRule.onNodeWithText("New Folder in Main Project").assertIsDisplayed()
   }
 }
