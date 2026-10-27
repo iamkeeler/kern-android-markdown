@@ -16,6 +16,8 @@ import com.attachdesign.kern.parser.MarkdownParser
 import com.attachdesign.kern.parser.IndexTransformationMatrix
 import com.attachdesign.kern.parser.IndexRange
 import com.attachdesign.kern.parser.MarkdownRenderer
+import com.attachdesign.kern.parser.MarkdownRenderProjection
+import com.attachdesign.kern.parser.ParagraphBlock
 
 import androidx.compose.ui.text.TextRange
 
@@ -35,9 +37,11 @@ class MarkdownVisualTransformation(
 
     private val styleProvider = MarkdownSpanStyleProvider(tokenColor, codeBackgroundColor)
 
-    override fun filter(text: AnnotatedString): TransformedText {
-        val rawText = text.text
-        val paragraph = MarkdownParser.parseParagraph(rawText)
+    override fun filter(text: AnnotatedString): TransformedText =
+        filter(MarkdownParser.parseParagraph(text.text))
+
+    internal fun filter(paragraph: ParagraphBlock, projection: MarkdownRenderProjection? = null): TransformedText {
+        val rawText = paragraph.rawText
 
         return when (viewMode) {
             ViewMode.RAW_PLAIN_TEXT -> {
@@ -56,8 +60,8 @@ class MarkdownVisualTransformation(
                 val (strippedText, matrix) = if (isFocused) {
                     stripTokens(paragraph)
                 } else {
-                    val projection = MarkdownRenderer.render(paragraph)
-                    projection.text to projection.indexMatrix
+                    val rendered = projection ?: MarkdownRenderer.render(paragraph)
+                    rendered.text to rendered.indexMatrix
                 }
                 val builder = AnnotatedString.Builder(strippedText)
                 applyRenderedStyles(paragraph, builder, matrix)

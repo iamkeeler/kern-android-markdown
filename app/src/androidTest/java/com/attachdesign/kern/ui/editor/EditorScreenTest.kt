@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
@@ -165,6 +166,25 @@ class EditorScreenTest {
       }
     }
     waitForDocument("Introduction")
+  }
+
+  @Test fun testInlineImageResolutionFollowsDocumentSwitch() {
+    val raw = "See ![diagram](diagram.png) here"
+    val block = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(raw)
+    val projection = com.attachdesign.kern.parser.MarkdownRenderer.render(block)
+    val calls = java.util.Collections.synchronizedList(mutableListOf<String>())
+    var document by mutableStateOf("reference")
+    composeTestRule.setContent {
+      val current = document
+      RenderedMarkdownText(raw, androidx.compose.ui.text.AnnotatedString(projection.text),
+          androidx.compose.ui.text.TextStyle(fontSize = 16.sp),
+          resolveImageModel = { calls.add(current); null }, imageResolutionKey = current)
+    }
+    composeTestRule.waitUntil(10_000) { calls.contains("reference") }
+    composeTestRule.runOnIdle { document = "preview" }
+    composeTestRule.waitUntil(10_000) { calls.contains("preview") }
+    composeTestRule.runOnIdle { document = "reference" }
+    composeTestRule.waitUntil(10_000) { synchronized(calls) { calls.count { it == "reference" } >= 2 } }
   }
 
   @Test fun testCompanionTogglePreservesDraftSelectionUndoAndFocus() {

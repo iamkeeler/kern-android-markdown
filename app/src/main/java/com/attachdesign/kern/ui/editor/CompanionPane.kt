@@ -30,6 +30,8 @@ import coil3.compose.SubcomposeAsyncImage
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.MarkdownElementType
+import com.attachdesign.kern.parser.MarkdownRenderer
+import com.attachdesign.kern.parser.RenderSpan
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import com.attachdesign.kern.ui.theme.toFontFamily
 import kotlinx.collections.immutable.ImmutableList
@@ -101,7 +103,8 @@ fun CompanionPane(
                     theme = theme,
                     fontScale = editorState.editorFontSizeScale,
                     resolveImage = if (preview) viewModel::resolveMarkdownImage else viewModel::resolveCompanionImage,
-                    resolutionKey = if (preview) editorState.activeFilePath else state.reference.toString(),
+                    resolutionKey = if (preview) "preview:${editorState.activeProject?.id}:${editorState.activeFilePath}"
+                        else "reference:${state.reference}",
                     modifier = Modifier.weight(1f).fillMaxWidth().imePadding()
                         .verticalScroll(if (preview) previewScroll else referenceScroll)
                         .padding(theme.dimensions.spacingExtraLarge)
@@ -119,7 +122,7 @@ private fun companionChipColors(theme: AppColorTheme) = FilterChipDefaults.filte
 )
 
 @Immutable
-private data class ReadingBlock(val block: ImmutableParagraphBlock, val text: AnnotatedString)
+private data class ReadingBlock(val block: ImmutableParagraphBlock, val text: AnnotatedString, val images: ImmutableList<RenderSpan>)
 
 @Composable
 private fun ReadOnlyMarkdownDocument(
@@ -135,7 +138,11 @@ private fun ReadOnlyMarkdownDocument(
         value = withContext(Dispatchers.Default) {
             val transform = MarkdownVisualTransformation(false, viewMode = ViewMode.RENDERED,
                 tokenColor = theme.textMuted, codeBackgroundColor = theme.codeBackground)
-            blocks.items.map { ReadingBlock(it, transform.filter(AnnotatedString(it.block.rawText)).text) }.toImmutableList()
+            blocks.items.map {
+                val projection = MarkdownRenderer.render(it.block)
+                ReadingBlock(it, transform.filter(it.block, projection).text,
+                    projection.spans.filter { span -> span.type == MarkdownElementType.IMAGE && !span.extra.isNullOrBlank() }.toImmutableList())
+            }.toImmutableList()
         }
     }
     SelectionContainer(modifier) {
@@ -173,7 +180,7 @@ private fun ReadOnlyMarkdownDocument(
                             TextStyle(color = theme.textPrimary, fontFamily = theme.toFontFamily(), fontSize = size,
                                 lineHeight = size * 1.6f,
                                 fontWeight = if (block.blockType.name.startsWith("HEADER_")) FontWeight.Bold else FontWeight.Normal),
-                            resolveImage, resolutionKey, Modifier.fillMaxWidth())
+                            resolveImage, resolutionKey, Modifier.fillMaxWidth(), reading.images)
                     }
                 }
             }

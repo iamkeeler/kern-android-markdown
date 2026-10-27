@@ -1202,10 +1202,11 @@ internal fun RenderedMarkdownText(
     textStyle: TextStyle,
     resolveImageModel: suspend (String) -> String?,
     imageResolutionKey: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    projectedImageSpans: List<com.attachdesign.kern.parser.RenderSpan>? = null
 ) {
-    val imageSpans = remember(rawText) {
-        MarkdownRenderer.render(MarkdownParser.parseParagraph(rawText)).spans
+    val imageSpans = remember(rawText, projectedImageSpans) {
+        projectedImageSpans ?: MarkdownRenderer.render(MarkdownParser.parseParagraph(rawText)).spans
             .filter { it.type == MarkdownElementType.IMAGE && !it.extra.isNullOrBlank() }
     }
     if (imageSpans.isEmpty()) {
@@ -1213,7 +1214,8 @@ internal fun RenderedMarkdownText(
         return
     }
 
-    val inlineContent = remember(imageSpans, textStyle.fontSize) {
+    val currentResolver = rememberUpdatedState(resolveImageModel)
+    val inlineContent = remember(imageSpans, textStyle.fontSize, imageResolutionKey, renderedText) {
         imageSpans.mapIndexed { index, span ->
             val id = "markdown-image-$index"
             id to InlineTextContent(
@@ -1224,7 +1226,7 @@ internal fun RenderedMarkdownText(
                 )
             ) {
                 val imageModel by produceState<String?>(span.extra, span.extra, imageResolutionKey) {
-                    this.value = span.extra?.let { resolveImageModel(it) } ?: span.extra
+                    this.value = span.extra?.let { currentResolver.value(it) } ?: span.extra
                 }
                 SubcomposeAsyncImage(
                     model = imageModel,

@@ -338,7 +338,10 @@ class EditorViewModel(
 
     fun loadFile(projectId: Long, filePath: String, focusOnStart: Boolean = false): Job? {
         // Re-entering composition after rotation must not reload over the live draft.
-        if (_uiState.value.activeProject?.id == projectId && _uiState.value.activeFilePath == filePath) return fileLoadJob
+        if (_uiState.value.activeProject?.id == projectId && _uiState.value.activeFilePath == filePath) {
+            if (loadingFile != (projectId to filePath)) fileLoadJob?.cancel()
+            return fileLoadJob
+        }
         val requestedFile = projectId to filePath
         if (loadingFile == requestedFile && fileLoadJob?.isActive == true) return fileLoadJob
         fileLoadJob?.cancel()

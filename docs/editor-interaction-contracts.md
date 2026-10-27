@@ -165,6 +165,14 @@ This document records user-visible editor behavior that must survive refactors. 
 - Root cause: the screen's load effect executes again on recreation; `EditorViewModel.loadFile` previously replaced the buffer even when that same project/file was already loaded.
 - Behavioral invariant: loading the already-active document is idempotent; repeated requests during its initial load share the pending job. Layout/configuration changes preserve the live document session.
 - Automated test: `EditorViewModelTest.reentering same file preserves live text selection and undo history`.
+- Regression update: returning to the active document while a different document is loading cancels that pending load. Otherwise its late completion could replace the live draft. Coverage: `EditorViewModelTest.returning to active file cancels a different pending load`.
+
+### Companion image resolution follows the displayed document
+
+- Symptom: switching between a reference and preview with identical inline image markup could retain the previous document's image.
+- Root cause: remembered inline content captured its resolver and document key without using them as remember dependencies.
+- Invariant: inline images resolve in the context of the displayed document on every document switch. Companion projection reuses each parsed block and its image spans on a background dispatcher; displaying a large companion document must not reparse all blocks on the UI thread.
+- Regression coverage: `EditorScreenTest.testInlineImageResolutionFollowsDocumentSwitch` and `MarkdownVisualTransformationTest.testExistingProjectionPreservesRenderedTextAndStyles`.
 
 ## Preferred direction
 

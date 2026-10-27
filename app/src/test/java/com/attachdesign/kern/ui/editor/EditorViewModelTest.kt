@@ -120,6 +120,27 @@ class EditorViewModelTest {
     }
 
     @Test
+    fun `returning to active file cancels a different pending load`() = runTest {
+        val project = com.attachdesign.kern.data.local.ProjectEntity(id = 3, name = "Drafts", path = "drafts", isExternal = false, isSelected = true)
+        every { projectDao.getProjectById(3) } returns project
+        every { fileDao.getFilesForProject(3) } returns emptyList()
+        every { settingDao.insertSetting(any()) } returns Unit
+        coEvery { storageManager.readFile(project, "active.md") } returns ""
+        val pending = kotlinx.coroutines.CompletableDeferred<String>()
+        coEvery { storageManager.readFile(project, "other.md") } coAnswers { pending.await() }
+        coEvery { storageManager.listDirectory(project, "") } returns emptyList()
+        viewModel.loadFile(3, "active.md")?.join()
+        viewModel.documentTextFieldState.edit { replace(0, length, "Unsaved draft") }
+        val other = viewModel.loadFile(3, "other.md")
+        viewModel.loadFile(3, "active.md")
+        pending.complete("")
+        other?.join()
+        assertTrue(other?.isCancelled == true)
+        assertEquals("active.md", viewModel.uiState.value.activeFilePath)
+        assertEquals("Unsaved draft", viewModel.documentTextFieldState.text.toString())
+    }
+
+    @Test
     fun `split restores prior sidebar without changing document state`() = runTest {
         viewModel.documentTextFieldState.edit { replace(0, length, "Unsaved **draft**") }
         viewModel.toggleSidebar(SidebarMode.SETTINGS)

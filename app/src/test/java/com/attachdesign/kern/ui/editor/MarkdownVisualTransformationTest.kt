@@ -12,6 +12,17 @@ class MarkdownVisualTransformationTest {
     private val codeBgColor = Color.LightGray
 
     @Test
+    fun testExistingProjectionPreservesRenderedTextAndStyles() {
+        val raw = "Read **bold** and ![diagram](diagram.png)."
+        val block = com.attachdesign.kern.parser.MarkdownParser.parseParagraph(raw)
+        val projection = com.attachdesign.kern.parser.MarkdownRenderer.render(block)
+        val transform = MarkdownVisualTransformation(false, viewMode = ViewMode.RENDERED,
+            tokenColor = tokenColor, codeBackgroundColor = codeBgColor)
+        assertEquals(transform.filter(AnnotatedString(raw)).text, transform.filter(block, projection).text)
+        assertEquals("diagram.png", projection.spans.single { it.type == com.attachdesign.kern.parser.MarkdownElementType.IMAGE }.extra)
+    }
+
+    @Test
     fun testSelectiveTokenRevealWhenCursorIsInsideBold() {
         val rawText = "**this is bold**, and *this is italic*"
         // **this is bold** is indices 0..16
