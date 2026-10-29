@@ -273,7 +273,7 @@ class EditorScreenTest {
 
   @Test fun testInjectedHingeGestureTogglesCompanionExactlyOnceEachWay() {
     db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
-    val angles = MutableStateFlow(180f)
+    val angles = MutableStateFlow(162f)
     val geometry = MutableStateFlow<FoldGeometry?>(null)
     val gestureClock = java.util.concurrent.atomic.AtomicLong(0)
     val feedbackCalls = mutableListOf<Pair<Boolean, Boolean>>()
@@ -316,7 +316,7 @@ class EditorScreenTest {
     holdFor(250)
     assertTrue("A bend alone must not constrain the writer to one side",
         composeTestRule.onNodeWithContentDescription("Document editor").fetchSemanticsNode().boundsInRoot.right > hinge.left)
-    angles.value = 180f
+    angles.value = 165f
     geometry.value = hinge
     holdFor(200)
     composeTestRule.waitUntil(10_000) { viewModel.companion.state.value.isOpen }
@@ -328,7 +328,7 @@ class EditorScreenTest {
     holdFor(1300)
     angles.value = 145f
     holdFor(250)
-    angles.value = 180f
+    angles.value = 165f
     holdFor(200)
     composeTestRule.waitUntil(10_000) { !viewModel.companion.state.value.isOpen }
     composeTestRule.onNodeWithContentDescription("Open split view").assertIsDisplayed()
@@ -337,7 +337,7 @@ class EditorScreenTest {
     holdFor(200)
     composeTestRule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
     composeTestRule.waitUntil(5_000) { angles.subscriptionCount.value == 0 }
-    angles.value = 180f
+    angles.value = 165f
     composeTestRule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
     holdFor(600)
     assertTrue("Resuming must not complete an old gesture", !viewModel.companion.state.value.isOpen)
@@ -412,10 +412,10 @@ class EditorScreenTest {
     composeTestRule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
   }
 
-  @Test fun testInjectedGentleFoldOpensMetricsWithoutRoomForSecondEditor() {
+  @Test fun testInjectedStudyCompanionGestureOpensMetricsWithoutRoomForSecondEditor() {
     db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
     db.settingDao().insertSetting(SettingEntity("fold_shortcut_action", "METRICS"))
-    val angles = MutableStateFlow(173f)
+    val angles = MutableStateFlow(162f)
     val clock = java.util.concurrent.atomic.AtomicLong(0)
     var feedbackCount = 0
     val environment = object : FoldEnvironment {
@@ -447,7 +447,7 @@ class EditorScreenTest {
     holdFor(500)
     angles.value = 158f
     holdFor(250)
-    angles.value = 173f
+    angles.value = 165f
     holdFor(250)
     composeTestRule.waitUntil(10_000) { viewModel.uiState.value.hemingwayMetrics != null }
     composeTestRule.onNodeWithText("Words").assertIsDisplayed()
@@ -460,12 +460,47 @@ class EditorScreenTest {
     holdFor(1300)
     angles.value = 158f
     holdFor(250)
-    angles.value = 173f
+    angles.value = 165f
     holdFor(250)
     composeTestRule.runOnIdle {
       assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
       assertEquals(2, feedbackCount)
     }
+  }
+
+  @Test fun testInjectedFoldDefersForSafeInputWithoutAnotherSensorEvent() {
+    val angles = MutableStateFlow(162f)
+    val clock = java.util.concurrent.atomic.AtomicLong(0)
+    val safe = mutableStateOf(false)
+    var toggles = 0
+    val environment = object : FoldEnvironment {
+      override val sensorAvailable = true
+      override val angles = angles
+      override val geometry = MutableStateFlow<FoldGeometry?>(null)
+      override fun monotonicTimeMillis() = clock.get()
+    }
+    composeTestRule.setContent {
+      rememberFoldGestureProgress(environment, enabled = true, eligible = true,
+          inputSafe = { safe.value }, onToggle = { toggles++ })
+    }
+    composeTestRule.waitUntil(5_000) { angles.subscriptionCount.value > 0 }
+    fun angleAt(angle: Float, time: Long) {
+      composeTestRule.runOnIdle { clock.set(time); angles.value = angle }
+      composeTestRule.waitForIdle()
+    }
+    angleAt(135f, 100)
+    angleAt(165f, 300)
+    composeTestRule.runOnIdle { assertEquals(0, toggles); clock.set(350); safe.value = true }
+    composeTestRule.waitUntil(5_000) { toggles == 1 }
+    // A later recognized gesture must expire, rather than fire after input was blocked too long.
+    composeTestRule.runOnIdle { safe.value = false }
+    angleAt(135f, 1400)
+    angleAt(165f, 1600)
+    composeTestRule.runOnIdle { clock.set(2200) }
+    composeTestRule.mainClock.advanceTimeBy(100)
+    composeTestRule.runOnIdle { safe.value = true }
+    composeTestRule.mainClock.advanceTimeBy(100)
+    composeTestRule.runOnIdle { assertEquals(1, toggles) }
   }
 
   @Test fun testInjectedFoldCannotCommitBehindAnotherWindow() {

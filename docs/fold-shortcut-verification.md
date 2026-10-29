@@ -24,3 +24,7 @@ Scope: Settings owns the fold shortcut and its persisted action/feedback prefere
 Emulator angle injection verifies recognition, lifecycle cancellation and UI dispatch, but does not establish the Pixel 10 Pro Fold's actual sensor readings or physical feel. The Settings dialog now displays local hinge readings to support that device test. The shortcut remains opt-in, and no sensor values are sent to telemetry.
 
 Shared Firebase/Play builds use the repository's version allocator, packaged-APK verification and source-commit metadata. Local test/build invocations do not reserve distribution numbers.
+
+## Study Companion alignment follow-up
+
+Compared the working local Study Companion hinge detector and its integration, including its sensor registration, lifecycle ownership, state machine and tests. [The comparison record](hinge-study-companion-comparison.md) identifies the exact reference commit and behavioral differences. Three traces derived from that implementation failed on Kern's preceding recognizer. Kern now uses the reference thresholds and event-driven recognition while retaining its input-safety and modal guards. Follow-up verification passed: 304 unit tests and 59 instrumentation tests, zero failures/errors/skips, zero lint errors, and a successful release APK build. Details are recorded in the comparison record.

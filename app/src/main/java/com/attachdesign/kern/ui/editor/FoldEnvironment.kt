@@ -24,11 +24,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
@@ -76,12 +77,16 @@ private class AndroidFoldEnvironment(context: Context) : FoldEnvironment {
     override val angles: Flow<Float> = callbackFlow {
         if (sensor == null) { close(); return@callbackFlow }
         val listener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent) { trySend(event.values[0]) }
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.sensor.type == Sensor.TYPE_HINGE_ANGLE) {
+                    event.values.firstOrNull()?.let { trySend(it) }
+                }
+            }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
-        if (!runCatching { manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME) }.getOrDefault(false)) close()
+        if (!runCatching { manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL) }.getOrDefault(false)) close()
         awaitClose { manager.unregisterListener(listener) }
-    }.conflate()
+    }
 }
 
 private tailrec fun Context.activity(): Activity? = when (this) {
@@ -110,22 +115,32 @@ fun rememberFoldGestureProgress(
             val recognizer = FoldGestureRecognizer()
             try {
                 coroutineScope {
-                    var latest: Float? = null
-                    launch { environment.angles.collect { latest = it } }
-                    // Hinge sensors can be on-change sensors: dwell times must progress even
-                    // when a stationary hinge does not emit another sample.
-                    var pendingUntil = -1L
-                    while (isActive) {
+                    var latestAngle = 0f
+                    var pendingToggle: Job? = null
+                    environment.angles.collect { angle ->
+                        latestAngle = angle
                         val now = environment.monotonicTimeMillis()
-                        latest?.let { angle ->
-                            if (recognizer.onAngle(angle, now)) pendingUntil = now + 500
-                            progress.floatValue = recognizer.bendProgress
-                            if (pendingUntil >= now && angle >= FoldGestureRecognizer.FLAT_ANGLE && currentSafe.value()) {
-                                currentToggle.value()
-                                pendingUntil = -1L
-                            } else if (angle < FoldGestureRecognizer.FLAT_ANGLE || now > pendingUntil) pendingUntil = -1L
+                        val recognized = recognizer.onAngle(angle, now)
+                        progress.floatValue = recognizer.bendProgress
+                        if (!angle.isFinite() || angle !in FoldGestureRecognizer.FLAT_ANGLE..180f) {
+                            pendingToggle?.cancel()
                         }
-                        delay(50)
+                        if (recognized) {
+                            pendingToggle?.cancel()
+                            // Only poll after recognition if native input temporarily blocks
+                            // the action. Never resample or conflate the recognition stream.
+                            pendingToggle = launch(start = CoroutineStart.UNDISPATCHED) {
+                                val deadline = now + 500
+                                while (isActive && environment.monotonicTimeMillis() <= deadline &&
+                                    latestAngle >= FoldGestureRecognizer.FLAT_ANGLE) {
+                                    if (currentSafe.value()) {
+                                        currentToggle.value()
+                                        return@launch
+                                    }
+                                    delay(50)
+                                }
+                            }
+                        }
                     }
                 }
             } finally { progress.floatValue = 0f }
