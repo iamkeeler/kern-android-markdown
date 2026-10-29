@@ -4,6 +4,9 @@ import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.ParagraphStyle
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -153,7 +156,27 @@ class MarkdownDocumentOutputTransformation(
 
     private fun TextFieldBuffer.applyBlockStyle(blockType: MarkdownBlockType, start: Int, end: Int) {
         if (start >= end) return
-        styleProvider.styleForBlock(blockType)?.let { addStyle(it, start, end) }
+        styleProvider.styleForBlock(blockType)?.let { style ->
+            addStyle(style, start, end)
+            val headingLineRatio = when (blockType) {
+                MarkdownBlockType.HEADER_1 -> 1.25f
+                MarkdownBlockType.HEADER_2, MarkdownBlockType.HEADER_3 -> 1.3f
+                MarkdownBlockType.HEADER_4, MarkdownBlockType.HEADER_5, MarkdownBlockType.HEADER_6 -> 1.3f
+                else -> null
+            }
+            if (headingLineRatio != null && style.fontSize.isSpecified) {
+                val headingHeight = style.fontSize * headingLineRatio
+                val bodyHeight = bodySize * 1.6f
+                addStyle(ParagraphStyle(
+                    lineHeight = if (headingHeight.value > bodyHeight.value) headingHeight else bodyHeight,
+                    lineHeightStyle = LineHeightStyle(
+                        LineHeightStyle.Alignment.Proportional,
+                        LineHeightStyle.Trim.None,
+                        LineHeightStyle.Mode.Minimum
+                    )
+                ), start, end)
+            }
+        }
     }
 
     private fun TextFieldBuffer.applyElementStyle(type: MarkdownElementType, start: Int, end: Int) {

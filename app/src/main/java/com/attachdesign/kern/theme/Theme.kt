@@ -10,42 +10,51 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import com.attachdesign.kern.ui.theme.AppColorTheme
+import com.attachdesign.kern.ui.theme.ThemeEngine
+import com.attachdesign.kern.ui.theme.readableColor
+import androidx.compose.ui.graphics.compositeOver
 
-private val DarkColorScheme = darkColorScheme(
-  primary = KernDefaultAccent,
-  background = KernDarkBackground,
-  surface = KernDarkSurface,
-  onPrimary = KernDarkBackground,
-  onBackground = KernDarkTextPrimary,
-  onSurface = KernDarkTextPrimary,
-)
+private val DarkColorScheme = ThemeEngine.DefaultDark.toColorTheme().toMaterialColorScheme()
 
-private val LightColorScheme = lightColorScheme(
-  primary = KernDefaultAccent,
-  background = KernLightBackground,
-  surface = KernLightSurface,
-  onPrimary = KernLightBackground,
-  onBackground = KernLightTextPrimary,
-  onSurface = KernLightTextPrimary,
-)
+private val LightColorScheme = ThemeEngine.DefaultLight.toColorTheme().toMaterialColorScheme()
 
-private fun AppColorTheme.toColorScheme() = if (isDark) {
-  darkColorScheme(
-    primary = accent,
-    background = background,
-    surface = surface,
-    onPrimary = background,
-    onBackground = textPrimary,
-    onSurface = textPrimary,
-  )
-} else {
-  lightColorScheme(
-    primary = accent,
-    background = background,
-    surface = surface,
-    onPrimary = background,
-    onBackground = textPrimary,
-    onSurface = textPrimary,
+/** Roles used by the app's native menus, dialogs, switches, fields, buttons and snackbars. */
+internal fun AppColorTheme.toMaterialColorScheme() = accessibleRoles.let { roles ->
+  val base = if (isDark) darkColorScheme() else lightColorScheme()
+  base.copy(
+    primary = roles.controlAccent,
+    onPrimary = roles.onControlAccent,
+    // A checked switch's optional icon uses onPrimaryContainer on its onPrimary thumb.
+    primaryContainer = roles.onControlAccent,
+    onPrimaryContainer = roles.controlAccent,
+    secondary = roles.textSecondary,
+    onSecondary = readableColor(roles.background, listOf(roles.textSecondary.compositeOver(roles.surface)), 4.5),
+    secondaryContainer = roles.surface,
+    onSecondaryContainer = roles.textPrimary,
+    background = roles.background,
+    onBackground = roles.textPrimary,
+    surface = roles.surface,
+    onSurface = roles.textPrimary,
+    surfaceVariant = roles.surface,
+    onSurfaceVariant = roles.textSecondary,
+    // Keep elevated menu/dialog surfaces neutral instead of adding a fallback purple tint.
+    surfaceTint = roles.surface,
+    surfaceBright = roles.surface,
+    surfaceDim = roles.background,
+    surfaceContainer = roles.surface,
+    surfaceContainerHigh = roles.surface,
+    surfaceContainerHighest = roles.surface,
+    surfaceContainerLow = roles.surface,
+    surfaceContainerLowest = roles.background,
+    outline = roles.indicator,
+    outlineVariant = roles.indicator,
+    error = roles.textDanger,
+    onError = readableColor(roles.background, listOf(roles.textDanger.compositeOver(roles.surface)), 4.5),
+    errorContainer = roles.surface,
+    onErrorContainer = roles.textDanger,
+    inverseSurface = roles.inverseSurface,
+    inverseOnSurface = roles.inverseOnSurface,
+    inversePrimary = roles.inversePrimary,
   )
 }
 
@@ -58,7 +67,7 @@ fun ModernAndroidMarkdownEditorTheme(
 ) {
   val colorScheme =
     when {
-      activeTheme != null -> activeTheme.toColorScheme()
+      activeTheme != null -> activeTheme.toMaterialColorScheme()
       dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
         val context = LocalContext.current
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

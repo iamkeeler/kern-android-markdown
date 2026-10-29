@@ -9,7 +9,7 @@ import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.local.QuoteDao
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
-import com.attachdesign.kern.data.storage.FileOperationsManager
+import com.attachdesign.kern.data.storage.*
 import com.attachdesign.kern.test.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -79,10 +79,15 @@ class MainScreenViewModelTest {
         coEvery { projectDao.insertProject(any()) } returns 1L
         coEvery { projectDao.deleteProjectById(any()) } returns Unit
         coEvery { projectDao.updateProject(any()) } returns Unit
-        coEvery { projectDao.getProjectById(any()) } returns null
+        coEvery { projectDao.getProjectById(any()) } answers {
+            projectDao.getSelectedProject()?.takeIf { it.id == firstArg<Long>() }
+        }
         coEvery { fileDao.deleteFilesForProject(any()) } returns Unit
         coEvery { fileDao.deleteFile(any(), any()) } returns Unit
         coEvery { storageManager.createFile(any(), any()) } returns true
+        coEvery { storageManager.listDirectoryOutcome(any(), any()) } coAnswers {
+            DirectoryOutcome.Success(storageManager.listDirectory(firstArg(), secondArg()))
+        }
     }
 
     @After
@@ -93,165 +98,59 @@ class MainScreenViewModelTest {
     }
 
     @Test
-    fun `createFile appends md extension if missing`() = runTest {
-        // Setup
-        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
-        coEvery { projectDao.getSelectedProject() } returns proj
-        coEvery { fileDao.insertFile(any()) } returns 1L
-
+    fun `creation delegates the submitted leaf and returns actual provider identity`() = runTest {
+        val project = ProjectEntity(1, "Test", "test", false, true)
+        coEvery { projectDao.getSelectedProject() } returns project
+        val actual = VfsNode.File("Provider normalized.MD", "Provider normalized.MD", 0, 0)
+        coEvery { fileOpsManager.createFile(project, "", "submitted.MD") } returns MutationOutcome.Success(StorageIdentity(actual))
         viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-
-        // Act
-        viewModel.createFile("newfile", proj)
+        var created: String? = null
+        viewModel.createFile("submitted.MD", project) { created = it }
         advanceUntilIdle()
-
-        // Assert
-        coVerify {
-            storageManager.createFile(proj, "newfile.md")
-            fileDao.insertFile(match {
-                it.name == "newfile.md" &&
-                it.relativePath == "newfile.md" &&
-                it.projectId == 1L &&
-                it.syncState == "PENDING"
-            })
-        }
+        assertEquals(actual.relativePath, created)
+        coVerify(exactly = 1) { fileOpsManager.createFile(project, "", "submitted.MD") }
+        coVerify(exactly = 0) { storageManager.createFile(project, any()) }
+        coVerify(exactly = 0) { fileDao.insertFile(match { it.name == actual.name }) }
     }
 
     @Test
-    fun `createFile does not append md extension if present`() = runTest {
-        // Setup
-        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
-        coEvery { projectDao.getSelectedProject() } returns proj
-        coEvery { fileDao.insertFile(any()) } returns 1L
-
+    fun `creation uses current subfolder for implicit and explicit project`() = runTest {
+        val project = ProjectEntity(1, "Test", "test", false, true)
+        coEvery { projectDao.getSelectedProject() } returns project
+        coEvery { fileOpsManager.createFile(project, "subfolder", any()) } returns MutationOutcome.Failed(MutationFailure.Storage)
         viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-
-        // Act
-        viewModel.createFile("existing.md", proj)
+        viewModel.navigateToSegment(project, "subfolder")
+        viewModel.createFile("implicit")
+        viewModel.createFile("explicit", project)
         advanceUntilIdle()
-
-        // Assert
-        coVerify {
-            storageManager.createFile(proj, "existing.md")
-            fileDao.insertFile(match {
-                it.name == "existing.md" &&
-                it.relativePath == "existing.md"
-            })
-        }
+        coVerify(exactly = 1) { fileOpsManager.createFile(project, "subfolder", "implicit") }
+        coVerify(exactly = 1) { fileOpsManager.createFile(project, "subfolder", "explicit") }
     }
 
     @Test
-    fun `createFile constructs correct relative path when current path is set`() = runTest {
-        // Setup
-        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
-        coEvery { projectDao.getSelectedProject() } returns proj
-        coEvery { fileDao.insertFile(any()) } returns 1L
-        coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
-        coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
-
+    fun `creation falls back to the selected project`() = runTest {
+        val project = ProjectEntity(2, "Selected", "selected", false, true)
+        coEvery { projectDao.getSelectedProject() } returns project
+        coEvery { fileOpsManager.createFile(project, "", "fallback") } returns MutationOutcome.Failed(MutationFailure.Storage)
         viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-
-        viewModel.navigateToSegment(proj, "subfolder")
-
-        // Act
-        // Use implicit target project (i.e. use activeProject)
-        viewModel.createFile("nested")
-        advanceUntilIdle()
-
-        // Assert
-        coVerify {
-            storageManager.createFile(proj, "subfolder/nested.md")
-            fileDao.insertFile(match {
-                it.relativePath == "subfolder/nested.md" &&
-                it.name == "nested.md"
-            })
-        }
-    }
-
-    @Test
-    fun `createFile preserves current path when target project is supplied`() = runTest {
-        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
-        coEvery { projectDao.getSelectedProject() } returns proj
-        coEvery { fileDao.insertFile(any()) } returns 1L
-        coEvery { storageManager.listDirectory(any(), any()) } returns emptyList()
-        coEvery { fileDao.getFilesForProject(any()) } returns emptyList()
-
-        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-        viewModel.navigateToSegment(proj, "subfolder")
-
-        viewModel.createFile("nested", proj)
-        advanceUntilIdle()
-
-        coVerify {
-            storageManager.createFile(proj, "subfolder/nested.md")
-            fileDao.insertFile(match {
-                it.relativePath == "subfolder/nested.md" &&
-                it.name == "nested.md"
-            })
-        }
-    }
-
-    @Test
-    fun `createFile sets sync state to SYNCED for external projects`() = runTest {
-        // Setup
-        val proj = ProjectEntity(id = 1L, name = "External", path = "ext", isExternal = true, isSelected = true)
-        coEvery { projectDao.getSelectedProject() } returns proj
-        coEvery { fileDao.insertFile(any()) } returns 1L
-
-        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-
-        // Act
-        viewModel.createFile("test", proj)
-        advanceUntilIdle()
-
-        // Assert
-        coVerify {
-            fileDao.insertFile(match {
-                it.syncState == "SYNCED"
-            })
-        }
-    }
-
-    @Test
-    fun `createFile falls back to selected project from db if neither target nor active is set`() = runTest {
-        // Setup
-        val proj = ProjectEntity(id = 2L, name = "DB Selected", path = "db", isExternal = false, isSelected = true)
-        coEvery { projectDao.getSelectedProject() } returns proj
-        coEvery { fileDao.insertFile(any()) } returns 1L
-        coEvery { projectDao.getAllProjects() } returns listOf(proj)
-
-        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-
-        // Act
         viewModel.createFile("fallback")
         advanceUntilIdle()
-
-        // Assert
-        coVerify {
-            storageManager.createFile(proj, "fallback.md")
-            fileDao.insertFile(match {
-                it.projectId == 2L
-            })
-        }
+        coVerify(exactly = 1) { fileOpsManager.createFile(project, "", "fallback") }
     }
 
     @Test
-    fun `createFile does not insert into database if storageManager returns false`() = runTest {
-        val proj = ProjectEntity(id = 1L, name = "Test", path = "test", isExternal = false, isSelected = true)
-        coEvery { projectDao.getSelectedProject() } returns proj
-        coEvery { storageManager.createFile(any(), any()) } returns false
-
+    fun `failed creation never navigates or invents metadata`() = runTest {
+        val project = ProjectEntity(1, "Test", "test", false, true)
+        coEvery { projectDao.getSelectedProject() } returns project
+        coEvery { fileOpsManager.createFile(project, "", "failed.md") } returns MutationOutcome.Failed(MutationFailure.Storage)
+        coEvery { fileOpsManager.createFolder(project, "", "failed folder") } returns MutationOutcome.Failed(MutationFailure.AccessDenied)
         viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
-
-        var callbackCalled = false
-        viewModel.createFile("failed_file.md", proj) {
-            callbackCalled = true
-        }
+        var called = false
+        viewModel.createFile("failed.md", project) { called = true }
+        viewModel.createFolder("failed folder", project)
         advanceUntilIdle()
-
-        coVerify(exactly = 1) { storageManager.createFile(proj, "failed_file.md") }
-        coVerify(exactly = 0) { fileDao.insertFile(match { it.name == "failed_file.md" }) }
-        assertFalse(callbackCalled)
+        assertFalse(called)
+        coVerify(exactly = 0) { fileDao.insertFile(match { it.name == "failed.md" || it.name == "failed folder" }) }
     }
 
     @Test

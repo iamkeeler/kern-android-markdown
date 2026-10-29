@@ -5,9 +5,12 @@ package com.attachdesign.kern.ui.editor
 import android.content.Context
 import androidx.compose.ui.text.input.TextFieldValue
 import com.attachdesign.kern.data.local.AppDatabase
+import com.attachdesign.kern.data.local.ProjectEntity
 import com.attachdesign.kern.data.local.FileDao
 import com.attachdesign.kern.data.local.ProjectDao
 import com.attachdesign.kern.data.local.SettingDao
+import com.attachdesign.kern.data.local.SettingEntity
+import com.attachdesign.kern.data.local.SettingKeys
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.FileOperationsManager
 import com.attachdesign.kern.test.MainDispatcherRule
@@ -16,10 +19,16 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -76,6 +85,89 @@ class EditorViewModelTest {
     fun tearDown() {
         viewModel.viewModelScope.cancel()
         io.mockk.unmockkAll()
+    }
+
+    @Test
+    fun `initial editor settings normalize font scale before publishing state`() = runTest {
+        viewModel.viewModelScope.cancel()
+        // Serialize Main resumptions even when real IO observers emit concurrently.
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        every { settingDao.getSettingFlow(SettingKeys.EDITOR_FONT_SIZE_SCALE) } returns emptyFlow()
+        every { settingDao.getSetting(SettingKeys.VIEW_MODE) } returns
+            SettingEntity(SettingKeys.VIEW_MODE, "RAW_PLAIN_TEXT")
+        listOf(
+            null to 1f,
+            "malformed" to 1f,
+            "NaN" to 1f,
+            "Infinity" to 1f,
+            "-Infinity" to 1f,
+            "0.1" to 0.8f,
+            "0.8" to 0.8f,
+            "1.13" to 1.13f,
+            "1.4" to 1.4f,
+            "2.0" to 1.4f
+        ).forEach { (raw, expected) ->
+            every { settingDao.getSetting(SettingKeys.EDITOR_FONT_SIZE_SCALE) } returns
+                raw?.let { SettingEntity(SettingKeys.EDITOR_FONT_SIZE_SCALE, it) }
+            viewModel = EditorViewModel(db, storageManager, fileOpsManager, context, testDispatcher)
+            val loaded = withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    viewModel.uiState.first { it.viewMode == ViewMode.RAW_PLAIN_TEXT }
+                }
+            }
+            assertEquals("setting=$raw", expected, loaded.editorFontSizeScale, 0f)
+            // The screen passes this state directly into the existing split policy.
+            assertTrue(CompanionLayoutPolicy.canSplit(960f, fontScale = loaded.editorFontSizeScale))
+            viewModel.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun `font setting updates normalize eligibility input without changing document state`() = runTest {
+        viewModel.viewModelScope.cancel()
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val scaleSetting = MutableStateFlow<SettingEntity?>(SettingEntity(SettingKeys.EDITOR_FONT_SIZE_SCALE, "0.93"))
+        every { settingDao.getSettingFlow(SettingKeys.EDITOR_FONT_SIZE_SCALE) } returns scaleSetting
+        every { settingDao.getSetting(SettingKeys.EDITOR_FONT_SIZE_SCALE) } returns scaleSetting.value
+        every { settingDao.getSetting(SettingKeys.VIEW_MODE) } returns
+            SettingEntity(SettingKeys.VIEW_MODE, "RAW_PLAIN_TEXT")
+        viewModel = EditorViewModel(db, storageManager, fileOpsManager, context, testDispatcher)
+        withContext(Dispatchers.Default) {
+            withTimeout(10_000) {
+                viewModel.uiState.first { it.viewMode == ViewMode.RAW_PLAIN_TEXT && it.editorFontSizeScale == 0.93f }
+            }
+        }
+        viewModel.documentTextFieldState.edit {
+            replace(0, length, "Unsaved **draft**")
+            selection = androidx.compose.ui.text.TextRange(3, 8)
+        }
+        val canUndo = viewModel.documentTextFieldState.undoState.canUndo
+        val canRedo = viewModel.documentTextFieldState.undoState.canRedo
+        listOf(
+            null to 1f,
+            "malformed" to 1f,
+            "NaN" to 1f,
+            "Infinity" to 1f,
+            "-Infinity" to 1f,
+            "0.2" to 0.8f,
+            "1.11" to 1.11f,
+            "2" to 1.4f
+        ).forEach { (raw, expected) ->
+            scaleSetting.value = SettingEntity(SettingKeys.EDITOR_FONT_SIZE_SCALE, "0.93")
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) { viewModel.uiState.first { it.editorFontSizeScale == 0.93f } }
+            }
+            scaleSetting.value = raw?.let { SettingEntity(SettingKeys.EDITOR_FONT_SIZE_SCALE, it) }
+            val updated = withContext(Dispatchers.Default) {
+                withTimeout(10_000) { viewModel.uiState.first { it.editorFontSizeScale != 0.93f } }
+            }
+            assertEquals("setting=$raw", expected, updated.editorFontSizeScale, 0f)
+            assertTrue(CompanionLayoutPolicy.canSplit(960f, fontScale = updated.editorFontSizeScale))
+            assertEquals("Unsaved **draft**", viewModel.documentTextFieldState.text.toString())
+            assertEquals(androidx.compose.ui.text.TextRange(3, 8), viewModel.documentTextFieldState.selection)
+            assertEquals(canUndo, viewModel.documentTextFieldState.undoState.canUndo)
+            assertEquals(canRedo, viewModel.documentTextFieldState.undoState.canRedo)
+        }
     }
 
     @Test
@@ -141,6 +233,30 @@ class EditorViewModelTest {
     }
 
     @Test
+    fun `switching second file saves current draft before loading next`() = runTest {
+        io.mockk.mockkConstructor(android.os.Bundle::class)
+        every { anyConstructed<android.os.Bundle>().putLong(any(), any()) } returns Unit
+        val project = com.attachdesign.kern.data.local.ProjectEntity(id = 3, name = "Drafts", path = "drafts", isExternal = false, isSelected = true)
+        every { projectDao.getProjectById(3) } returns project
+        every { fileDao.getFilesForProject(3) } returns emptyList()
+        every { fileDao.getFileByPath(3, any()) } returns null
+        every { settingDao.insertSetting(any()) } returns Unit
+        coEvery { storageManager.readFile(project, any()) } returns ""
+        coEvery { storageManager.listDirectory(project, "") } returns emptyList()
+        viewModel.loadFile(3, "active.md")?.join()
+        viewModel.documentTextFieldState.edit { replace(0, length, "Unsaved second draft") }
+        viewModel.switchSecondaryFile(ReferenceKey(3, "next.md"))
+        withContext(Dispatchers.Default) {
+            withTimeout(10_000) { viewModel.switchingSecondaryFile.first { !it } }
+        }
+        io.mockk.coVerifyOrder {
+            storageManager.writeFile(project, "active.md", "Unsaved second draft")
+            storageManager.readFile(project, "next.md")
+        }
+        assertEquals("next.md", viewModel.uiState.value.activeFilePath)
+    }
+
+    @Test
     fun `split restores prior sidebar without changing document state`() = runTest {
         viewModel.documentTextFieldState.edit { replace(0, length, "Unsaved **draft**") }
         viewModel.toggleSidebar(SidebarMode.SETTINGS)
@@ -154,6 +270,8 @@ class EditorViewModelTest {
 
     @Test
     fun `toggleBulletList adds hyphen prefix when bullet list is not present`() = runTest {
+        // This command-only fixture does not exercise asynchronous settings or persistence.
+        viewModel.viewModelScope.cancel()
         // Setup initial paragraphs state
         val paragraphBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph("Hello world", "1")
         val immutableBlock = com.attachdesign.kern.ui.editor.ImmutableParagraphBlock(paragraphBlock)
@@ -172,6 +290,8 @@ class EditorViewModelTest {
 
     @Test
     fun `toggleBulletList removes hyphen prefix when bullet list is already present`() = runTest {
+        // This command-only fixture does not exercise asynchronous settings or persistence.
+        viewModel.viewModelScope.cancel()
         // Setup initial paragraphs state with bullet list
         val paragraphBlock = com.attachdesign.kern.parser.MarkdownParser.parseParagraph("- Hello world", "1")
         val immutableBlock = com.attachdesign.kern.ui.editor.ImmutableParagraphBlock(paragraphBlock)
@@ -242,4 +362,14 @@ class EditorViewModelTest {
         viewModel.redo()
         assertEquals("Hello World", viewModel.documentTextFieldState.text.toString())
     }
+    @Test
+    fun `reference listing reports access failure separately from a genuinely empty folder`() = runTest {
+        val project = ProjectEntity(3, "Linked", "content://test/tree/root", true, false)
+        every { projectDao.getProjectById(3) } returns project
+        coEvery { storageManager.listDirectoryOutcome(project, "") } returns com.attachdesign.kern.data.storage.DirectoryOutcome.AccessDenied
+        assertTrue(runCatching { viewModel.listReferenceFiles(3, "") }.isFailure)
+        coEvery { storageManager.listDirectoryOutcome(project, "") } returns com.attachdesign.kern.data.storage.DirectoryOutcome.Success(emptyList())
+        assertTrue(viewModel.listReferenceFiles(3, "").isEmpty())
+    }
+
 }

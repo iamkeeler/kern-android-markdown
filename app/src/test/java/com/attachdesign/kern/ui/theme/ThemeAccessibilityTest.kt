@@ -1,89 +1,106 @@
 package com.attachdesign.kern.ui.theme
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.unit.sp
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.pow
 
-/**
- * JVM unit tests checking WCAG 2.0 compliance for contrast ratios of the built-in themes.
- */
+/** Tests declared palette contracts separately from the roles actually rendered by controls. */
 class ThemeAccessibilityTest {
+    private val themes = listOf(ThemeEngine.DefaultLight, ThemeEngine.DefaultDark).map { it.toColorTheme() }
 
-    // Relative luminance calculation based on WCAG 2.0 formula
-    private fun calculateLuminance(hexColor: String): Double {
-        val color = hexColor.trim().removePrefix("#")
-        val r = color.substring(0, 2).toInt(16) / 255.0
-        val g = color.substring(2, 4).toInt(16) / 255.0
-        val b = color.substring(4, 6).toInt(16) / 255.0
-
-        val rL = if (r <= 0.03928) r / 12.92 else ((r + 0.055) / 1.055).pow(2.4)
-        val gL = if (g <= 0.03928) g / 12.92 else ((g + 0.055) / 1.055).pow(2.4)
-        val bL = if (b <= 0.03928) b / 12.92 else ((b + 0.055) / 1.055).pow(2.4)
-
-        return 0.2126 * rL + 0.7152 * gL + 0.0722 * bL
-    }
-
-    private fun calculateContrastRatio(color1: String, color2: String): Double {
-        val l1 = calculateLuminance(color1)
-        val l2 = calculateLuminance(color2)
-        val lighter = max(l1, l2)
-        val darker = min(l1, l2)
-        return (lighter + 0.05) / (darker + 0.05)
+    @Test
+    fun builtInDeclaredPrimaryAndInteractiveAccentRetainContrast() {
+        themes.forEach { theme ->
+            listOf(theme.background, theme.surface).forEach { surface ->
+                assertContrast(theme.textPrimary, surface, 4.5)
+                assertContrast(theme.accent, surface, 3.0)
+            }
+        }
     }
 
     @Test
-    fun testDefaultLightThemeContrast() {
-        val theme = ThemeEngine.DefaultLight
-        
-        // Text Primary vs Background (WCAG AA: minimum 4.5:1)
-        val textBgContrast = calculateContrastRatio(theme.textPrimaryHex, theme.backgroundHex)
-        assertTrue("Light theme text vs bg contrast ($textBgContrast) is below 4.5:1", textBgContrast >= 4.5)
-
-        // Text Primary vs Surface (WCAG AA: minimum 4.5:1)
-        val textSurfContrast = calculateContrastRatio(theme.textPrimaryHex, theme.surfaceHex)
-        assertTrue("Light theme text vs surface contrast ($textSurfContrast) is below 4.5:1", textSurfContrast >= 4.5)
-
-        // Accent vs Background (WCAG: minimum 3.0:1 for active UI controls & focus indicators)
-        val accentBgContrast = calculateContrastRatio(theme.accentHex, theme.backgroundHex)
-        assertTrue("Light theme accent vs bg contrast ($accentBgContrast) is below 3.0:1", accentBgContrast >= 3.0)
-
-        // Header Divider vs Background (minimum 3.0:1 for structural UI dividers)
-        val colorTheme = theme.toColorTheme()
-        val dividerHex = theme.headerDividerHex ?: theme.textPrimaryHex
-        val dividerBgContrast = calculateContrastRatio(dividerHex, theme.backgroundHex)
-        assertTrue("Light theme header divider vs bg contrast ($dividerBgContrast) is below 3.0:1", dividerBgContrast >= 3.0)
+    fun builtInSmallTextRolesMeetAAOnCanvasAndSurface() {
+        themes.forEach { theme ->
+            listOf(theme.textPrimary, theme.textSecondary, theme.textAccent, theme.textDanger).forEach { text ->
+                listOf(theme.background, theme.surface).forEach { surface ->
+                    assertContrast(text, surface, 4.5)
+                }
+            }
+        }
     }
 
     @Test
-    fun testDefaultDarkThemeContrast() {
-        val theme = ThemeEngine.DefaultDark
-        
-        // Text Primary vs Background (WCAG AA: minimum 4.5:1)
-        val textBgContrast = calculateContrastRatio(theme.textPrimaryHex, theme.backgroundHex)
-        assertTrue("Dark theme text vs bg contrast ($textBgContrast) is below 4.5:1", textBgContrast >= 4.5)
+    fun indicatorsAndControlForegroundsMeetTheirActualSurfaceRequirements() {
+        themes.forEach { theme ->
+            listOf(theme.background, theme.surface).forEach { surface ->
+                assertContrast(theme.controlAccent, surface, 3.0)
+                assertContrast(theme.indicator, surface, 3.0)
+                assertContrast(theme.onControlAccent, theme.controlAccent.compositeOver(surface), 4.5)
+            }
+        }
+    }
 
-        // Text Primary vs Surface (WCAG AA: minimum 4.5:1)
-        val textSurfContrast = calculateContrastRatio(theme.textPrimaryHex, theme.surfaceHex)
-        assertTrue("Dark theme text vs surface contrast ($textSurfContrast) is below 4.5:1", textSurfContrast >= 4.5)
+    @Test
+    fun translucentTextIsMeasuredAfterCompositing() {
+        assertEquals(1.0, contrastRatio(Color.White.copy(alpha = 0f), Color.Black), 0.0001)
+        // Compose's sRGB color stores alpha at 8-bit precision: 0.5 becomes 128/255.
+        assertEquals(5.3172, contrastRatio(Color.White.copy(alpha = 0.5f), Color.Black), 0.001)
+        assertEquals(21.0, contrastRatio(Color.White, Color.Black), 0.0001)
+        val translucentSurface = Color.Black.copy(alpha = 0.5f)
+        assertEquals(
+            contrastRatio(Color.White, translucentSurface.compositeOver(Color.White)),
+            contrastRatio(Color.White, translucentSurface, Color.White),
+            0.0001,
+        )
+    }
 
-        // Accent vs Background (WCAG: minimum 3.0:1 for active UI controls & focus indicators)
-        val accentBgContrast = calculateContrastRatio(theme.accentHex, theme.backgroundHex)
-        assertTrue("Dark theme accent vs bg contrast ($accentBgContrast) is below 3.0:1", accentBgContrast >= 3.0)
+    @Test
+    fun transparentImportedTokensProduceVisibleRolesOnResolvedSurfaces() {
+        themes.forEach { base ->
+            val theme = base.copy(
+                background = base.background.copy(alpha = 0.8f),
+                surface = base.surface.copy(alpha = 0.5f),
+                textPrimary = base.textPrimary.copy(alpha = 0f),
+                textMuted = base.textMuted.copy(alpha = 0.1f),
+                accent = base.accent.copy(alpha = 0f),
+                danger = base.danger.copy(alpha = 0.15f),
+            )
+            val roles = theme.accessibleRoles
+            listOf(roles.background, roles.surface).forEach { surface ->
+                listOf(roles.textPrimary, theme.textSecondary, theme.textAccent, theme.textDanger).forEach {
+                    assertContrast(it, surface, 4.5)
+                }
+                assertContrast(theme.indicator, surface, 3.0)
+                assertContrast(theme.onControlAccent, theme.controlAccent.compositeOver(surface), 4.5)
+            }
+        }
+    }
 
-        // Header Divider vs Background (minimum 3.0:1 for structural UI dividers)
-        val dividerHex = theme.headerDividerHex ?: theme.textPrimaryHex
-        val dividerBgContrast = calculateContrastRatio(dividerHex, theme.backgroundHex)
-        assertTrue("Dark theme header divider vs bg contrast ($dividerBgContrast) is below 3.0:1", dividerBgContrast >= 3.0)
+    @Test
+    fun readableTokensRemainExactAndHelperMetricsDoNotEnlargeTinyOrBody() {
+        themes.forEach { theme ->
+            assertEquals(theme.textPrimary, theme.accessibleRoles.textPrimary)
+            assertEquals(theme.background, theme.accessibleRoles.background)
+            assertEquals(theme.surface, theme.accessibleRoles.surface)
+        }
+        val sizes = AppTypographySizes()
+        assertEquals(11.sp, sizes.tiny)
+        assertEquals(13.sp, sizes.body)
+        assertEquals(13.sp, sizes.helper)
+        assertEquals(18.sp, sizes.helperLineHeight)
     }
 
     @Test
     fun activeThemeDrivesAccessibleSystemBarIcons() {
-        val light = systemBarUsesDarkIcons(ThemeEngine.DefaultLight.isDark)
-        val dark = systemBarUsesDarkIcons(ThemeEngine.DefaultDark.isDark)
+        assertTrue("Light system bars need dark icons", systemBarUsesDarkIcons(ThemeEngine.DefaultLight.isDark))
+        assertTrue("Dark system bars need light icons", !systemBarUsesDarkIcons(ThemeEngine.DefaultDark.isDark))
+    }
 
-        assertTrue("Light system bars need dark icons", light)
-        assertTrue("Dark system bars need light icons", !dark)
+    private fun assertContrast(foreground: Color, background: Color, minimum: Double) {
+        val ratio = contrastRatio(foreground, background)
+        assertTrue("$foreground on $background: $ratio must be at least $minimum", ratio >= minimum)
     }
 }

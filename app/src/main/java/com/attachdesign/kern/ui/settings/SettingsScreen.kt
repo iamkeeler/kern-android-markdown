@@ -2,6 +2,14 @@ package com.attachdesign.kern.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,8 +18,11 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,12 +35,14 @@ import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.local.SettingKeys
 import com.attachdesign.kern.data.local.ThemeEntity
+import com.attachdesign.kern.ui.common.AdaptiveMetricPair
 import com.attachdesign.kern.data.stats.StatsRepository
 import com.attachdesign.kern.data.analytics.TelemetryCollection
 import com.attachdesign.kern.domain.stats.UserStats
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.theme.toFontFamily
-import com.attachdesign.kern.ui.theme.AppThemeJson
+import com.attachdesign.kern.ui.theme.toThemeJson
+import com.attachdesign.kern.ui.theme.EditorTypography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,7 +58,7 @@ fun SettingsTabsContent(
     db: AppDatabase,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     modifier: Modifier = Modifier,
-
+    importTheme: suspend (String) -> Unit = { persistImportedTheme(db, it) }
 ) {
     val coroutineScope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
@@ -72,7 +85,7 @@ fun SettingsTabsContent(
 
     val currentViewMode            = viewModeSetting?.value ?: "RENDERED"
     val currentFontFamily          = editorFontSetting?.value ?: "serif"
-    val currentFontSizeScale = editorFontSizeScaleSetting?.value?.toFloatOrNull() ?: 1.0f
+    val currentFontSizeScale = EditorTypography.normalizeScale(editorFontSizeScaleSetting?.value)
     val currentSticky              = stickySetting?.value?.toBoolean() ?: true
     val currentLaunchNewFile       = launchNewFileSetting?.value?.toBoolean() ?: true
     val currentSentenceCapitalization = sentenceCapitalizationSetting?.value?.toBoolean() ?: true
@@ -89,30 +102,45 @@ fun SettingsTabsContent(
 
     val appFont = theme.toFontFamily()
 
-    var activeTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf(
+        "appearance" to "Appearance", "behavior" to "Behavior", "stats" to "Stats",
+        "sync" to "Sync", "about" to "About"
+    )
+    var activeTabId by rememberSaveable { mutableStateOf("appearance") }
+    val activeTab = tabs.indexOfFirst { it.first == activeTabId }.coerceAtLeast(0)
+    val tabScrollStates = mapOf(
+        "appearance" to rememberScrollState(), "behavior" to rememberScrollState(),
+        "stats" to rememberScrollState(), "sync" to rememberScrollState(),
+        "about" to rememberScrollState()
+    )
+    var inputThemeJson by rememberSaveable { mutableStateOf("") }
+    var isImportPending by remember { mutableStateOf(false) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    val isJsonValid = remember(inputThemeJson) {
+        inputThemeJson.isBlank() || ThemeEngine.deserialize(inputThemeJson) != null
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Tabs Selector
         ScrollableTabRow(
             selectedTabIndex = activeTab,
             containerColor = Color.Transparent,
-            contentColor = theme.accent,
+            contentColor = theme.textAccent,
             edgePadding = 0.dp,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[activeTab]),
-                    color = theme.accent
+                    color = theme.controlAccent
                 )
             },
             divider = {},
             modifier = Modifier.fillMaxWidth()
         ) {
-            val tabs = listOf("Appearance", "Behavior", "Stats", "Sync", "About")
-            tabs.forEachIndexed { idx, tabName ->
+            tabs.forEachIndexed { idx, (tabId, tabName) ->
                 val selected = activeTab == idx
                 Tab(
                     selected = selected,
-                    onClick = { activeTab = idx },
+                    onClick = { activeTabId = tabId },
                     text = {
                         Text(
                             text = tabName,
@@ -121,8 +149,8 @@ fun SettingsTabsContent(
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
                     },
-                    selectedContentColor = theme.accent,
-                    unselectedContentColor = theme.textMuted
+                    selectedContentColor = theme.textAccent,
+                    unselectedContentColor = theme.textSecondary
                 )
             }
         }
@@ -138,13 +166,14 @@ fun SettingsTabsContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .testTag("settings-tab-content")
+                .verticalScroll(tabScrollStates.getValue(tabs[activeTab].first))
         ) {
             when (activeTab) {
                 0 -> { // Appearance tab
                     Text(
                         text = "THEMES",
-                        color = theme.textMuted,
+                        color = theme.textSecondary,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
@@ -156,66 +185,15 @@ fun SettingsTabsContent(
                         "Cream & Charcoal (Default)" to ThemeEngine.DefaultLight,
                         "Inky Charcoal (Default)"   to ThemeEngine.DefaultDark
                     )
-                    presets.forEach { (name, presetJson) ->
-                        val isCurrent = theme.name == presetJson.name
-                        ListItem(
-                            headlineContent = {
-                                Text(name, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            },
-                            trailingContent = {
-                                RadioButton(
-                                    selected = isCurrent,
-                                    onClick = null,
-                                    colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        val jsonString = ThemeEngine.serialize(presetJson)
-                                        val id = db.themeDao().insertTheme(ThemeEntity(name = presetJson.name, jsonString = jsonString))
-                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.SELECTED_THEME_ID, id.toString()))
-                                    }
-                                },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                        )
-                    }
-
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-
-                    Text("VIEW MODE", color = theme.textMuted, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
-                    val modes = listOf(
-                        "RENDERED"           to "Live Preview",
-                        "SYNTAX_HIGHLIGHTED" to "Syntax Highlighted",
-                        "RAW_PLAIN_TEXT"     to "Raw Plain-Text"
-                    )
-                    modes.forEach { (mode, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                     coroutineScope.launch(Dispatchers.IO) {
-                                         db.settingDao().insertSetting(SettingEntity(SettingKeys.VIEW_MODE, mode))
-                                     }
+                    Column(Modifier.selectableGroup()) {
+                        presets.forEach { (name, presetJson) ->
+                            SettingsRadioRow(name, theme.name == presetJson.name, theme) {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    val jsonString = ThemeEngine.serialize(presetJson)
+                                    val id = db.themeDao().insertTheme(ThemeEntity(name = presetJson.name, jsonString = jsonString))
+                                    db.settingDao().insertSetting(SettingEntity(SettingKeys.SELECTED_THEME_ID, id.toString()))
                                 }
-                                .padding(vertical = theme.dimensions.spacingMedium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            RadioButton(
-                                selected = currentViewMode == mode,
-                                onClick = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.VIEW_MODE, mode))
-                                    }
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
-                            )
+                            }
                         }
                     }
 
@@ -223,36 +201,41 @@ fun SettingsTabsContent(
                     HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
 
-                    Text("EDITOR FONT", color = theme.textMuted, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text("VIEW MODE", color = theme.textSecondary, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Spacer(Modifier.height(theme.dimensions.spacingSmall))
+                    val modes = listOf(
+                        "RENDERED"           to "Live Preview",
+                        "SYNTAX_HIGHLIGHTED" to "Syntax Highlighted",
+                        "RAW_PLAIN_TEXT"     to "Raw Plain-Text"
+                    )
+                    Column(Modifier.selectableGroup()) {
+                        modes.forEach { (mode, label) ->
+                            SettingsRadioRow(label, currentViewMode == mode, theme) {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    db.settingDao().insertSetting(SettingEntity(SettingKeys.VIEW_MODE, mode))
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+
+                    Text("EDITOR FONT", color = theme.textSecondary, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                     Spacer(Modifier.height(theme.dimensions.spacingSmall))
                     val fonts = listOf(
                         "serif"      to "Serif (Book)",
                         "sans-serif" to "Sans-Serif (Modern)",
                         "monospace"  to "Monospace (Code)"
                     )
-                    fonts.forEach { (font, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_FAMILY, font))
-                                    }
+                    Column(Modifier.selectableGroup()) {
+                        fonts.forEach { (font, label) ->
+                            SettingsRadioRow(label, currentFontFamily == font, theme) {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_FAMILY, font))
                                 }
-                                .padding(vertical = theme.dimensions.spacingMedium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(label, color = theme.textPrimary, fontSize = theme.typography.body, fontFamily = appFont)
-                            RadioButton(
-                                selected = currentFontFamily == font,
-                                onClick = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.EDITOR_FONT_FAMILY, font))
-                                    }
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = theme.accent)
-                            )
+                            }
                         }
                     }
 
@@ -271,7 +254,7 @@ fun SettingsTabsContent(
                     
                     Text(
                         text = "EDITOR FONT SIZE: ${sizeLabel.uppercase()}",
-                        color = theme.textMuted,
+                        color = theme.textSecondary,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
@@ -289,9 +272,9 @@ fun SettingsTabsContent(
                         valueRange = 0.8f..1.4f,
                         steps = 2,
                         colors = SliderDefaults.colors(
-                            thumbColor = theme.accent,
-                            activeTrackColor = theme.accent,
-                            inactiveTrackColor = theme.textMuted.copy(alpha = 0.3f)
+                            thumbColor = theme.controlAccent,
+                            activeTrackColor = theme.controlAccent,
+                            inactiveTrackColor = theme.indicator
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -299,10 +282,10 @@ fun SettingsTabsContent(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = theme.dimensions.spacingSmall),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Small", color = theme.textMuted, fontSize = theme.typography.tiny)
-                        Text("Medium", color = theme.textMuted, fontSize = theme.typography.tiny)
-                        Text("Large", color = theme.textMuted, fontSize = theme.typography.tiny)
-                        Text("Extra Large", color = theme.textMuted, fontSize = theme.typography.tiny)
+                        Text("Small", color = theme.textSecondary, fontSize = theme.typography.tiny)
+                        Text("Medium", color = theme.textSecondary, fontSize = theme.typography.tiny)
+                        Text("Large", color = theme.textSecondary, fontSize = theme.typography.tiny)
+                        Text("Extra Large", color = theme.textSecondary, fontSize = theme.typography.tiny)
                     }
 
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
@@ -311,7 +294,7 @@ fun SettingsTabsContent(
 
                     Text(
                         text = "CUSTOM THEME",
-                        color = theme.textMuted,
+                        color = theme.textSecondary,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
@@ -322,17 +305,7 @@ fun SettingsTabsContent(
                     MinimalOutlinedButton(
                         text = "Export Current Theme",
                         onClick = {
-                            val currentThemeJson = AppThemeJson(
-                                name = theme.name,
-                                isDark = theme.isDark,
-                                backgroundHex   = String.format("#%06X", (0xFFFFFF and theme.background.value.toLong().toInt())),
-                                surfaceHex      = String.format("#%06X", (0xFFFFFF and theme.surface.value.toLong().toInt())),
-                                textPrimaryHex  = String.format("#%06X", (0xFFFFFF and theme.textPrimary.value.toLong().toInt())),
-                                textMutedHex    = String.format("#%06X", (0xFFFFFF and theme.textMuted.value.toLong().toInt())),
-                                accentHex       = String.format("#%06X", (0xFFFFFF and theme.accent.value.toLong().toInt())),
-                                codeBackgroundHex = String.format("#%06X", (0xFFFFFF and theme.codeBackground.value.toLong().toInt())),
-                                editorFontFamily = theme.editorFontFamily
-                            )
+                            val currentThemeJson = theme.toThemeJson()
                             val serialized = ThemeEngine.serialize(currentThemeJson)
                             clipboardManager.setText(AnnotatedString(serialized))
                             Toast.makeText(context, "Theme copied", Toast.LENGTH_SHORT).show()
@@ -342,35 +315,34 @@ fun SettingsTabsContent(
                     )
                     Spacer(Modifier.height(theme.dimensions.spacingLarge))
 
-                    var inputThemeJson by remember { mutableStateOf("") }
-                    val isJsonValid = remember(inputThemeJson) {
-                        if (inputThemeJson.isBlank()) true else ThemeEngine.deserialize(inputThemeJson) != null
-                    }
-                    
                     OutlinedTextField(
                         value = inputThemeJson,
-                        onValueChange = { inputThemeJson = it },
-                        label = { Text("Paste Theme JSON", fontSize = theme.typography.small, color = theme.textMuted) },
-                        isError = !isJsonValid,
+                        onValueChange = { inputThemeJson = it; importError = null },
+                        enabled = !isImportPending,
+                        label = { Text("Paste Theme JSON", fontSize = theme.typography.small, color = theme.textSecondary) },
+                        isError = !isJsonValid || importError != null,
                         supportingText = {
-                            if (!isJsonValid) {
-                                Text("Invalid Theme JSON format", color = Color(0xFFE53935))
+                            val error = importError ?: if (!isJsonValid) "Invalid Theme JSON format" else null
+                            if (error != null) {
+                                Text(error, color = theme.textDanger, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight)
                             }
                         },
                         textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = theme.typography.small, color = theme.textPrimary),
-                        modifier = Modifier.fillMaxWidth().height(theme.dimensions.themeInputHeight),
+                        minLines = 4,
+                        maxLines = 8,
+                        modifier = Modifier.testTag("theme-json-input").fillMaxWidth().heightIn(min = theme.dimensions.themeInputHeight),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor   = theme.textPrimary,
                             unfocusedTextColor = theme.textPrimary,
                             errorTextColor = theme.textPrimary,
-                            focusedBorderColor   = theme.accent,
-                            unfocusedBorderColor = theme.textMuted.copy(alpha = 0.5f),
-                            errorBorderColor = Color(0xFFE53935),
-                            focusedLabelColor   = theme.accent,
-                            unfocusedLabelColor = theme.textMuted,
-                            errorLabelColor = Color(0xFFE53935),
-                            errorSupportingTextColor = Color(0xFFE53935),
-                            cursorColor = theme.accent
+                            focusedBorderColor   = theme.controlAccent,
+                            unfocusedBorderColor = theme.indicator,
+                            errorBorderColor = theme.textDanger,
+                            focusedLabelColor   = theme.textAccent,
+                            unfocusedLabelColor = theme.textSecondary,
+                            errorLabelColor = theme.textDanger,
+                            errorSupportingTextColor = theme.textDanger,
+                            cursorColor = theme.controlAccent
                         )
                     )
                     Spacer(Modifier.height(theme.dimensions.spacingMedium))
@@ -378,20 +350,26 @@ fun SettingsTabsContent(
                     MinimalOutlinedButton(
                         text = "Import Custom Theme",
                         onClick = {
-                            if (inputThemeJson.isNotBlank() && isJsonValid) {
-                                val themeJson = ThemeEngine.deserialize(inputThemeJson)
-                                if (themeJson != null) {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        val id = db.themeDao().insertTheme(ThemeEntity(name = themeJson.name, jsonString = inputThemeJson))
-                                        db.settingDao().insertSetting(SettingEntity(SettingKeys.SELECTED_THEME_ID, id.toString()))
+                            if (!isImportPending && inputThemeJson.isNotBlank() && isJsonValid) {
+                                val submittedJson = inputThemeJson
+                                isImportPending = true
+                                importError = null
+                                coroutineScope.launch {
+                                    try {
+                                        importTheme(submittedJson)
+                                        if (inputThemeJson == submittedJson) inputThemeJson = ""
+                                        Toast.makeText(context, "Theme applied", Toast.LENGTH_SHORT).show()
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) {
+                                        importError = "Could not import theme. Your draft is preserved. Try again."
+                                    } finally {
+                                        isImportPending = false
                                     }
-                                    Toast.makeText(context, "Theme applied", Toast.LENGTH_SHORT).show()
-                                    inputThemeJson = ""
                                 }
-                            } else if (inputThemeJson.isNotBlank() && !isJsonValid) {
-                                Toast.makeText(context, "Invalid theme JSON", Toast.LENGTH_SHORT).show()
                             }
                         },
+                        enabled = inputThemeJson.isNotBlank() && isJsonValid && !isImportPending,
                         theme = theme,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -399,7 +377,7 @@ fun SettingsTabsContent(
                 1 -> { // Behavior tab
                     Text(
                         text = "EDITOR BEHAVIOR",
-                        color = theme.textMuted,
+                        color = theme.textSecondary,
                         fontSize = theme.typography.tiny,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
@@ -410,9 +388,9 @@ fun SettingsTabsContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
+                            .toggleable(value = currentSticky, role = Role.Switch) { value ->
                                 coroutineScope.launch(Dispatchers.IO) {
-                                    db.settingDao().insertSetting(SettingEntity(SettingKeys.STICKY_SELECTION, (!currentSticky).toString()))
+                                    db.settingDao().insertSetting(SettingEntity(SettingKeys.STICKY_SELECTION, value.toString()))
                                 }
                             }
                             .padding(vertical = theme.dimensions.spacingMedium),
@@ -429,21 +407,20 @@ fun SettingsTabsContent(
                               )
                               Text(
                                   text = "Maintain text selection after applying formatting.",
-                                  color = theme.textMuted,
-                                  fontSize = theme.typography.tiny,
-                                  lineHeight = theme.typography.bodyLarge
+                                  color = theme.textSecondary,
+                                  fontSize = theme.typography.helper,
+                                  lineHeight = theme.typography.helperLineHeight
                               )
                           }
                           Switch(
                               checked = currentSticky,
-                              onCheckedChange = { value ->
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.STICKY_SELECTION, value.toString()))
-                                  }
-                              },
+                              modifier = Modifier.testTag("sticky-selection-control"),
+                              onCheckedChange = null,
                               colors = SwitchDefaults.colors(
-                                  checkedThumbColor = theme.accent,
-                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                                  checkedThumbColor = theme.onControlAccent,
+                                  checkedTrackColor = theme.controlAccent,
+                                 uncheckedThumbColor = theme.indicator,
+                                 uncheckedBorderColor = theme.indicator
                               )
                           )
                       }
@@ -455,9 +432,9 @@ fun SettingsTabsContent(
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .clickable {
+                              .toggleable(value = currentLaunchNewFile, role = Role.Switch) { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.LAUNCH_NEW_FILE, (!currentLaunchNewFile).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.LAUNCH_NEW_FILE, value.toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -474,21 +451,19 @@ fun SettingsTabsContent(
                               )
                               Text(
                                   text = "Open the editor automatically when creating a new file.",
-                                  color = theme.textMuted,
-                                  fontSize = theme.typography.tiny,
-                                  lineHeight = theme.typography.bodyLarge
+                                  color = theme.textSecondary,
+                                  fontSize = theme.typography.helper,
+                                  lineHeight = theme.typography.helperLineHeight
                               )
                           }
                           Switch(
                               checked = currentLaunchNewFile,
-                              onCheckedChange = { value ->
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.LAUNCH_NEW_FILE, value.toString()))
-                                  }
-                              },
+                              onCheckedChange = null,
                               colors = SwitchDefaults.colors(
-                                  checkedThumbColor = theme.accent,
-                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                                  checkedThumbColor = theme.onControlAccent,
+                                  checkedTrackColor = theme.controlAccent,
+                                 uncheckedThumbColor = theme.indicator,
+                                 uncheckedBorderColor = theme.indicator
                               )
                           )
                       }
@@ -499,7 +474,7 @@ fun SettingsTabsContent(
 
                       Text(
                           text = "TYPING & AUTOMATION",
-                          color = theme.textMuted,
+                          color = theme.textSecondary,
                           fontSize = theme.typography.tiny,
                           fontFamily = FontFamily.Monospace,
                           fontWeight = FontWeight.Bold,
@@ -510,9 +485,9 @@ fun SettingsTabsContent(
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .clickable {
+                              .toggleable(value = currentAutoHeader, role = Role.Switch) { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_HEADER_SPACING, (!currentAutoHeader).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_HEADER_SPACING, value.toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -529,21 +504,19 @@ fun SettingsTabsContent(
                               )
                               Text(
                                   text = "Insert a space after header symbols automatically (e.g. # Header).",
-                                  color = theme.textMuted,
-                                  fontSize = theme.typography.tiny,
-                                  lineHeight = theme.typography.bodyLarge
+                                  color = theme.textSecondary,
+                                  fontSize = theme.typography.helper,
+                                  lineHeight = theme.typography.helperLineHeight
                               )
                           }
                           Switch(
                               checked = currentAutoHeader,
-                              onCheckedChange = { value ->
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_HEADER_SPACING, value.toString()))
-                                  }
-                              },
+                              onCheckedChange = null,
                               colors = SwitchDefaults.colors(
-                                  checkedThumbColor = theme.accent,
-                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                                  checkedThumbColor = theme.onControlAccent,
+                                  checkedTrackColor = theme.controlAccent,
+                                 uncheckedThumbColor = theme.indicator,
+                                 uncheckedBorderColor = theme.indicator
                               )
                           )
                       }
@@ -556,9 +529,9 @@ fun SettingsTabsContent(
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .clickable {
+                              .toggleable(value = currentSentenceCapitalization, role = Role.Switch) { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SENTENCE_CAPITALIZATION, (!currentSentenceCapitalization).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SENTENCE_CAPITALIZATION, value.toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -575,21 +548,19 @@ fun SettingsTabsContent(
                               )
                               Text(
                                   text = "Automatically capitalize the first letter of sentences.",
-                                  color = theme.textMuted,
-                                  fontSize = theme.typography.tiny,
-                                  lineHeight = theme.typography.bodyLarge
+                                  color = theme.textSecondary,
+                                  fontSize = theme.typography.helper,
+                                  lineHeight = theme.typography.helperLineHeight
                               )
                           }
                           Switch(
                               checked = currentSentenceCapitalization,
-                              onCheckedChange = { value ->
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SENTENCE_CAPITALIZATION, value.toString()))
-                                  }
-                              },
+                              onCheckedChange = null,
                               colors = SwitchDefaults.colors(
-                                  checkedThumbColor = theme.accent,
-                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                                  checkedThumbColor = theme.onControlAccent,
+                                  checkedTrackColor = theme.controlAccent,
+                                 uncheckedThumbColor = theme.indicator,
+                                 uncheckedBorderColor = theme.indicator
                               )
                           )
                       }
@@ -601,9 +572,9 @@ fun SettingsTabsContent(
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .clickable {
+                              .toggleable(value = currentShowWorkspaceIntro, role = Role.Switch) { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SHOW_WORKSPACE_INTRO, (!currentShowWorkspaceIntro).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SHOW_WORKSPACE_INTRO, value.toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -620,21 +591,19 @@ fun SettingsTabsContent(
                               )
                               Text(
                                   text = "Show confirmation prompt before adding watched folders.",
-                                  color = theme.textMuted,
-                                  fontSize = theme.typography.tiny,
-                                  lineHeight = theme.typography.bodyLarge
+                                  color = theme.textSecondary,
+                                  fontSize = theme.typography.helper,
+                                  lineHeight = theme.typography.helperLineHeight
                               )
                           }
                           Switch(
                               checked = currentShowWorkspaceIntro,
-                              onCheckedChange = { value ->
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.SHOW_WORKSPACE_INTRO, value.toString()))
-                                  }
-                              },
+                              onCheckedChange = null,
                               colors = SwitchDefaults.colors(
-                                  checkedThumbColor = theme.accent,
-                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                                  checkedThumbColor = theme.onControlAccent,
+                                  checkedTrackColor = theme.controlAccent,
+                                 uncheckedThumbColor = theme.indicator,
+                                 uncheckedBorderColor = theme.indicator
                               )
                           )
                       }
@@ -646,9 +615,9 @@ fun SettingsTabsContent(
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .clickable {
+                              .toggleable(value = currentAutoComplete, role = Role.Switch) { value ->
                                   coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_ENABLED, (!currentAutoComplete).toString()))
+                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_ENABLED, value.toString()))
                                   }
                               }
                               .padding(vertical = theme.dimensions.spacingMedium),
@@ -665,32 +634,31 @@ fun SettingsTabsContent(
                               )
                               Text(
                                   text = "Auto-pair quotes, brackets, and braces.",
-                                  color = theme.textMuted,
-                                  fontSize = theme.typography.tiny,
-                                  lineHeight = theme.typography.bodyLarge
+                                  color = theme.textSecondary,
+                                  fontSize = theme.typography.helper,
+                                  lineHeight = theme.typography.helperLineHeight
                               )
                           }
                           Switch(
                               checked = currentAutoComplete,
-                              onCheckedChange = { value ->
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_ENABLED, value.toString()))
-                                  }
-                              },
+                              onCheckedChange = null,
                               colors = SwitchDefaults.colors(
-                                  checkedThumbColor = theme.accent,
-                                  checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                                  checkedThumbColor = theme.onControlAccent,
+                                  checkedTrackColor = theme.controlAccent,
+                                 uncheckedThumbColor = theme.indicator,
+                                 uncheckedBorderColor = theme.indicator
                               )
                           )
                       }
 
                       if (currentAutoComplete) {
                           Spacer(Modifier.height(theme.dimensions.spacingMedium))
-                          Row(
+                          FlowRow(
                               modifier = Modifier
                                   .fillMaxWidth()
                                   .padding(bottom = theme.dimensions.spacingLarge),
-                              horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
+                              horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium),
+                              verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
                           ) {
                               MinimalOutlinedButtonSmall(text = "\"\"", selected = currentAutoCompleteQuotes, onClick = {
                                   coroutineScope.launch(Dispatchers.IO) { db.settingDao().insertSetting(SettingEntity(SettingKeys.AUTO_COMPLETE_QUOTES, (!currentAutoCompleteQuotes).toString())) }
@@ -714,11 +682,11 @@ fun SettingsTabsContent(
                     StatsTabContent(db = db, theme = theme, appFont = appFont)
                 }
                 3 -> { // Sync tab
-                     Text("CLOUD SYNC", color = theme.textMuted, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                     Text("CLOUD SYNC", color = theme.textSecondary, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                      Spacer(Modifier.height(theme.dimensions.spacingMedium))
                      Text(
                          "We are actively working on adding cloud synchronization features so you can access your documents anywhere. Stay tuned for updates!",
-                         color = theme.textMuted,
+                         color = theme.textSecondary,
                          fontSize = theme.typography.body,
                          fontFamily = appFont,
                          lineHeight = theme.typography.title
@@ -728,7 +696,7 @@ fun SettingsTabsContent(
                 4 -> { // About tab
                      Text(
                          text = "PRIVACY",
-                         color = theme.textMuted,
+                         color = theme.textSecondary,
                          fontSize = theme.typography.tiny,
                          fontFamily = FontFamily.Monospace,
                          fontWeight = FontWeight.Bold,
@@ -738,8 +706,7 @@ fun SettingsTabsContent(
                      Row(
                          modifier = Modifier
                              .fillMaxWidth()
-                             .clickable {
-                                 val enabled = !currentTelemetryCollection
+                             .toggleable(value = currentTelemetryCollection, role = Role.Switch) { enabled ->
                                  TelemetryCollection.setEnabled(enabled)
                                  coroutineScope.launch(Dispatchers.IO) {
                                      db.settingDao().insertSetting(
@@ -761,41 +728,36 @@ fun SettingsTabsContent(
                              )
                              Text(
                                  text = "Share anonymous analytics and crash logs to help improve the app.",
-                                 color = theme.textMuted,
-                                 fontSize = theme.typography.tiny,
-                                 lineHeight = theme.typography.bodyLarge
+                                 color = theme.textSecondary,
+                                 fontSize = theme.typography.helper,
+                                 lineHeight = theme.typography.helperLineHeight
                              )
                          }
                          Switch(
                              checked = currentTelemetryCollection,
-                             onCheckedChange = { enabled ->
-                                 TelemetryCollection.setEnabled(enabled)
-                                 coroutineScope.launch(Dispatchers.IO) {
-                                     db.settingDao().insertSetting(
-                                         SettingEntity(TelemetryCollection.SETTING_KEY, enabled.toString())
-                                     )
-                                 }
-                             },
+                             onCheckedChange = null,
                              colors = SwitchDefaults.colors(
-                                 checkedThumbColor = theme.accent,
-                                 checkedTrackColor = theme.accent.copy(alpha = 0.5f)
+                                 checkedThumbColor = theme.onControlAccent,
+                                 checkedTrackColor = theme.controlAccent,
+                                 uncheckedThumbColor = theme.indicator,
+                                 uncheckedBorderColor = theme.indicator
                              )
                          )
                      }
                      Text(
                          text = "This is on by default. The data is anonymized and only used to improve Kern. You can turn it off at any time.",
-                         color = theme.textMuted,
-                         fontSize = theme.typography.tiny,
+                         color = theme.textSecondary,
+                         fontSize = theme.typography.helper,
                          fontFamily = appFont,
-                         lineHeight = theme.typography.bodyLarge
+                         lineHeight = theme.typography.helperLineHeight
                      )
                      Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
                      HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
                      Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
-                     Row(
+                     FlowRow(
                          modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingMedium),
                          horizontalArrangement = Arrangement.SpaceBetween,
-                         verticalAlignment = Alignment.CenterVertically
+                         verticalArrangement = Arrangement.spacedBy(8.dp)
                      ) {
                          Text("Kern", color = theme.textPrimary, fontSize = theme.typography.bodyLarge,
                              fontFamily = appFont, fontWeight = FontWeight.Medium)
@@ -807,7 +769,7 @@ fun SettingsTabsContent(
                                   "Version 1.0"
                               }
                           }
-                          Text(appVersion, color = theme.textMuted, fontSize = theme.typography.tiny,
+                          Text(appVersion, color = theme.textSecondary, fontSize = theme.typography.tiny,
                               fontFamily = FontFamily.Monospace)
                      }
                     Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
@@ -816,7 +778,7 @@ fun SettingsTabsContent(
                      
                      Text(
                          text = "A modern, typography-focused Markdown editor built for distraction-free writing, local file privacy, and rich document analytics.",
-                         color = theme.textMuted,
+                         color = theme.textSecondary,
                          fontSize = theme.typography.body,
                          fontFamily = appFont,
                          lineHeight = theme.typography.title,
@@ -825,55 +787,16 @@ fun SettingsTabsContent(
 
                      Spacer(Modifier.height(theme.dimensions.spacingSmall))
 
-                     Row(
-                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
-                         horizontalArrangement = Arrangement.SpaceBetween,
-                         verticalAlignment = Alignment.CenterVertically
-                     ) {
-                         Text("Design & Development", color = theme.textMuted, fontSize = theme.typography.small)
-                         Text("Attach.design", color = theme.accent, fontSize = theme.typography.body,
-                             fontFamily = appFont, fontWeight = FontWeight.Medium,
-                             modifier = Modifier.clickable {
-                                 try {
-                                     uriHandler.openUri("https://kern.attach.design")
-                                 } catch (e: Exception) {
-                                     e.printStackTrace()
-                                 }
-                             })
+                     AboutLinkRow("Design & Development", "Attach.design", theme, appFont) {
+                         try { uriHandler.openUri("https://kern.attach.design") } catch (e: Exception) { e.printStackTrace() }
                      }
 
-                     Row(
-                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
-                         horizontalArrangement = Arrangement.SpaceBetween,
-                         verticalAlignment = Alignment.CenterVertically
-                     ) {
-                         Text("Source Code", color = theme.textMuted, fontSize = theme.typography.small)
-                         Text("GitHub Repository", color = theme.accent, fontSize = theme.typography.body,
-                             fontFamily = appFont, fontWeight = FontWeight.Medium,
-                             modifier = Modifier.clickable {
-                                 try {
-                                     uriHandler.openUri("https://github.com/iamkeeler/kern-android-markdown")
-                                 } catch (e: Exception) {
-                                     e.printStackTrace()
-                                 }
-                             })
+                     AboutLinkRow("Source Code", "GitHub Repository", theme, appFont) {
+                         try { uriHandler.openUri("https://github.com/iamkeeler/kern-android-markdown") } catch (e: Exception) { e.printStackTrace() }
                      }
 
-                     Row(
-                         modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.spacingSmall),
-                         horizontalArrangement = Arrangement.SpaceBetween,
-                         verticalAlignment = Alignment.CenterVertically
-                     ) {
-                         Text("Privacy Policy", color = theme.textMuted, fontSize = theme.typography.small)
-                         Text("Read Policy", color = theme.accent, fontSize = theme.typography.body,
-                             fontFamily = appFont, fontWeight = FontWeight.Medium,
-                             modifier = Modifier.clickable {
-                                 try {
-                                     uriHandler.openUri("https://kern.attach.design/privacy.html")
-                                 } catch (e: Exception) {
-                                     e.printStackTrace()
-                                 }
-                             })
+                     AboutLinkRow("Privacy Policy", "Read Policy", theme, appFont) {
+                         try { uriHandler.openUri("https://kern.attach.design/privacy.html") } catch (e: Exception) { e.printStackTrace() }
                      }
 
                      Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
@@ -882,7 +805,7 @@ fun SettingsTabsContent(
 
                      Text(
                          text = "OPEN SOURCE LIBRARIES",
-                         color = theme.textMuted,
+                         color = theme.textSecondary,
                          fontSize = theme.typography.tiny,
                          fontFamily = FontFamily.Monospace,
                          fontWeight = FontWeight.Bold,
@@ -906,14 +829,14 @@ fun SettingsTabsContent(
                          "Coil Network"                   to "Apache 2.0 · Coil contributors"
                      )
                      libraries.forEach { (lib, license) ->
-                          Row(
+                          FlowRow(
                               modifier = Modifier.fillMaxWidth().padding(vertical = theme.dimensions.elevationMedium),
-                              horizontalArrangement = Arrangement.SpaceBetween,
-                              verticalAlignment = Alignment.CenterVertically
+                              horizontalArrangement = Arrangement.spacedBy(16.dp),
+                              verticalArrangement = Arrangement.spacedBy(4.dp)
                           ) {
                               Text(lib, color = theme.textPrimary, fontSize = theme.typography.body,
-                                  fontFamily = appFont, modifier = Modifier.weight(1f))
-                             Text(license, color = theme.textMuted, fontSize = theme.typography.tiny,
+                                  fontFamily = appFont)
+                             Text(license, color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight,
                                  fontFamily = FontFamily.Monospace)
                          }
                      }
@@ -944,6 +867,8 @@ fun SettingsScreen(
         exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(50)),
         modifier = modifier.fillMaxSize().background(theme.background)
     ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val gutter = if (maxWidth >= 600.dp) 24.dp else 16.dp
         Scaffold(
             containerColor = theme.background,
             topBar = {
@@ -976,13 +901,68 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(horizontal = theme.dimensions.spacingHuge)
+                    .padding(horizontal = gutter)
             )
         }
+    }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AboutLinkRow(
+    label: String,
+    title: String,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    appFont: FontFamily,
+    onClick: () -> Unit
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(label, color = theme.textSecondary, fontSize = theme.typography.helper,
+            lineHeight = theme.typography.helperLineHeight, fontFamily = appFont)
+        Text(title, color = theme.textAccent, fontSize = theme.typography.body,
+            fontFamily = appFont, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun SettingsRadioRow(
+    label: String,
+    selected: Boolean,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(vertical = theme.dimensions.spacingMedium),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge),
+            color = theme.textPrimary,
+            fontSize = theme.typography.body,
+            fontFamily = theme.toFontFamily()
+        )
+        RadioButton(
+            selected = selected,
+            onClick = null,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = theme.controlAccent,
+                unselectedColor = theme.indicator
+            )
+        )
+    }
+}
 
 @Composable
 fun MinimalOutlinedButton(
@@ -990,15 +970,17 @@ fun MinimalOutlinedButton(
     onClick: () -> Unit,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     modifier: Modifier = Modifier,
-    isPrimary: Boolean = false
+    isPrimary: Boolean = false,
+    enabled: Boolean = true
 ) {
     val appFont = theme.toFontFamily()
-    val bgColor = if (isPrimary) theme.accent else Color.Transparent
-    val textColor = if (isPrimary) theme.background else theme.textPrimary
-    val borderColor = if (isPrimary) theme.accent else theme.textMuted.copy(alpha = 0.3f)
+    val bgColor = if (isPrimary) theme.controlAccent else Color.Transparent
+    val textColor = if (isPrimary) theme.onControlAccent else theme.textPrimary
+    val borderColor = if (isPrimary) theme.controlAccent else theme.indicator
 
     OutlinedButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier,
         shape = RoundedCornerShape(theme.dimensions.spacingSmall),
         border = BorderStroke(theme.dimensions.borderWidth, borderColor),
@@ -1025,13 +1007,26 @@ fun MinimalOutlinedButtonSmall(
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     modifier: Modifier = Modifier
 ) {
-    val border    = if (selected) theme.accent else theme.textMuted.copy(alpha = 0.3f)
-    val bg        = if (selected) theme.accent.copy(alpha = 0.15f) else Color.Transparent
-    val textColor = if (selected) theme.accent else theme.textMuted
+    val border    = if (selected) theme.controlAccent else theme.indicator
+    val bg        = if (selected) theme.controlAccent else Color.Transparent
+    val textColor = if (selected) theme.onControlAccent else theme.textSecondary
 
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.defaultMinSize(minWidth = 1.dp, minHeight = 1.dp),
+        modifier = modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics {
+                contentDescription = when (text) {
+                    "\"\"" -> "Auto-pair double quotes"
+                    "''" -> "Auto-pair single quotes"
+                    "{}" -> "Auto-pair braces"
+                    "()" -> "Auto-pair parentheses"
+                    "[]" -> "Auto-pair brackets"
+                    else -> text
+                }
+                this.selected = selected
+                stateDescription = if (selected) "On" else "Off"
+            },
         shape = RoundedCornerShape(theme.dimensions.spacingSmall),
         border = BorderStroke(theme.dimensions.borderWidth, border),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -1068,7 +1063,7 @@ fun StatsTabContent(
         // WRITING METRICS
         Text(
             text = "WRITING METRICS",
-            color = theme.textMuted,
+            color = theme.textSecondary,
             fontSize = theme.typography.tiny,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -1076,23 +1071,26 @@ fun StatsTabContent(
         )
         Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
-        Row(modifier = Modifier.fillMaxWidth()) {
+        AdaptiveMetricPair(
+            first = { tileModifier ->
             MetricStatTile(
                 label = "Words Written",
                 value = UserStats.formatNumber(userStats.wordsWritten),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            },
+            second = { tileModifier ->
             MetricStatTile(
                 label = "Characters Written",
                 value = UserStats.formatNumber(userStats.charactersWritten),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-        }
+            }
+        )
 
         Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
         HorizontalDivider(
@@ -1104,7 +1102,7 @@ fun StatsTabContent(
         // READING METRICS
         Text(
             text = "READING METRICS",
-            color = theme.textMuted,
+            color = theme.textSecondary,
             fontSize = theme.typography.tiny,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -1112,23 +1110,26 @@ fun StatsTabContent(
         )
         Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
-        Row(modifier = Modifier.fillMaxWidth()) {
+        AdaptiveMetricPair(
+            first = { tileModifier ->
             MetricStatTile(
                 label = "Words Read",
                 value = UserStats.formatNumber(userStats.wordsRead),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            },
+            second = { tileModifier ->
             MetricStatTile(
                 label = "Est. Reading Time",
                 value = UserStats.formatReadingTime(userStats.estimatedReadingTimeMinutes),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-        }
+            }
+        )
 
         Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
         HorizontalDivider(
@@ -1140,7 +1141,7 @@ fun StatsTabContent(
         // ACTIVITY METRICS
         Text(
             text = "ACTIVITY METRICS",
-            color = theme.textMuted,
+            color = theme.textSecondary,
             fontSize = theme.typography.tiny,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -1148,23 +1149,26 @@ fun StatsTabContent(
         )
         Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
-        Row(modifier = Modifier.fillMaxWidth()) {
+        AdaptiveMetricPair(
+            first = { tileModifier ->
             MetricStatTile(
                 label = "Documents Opened",
                 value = UserStats.formatNumber(userStats.documentsOpened),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            },
+            second = { tileModifier ->
             MetricStatTile(
                 label = "Times Shared",
                 value = UserStats.formatNumber(userStats.timesShared),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-        }
+            }
+        )
 
         Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
         HorizontalDivider(
@@ -1176,7 +1180,7 @@ fun StatsTabContent(
         // WORKSPACE TOTALS
         Text(
             text = "WORKSPACE TOTALS",
-            color = theme.textMuted,
+            color = theme.textSecondary,
             fontSize = theme.typography.tiny,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -1184,31 +1188,34 @@ fun StatsTabContent(
         )
         Spacer(Modifier.height(theme.dimensions.spacingMedium))
 
-        Row(modifier = Modifier.fillMaxWidth()) {
+        AdaptiveMetricPair(
+            first = { tileModifier ->
             MetricStatTile(
                 label = "Indexed Files",
                 value = UserStats.formatNumber(userStats.totalIndexedFiles),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-            Spacer(Modifier.width(theme.dimensions.spacingLarge))
+            },
+            second = { tileModifier ->
             MetricStatTile(
                 label = "Workspace Words",
                 value = UserStats.formatNumber(userStats.totalIndexedWords),
                 theme = theme,
                 appFont = appFont,
-                modifier = Modifier.weight(1f)
+                modifier = tileModifier
             )
-        }
+            }
+        )
 
         Spacer(Modifier.height(theme.dimensions.spacingExtraLarge * 2))
 
         // Reset Button
         OutlinedButton(
             onClick = { showResetDialog = true },
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            border = BorderStroke(theme.dimensions.borderWidth, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = theme.textDanger),
+            border = BorderStroke(theme.dimensions.borderWidth, theme.textDanger)
         ) {
             Text("Reset Statistics", fontFamily = appFont, fontSize = theme.typography.body)
         }
@@ -1228,7 +1235,7 @@ fun StatsTabContent(
                         }
                     }
                 ) {
-                    Text("Reset", color = MaterialTheme.colorScheme.error, fontFamily = appFont)
+                    Text("Reset", color = theme.textDanger, fontFamily = appFont)
                 }
             },
             dismissButton = {
@@ -1259,14 +1266,15 @@ private fun MetricStatTile(
             fontSize = 26.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
-            color = theme.accent
+            color = theme.textPrimary
         )
         Spacer(Modifier.height(theme.dimensions.spacingTiny))
         Text(
             text = label,
-            fontSize = theme.typography.tiny,
+            fontSize = theme.typography.helper,
+            lineHeight = theme.typography.helperLineHeight,
             fontFamily = appFont,
-            color = theme.textMuted
+            color = theme.textSecondary
         )
         }
     }

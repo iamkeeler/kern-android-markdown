@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldDecorator
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,6 +44,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.heightIn
+import com.attachdesign.kern.ui.common.AdaptiveMetricPair
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,11 +63,13 @@ import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import com.attachdesign.kern.ui.theme.toFontFamily
+import com.attachdesign.kern.ui.theme.EditorTypography
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -84,7 +89,9 @@ import com.attachdesign.kern.parser.MarkdownRenderer
 import com.attachdesign.kern.parser.MarkdownElementType
 import com.attachdesign.kern.parser.IndexRange
 import com.attachdesign.kern.parser.IndexTransformationMatrix
-import com.attachdesign.kern.ui.main.dialogs.InputDialog
+import com.attachdesign.kern.ui.main.dialogs.*
+import com.attachdesign.kern.ui.common.LocalDeletionSession
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import com.attachdesign.kern.ui.settings.SettingsTabsContent
 import androidx.compose.ui.unit.dp
@@ -95,6 +102,7 @@ import com.attachdesign.kern.parser.DocumentEditEngine
 import kotlinx.coroutines.flow.collectLatest
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.outlined.VerticalSplit
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.layout.PaneScaffoldDirective
@@ -104,6 +112,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -119,13 +128,23 @@ fun EditorScreen(
     modifier: Modifier = Modifier,
     focusOnStart: Boolean = false,
     touchOriginX: Float? = null,
-    touchOriginY: Float? = null
+    touchOriginY: Float? = null,
+    companionEnabled: Boolean = true,
+    onChooseFile: (() -> Unit)? = null,
+    onIdentityChanged: (String, String) -> Unit = { _, _ -> }
 ) {
+    val deletionSession = LocalDeletionSession.current
+    SideEffect { viewModel.attachDeletionSession(deletionSession) }
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
     val companion by viewModel.companion.state.collectAsStateWithLifecycle()
+    val secondaryEditor = if (companionEnabled) androidx.lifecycle.viewmodel.compose.viewModel<EditorViewModel>(
+        key = "second-editor-${viewModel.sessionId}"
+    ) { viewModel.createSecondaryEditor() } else null
+    val secondaryState = secondaryEditor?.uiState?.collectAsStateWithLifecycle()?.value
+    val secondarySwitching = secondaryEditor?.switchingSecondaryFile?.collectAsStateWithLifecycle()?.value == true
     val foldSetting by viewModel.foldToSplit.collectAsStateWithLifecycle()
     val foldHaptics by viewModel.foldHaptics.collectAsStateWithLifecycle()
     val foldSound by viewModel.foldSound.collectAsStateWithLifecycle()
@@ -140,7 +159,9 @@ fun EditorScreen(
     var pointerHeld by remember { mutableStateOf(false) }
     val companionSavedState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val platformView = LocalView.current
-    if (showReferencePicker) ReferencePicker(viewModel) { showReferencePicker = false }
+    if (showReferencePicker) ReferencePicker(viewModel,
+        onSelect = { secondaryEditor?.switchSecondaryFile(it) },
+        onDismiss = { showReferencePicker = false })
     if (showFoldSettings) FoldShortcutDialog(
         theme = theme,
         enabled = foldSetting?.value == "true", available = foldEnvironment.sensorAvailable,
@@ -156,30 +177,61 @@ fun EditorScreen(
             .collectLatest(viewModel::onDocumentTextChanged)
     }
 
-    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameDialog by rememberSaveable(stateSaver = NamingRequest.Saver) { mutableStateOf<NamingRequest?>(null) }
+    val showRenameDialog = renameDialog != null
+    val renameRecords by viewModel.renameOperations.records.collectAsStateWithLifecycle()
+    val openRename = {
+        uiState.activeProject?.let { project ->
+            renameDialog = viewModel.pendingRenameRequest ?: NamingRequest.create(NamingKind.RenameNode,
+                project.id, project.name, uiState.activeFilePath.substringBeforeLast('/', ""),
+                uiState.activeFilePath, uiState.fileName)
+        }
+    }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    if (showRenameDialog) {
-        InputDialog(
-            title = "Rename File",
-            label = "Document name",
-            confirmText = "Rename",
-            theme = theme,
-            onDismiss = { showRenameDialog = false },
-            onConfirm = { newName ->
-                viewModel.renameCurrentFile(newName) { newPath ->
-                    Toast.makeText(context, "Document renamed", Toast.LENGTH_SHORT).show()
+    renameDialog?.let { request ->
+        val record = renameRecords[request.id]
+        val interrupted = request.inspectionRequired || (request.submitted && record == null)
+        val partial = record is NamingOperationState.NeedsReconciliation
+        LaunchedEffect(request.id, record) {
+            when (record) {
+                is NamingOperationState.Succeeded -> {
+                    viewModel.renameOperations.consumeSuccess(request.id)
+                    if (renameDialog?.id == request.id) renameDialog = null
                 }
-                showRenameDialog = false
+                NamingOperationState.Consumed -> if (renameDialog?.id == request.id) renameDialog = null
+                is NamingOperationState.Failed -> renameDialog = request.copy(submitted = false)
+                is NamingOperationState.NeedsReconciliation -> renameDialog = request.copy(submitted = false, inspectionRequired = true)
+                is NamingOperationState.Inspected -> renameDialog = request.copy(submitted = false, inspectionRequired = !record.mayRetry)
+                null -> if (request.submitted) {
+                    viewModel.holdInterruptedRename(request)
+                    renameDialog = request.copy(inspectionRequired = true)
+                }
+                NamingOperationState.Pending -> Unit
             }
-        )
+        }
+        val error = when (record) {
+            is NamingOperationState.Failed -> record.message
+            is NamingOperationState.NeedsReconciliation -> "The file may already have moved. Retry indexing before editing or saving."
+            is NamingOperationState.Inspected -> record.message
+            else -> if (interrupted) "Rename was interrupted. Refresh files before editing or retrying." else null
+        }
+        val renamed: (String) -> Unit = { path -> onIdentityChanged(request.targetPath, path) }
+        InputDialog("Rename File", "Document name", "Rename", theme,
+            request.draft, { renameDialog = request.copy(draft = it) }, record == NamingOperationState.Pending,
+            error, { renameDialog = null }, {
+                viewModel.submitRename(request, renamed)
+                renameDialog = request.copy(submitted = true)
+            }, canSubmit = !interrupted && !partial,
+            recoveryText = if (partial) "Retry indexing" else if (interrupted) "Refresh files" else null,
+            onRecovery = if (partial || interrupted) ({ viewModel.recoverRename(request, renamed) }) else null)
     }
 
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete document?", color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text = { Text("This will permanently remove this document. You cannot undo this action.", color = theme.textPrimary, fontSize = theme.typography.body) },
+            text = { Text("Delete '${uiState.fileName}'? You can Undo from the confirmation. When that offer ends, the document is permanently deleted.", color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
@@ -187,11 +239,11 @@ fun EditorScreen(
                         onBackClick()
                     }
                 }) {
-                    Text("Delete", color = theme.accent)
+                    Text("Delete", color = theme.textDanger)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel", color = theme.textMuted) }
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel", color = theme.textSecondary) }
             },
             containerColor = theme.surface
         )
@@ -232,6 +284,7 @@ fun EditorScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .testTag("Editor surface")
             .clip(CircularRevealShape(revealProgress.value, touchOriginX, touchOriginY))
             .background(uiState.activeTheme.background)
     ) {
@@ -247,6 +300,13 @@ fun EditorScreen(
         val canSplit = CompanionLayoutPolicy.canSplit(widthDp.value, firstPaneDp, secondPaneDp,
             density.fontScale * uiState.editorFontSizeScale, geometry?.isVertical == false)
         val companionVisible = canSplit && companion.isOpen && !uiState.isSidebarOpen
+        DisposableEffect(secondaryEditor, companionVisible) {
+            onDispose {
+                if (companionVisible && secondaryEditor != null) {
+                    secondaryEditor.onDocumentTextChanged(secondaryEditor.documentTextFieldState.text.toString())
+                }
+            }
+        }
         val supportingVisible = companionVisible || (isDualPane && uiState.isSidebarOpen)
         val imeVisible = WindowInsets.ime.getBottom(density) > 0
         BackHandler(enabled = companion.isOpen && !imeVisible && !showReferencePicker && !showFoldSettings && !headerMenuOpen) {
@@ -254,10 +314,10 @@ fun EditorScreen(
         }
         val bend = rememberFoldGestureProgress(
             environment = foldEnvironment, enabled = foldSetting?.value == "true",
-            eligible = canSplit && geometry?.isVertical == true && !showRenameDialog && !showDeleteDialog &&
+            eligible = companionEnabled && geometry?.isVertical != false && !showRenameDialog && !showDeleteDialog &&
                 !showReferencePicker && !showFoldSettings && !headerMenuOpen,
-            resetKey = Pair(windowBounds, geometry?.copy(isSeparating = false)),
-            inputSafe = { !pointerHeld && viewModel.documentTextFieldState.composition == null },
+            inputSafe = { canSplit && !pointerHeld && viewModel.documentTextFieldState.composition == null &&
+                secondaryEditor?.documentTextFieldState?.composition == null },
             onToggle = {
                 viewModel.toggleCompanion()
                 tactileFeedback.triggerFoldFeedback(hapticsEnabled, soundEnabled)
@@ -270,7 +330,7 @@ fun EditorScreen(
                 maxHorizontalPartitions = if (supportingVisible) 2 else 1,
                 horizontalPartitionSpacerSize = theme.dimensions.spacingMedium,
                 defaultPanePreferredWidth = if (companionVisible) maxWidth / 2 else theme.dimensions.sidebarWidth,
-                excludedBounds = geometry?.takeIf { it.isSeparating && it.isVertical }?.let {
+                excludedBounds = geometry?.takeIf { supportingVisible && it.isSeparating && it.isVertical }?.let {
                     listOf(Rect(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()))
                 } ?: emptyList()
             ),
@@ -303,11 +363,12 @@ fun EditorScreen(
                         Box {
                             Column {
                                 EditorHeader(
-                                    filePath = filePath,
+                                    filePath = uiState.activeFilePath.ifEmpty { filePath },
                                     theme = uiState.activeTheme,
                                     isMetricsActive = uiState.sidebarMode == SidebarMode.METRICS,
-                                    canSplit = canSplit,
+                                    canSplit = companionEnabled && canSplit,
                                     isCompanionOpen = companion.isOpen,
+                                    onChooseFile = onChooseFile,
                                     onSplitToggle = viewModel::toggleCompanion,
                                     onFoldSettings = { showFoldSettings = true },
                                     onMenuVisibilityChanged = { headerMenuOpen = it },
@@ -331,7 +392,7 @@ fun EditorScreen(
                                         viewModel.toggleSidebar(if (currentMode == SidebarMode.SETTINGS) SidebarMode.CLOSED else SidebarMode.SETTINGS)
                                     },
                                     onTitleClick = {
-                                        showRenameDialog = true
+                                        openRename()
                                     },
                                     onMoreOptionsAction = { action ->
                                         when(action) {
@@ -348,7 +409,7 @@ fun EditorScreen(
                                                 Toast.makeText(context, "Copied Markdown source", Toast.LENGTH_SHORT).show()
                                             }
                                             "Rename" -> {
-                                                showRenameDialog = true
+                                                openRename()
                                             }
                                             "Duplicate" -> {
                                                 viewModel.duplicateCurrentFile { newPath ->
@@ -370,6 +431,11 @@ fun EditorScreen(
                         }
 
                         val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+                        val editorHorizontalPadding = if (!supportingVisible && widthDp >= theme.dimensions.largeScreenBreakpoint) {
+                            theme.dimensions.spacingHuge
+                        } else {
+                            theme.dimensions.spacingExtraLarge
+                        }
                         // Main Editor Area
                         Box(
                             modifier = Modifier
@@ -378,18 +444,16 @@ fun EditorScreen(
                                 // The editor canvas consumes the IME inset once, so the floating
                                 // palette is laid out directly above the keyboard instead of behind it.
                                 .imePadding()
-                                .padding(
-                                    top = theme.dimensions.spacingSmall,
-                                    start = if (!supportingVisible && widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge,
-                                    end = if (!supportingVisible && widthDp >= theme.dimensions.largeScreenBreakpoint) theme.dimensions.spacingHuge else theme.dimensions.spacingExtraLarge
-                                )
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    focusManager.clearFocus()
-                                    viewModel.setParagraphFocus(-1)
-                                }
+                                .then(if (uiState.documentEditorEnabled) Modifier else Modifier
+                                    .padding(top = theme.dimensions.spacingSmall,
+                                        start = editorHorizontalPadding, end = editorHorizontalPadding)
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        focusManager.clearFocus()
+                                        viewModel.setParagraphFocus(-1)
+                                    })
                         ) {
                             // Floating Formatting Toolbar State
                             var isToolbarMinimized by remember { mutableStateOf(false) }
@@ -405,7 +469,8 @@ fun EditorScreen(
                                     DocumentEditorField(
                                         state = uiState,
                                         viewModel = viewModel,
-                                        isToolbarMinimized = isToolbarMinimized
+                                        isToolbarMinimized = isToolbarMinimized,
+                                        horizontalPadding = editorHorizontalPadding
                                     )
                                 } else {
                                     EditorCanvas(
@@ -437,6 +502,7 @@ fun EditorScreen(
                                     .fillMaxWidth()
                                     .align(Alignment.BottomCenter)
                                     .zIndex(1f)
+                                    .padding(horizontal = if (uiState.documentEditorEnabled) editorHorizontalPadding else 0.dp)
                                     .padding(bottom = toolbarBottomPadding)
                             ) {
                                 androidx.compose.animation.AnimatedContent(
@@ -514,10 +580,28 @@ fun EditorScreen(
                 AnimatedPane {
                     if (!uiState.isSidebarOpen) {
                         companionSavedState.SaveableStateProvider("companion") {
-                            CompanionPane(companion, uiState, viewModel,
-                                onChooseReference = { showReferencePicker = true },
-                                onClose = viewModel::toggleCompanion,
-                                modifier = Modifier.fillMaxSize().statusBarsPadding())
+                            val secondaryProject = secondaryState?.activeProject
+                            val secondaryPath = secondaryState?.activeFilePath.orEmpty()
+                            if (secondarySwitching) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                            } else if (secondaryEditor != null && secondaryProject != null && secondaryPath.isNotEmpty()) {
+                                EditorScreen(secondaryProject.id, secondaryPath, secondaryEditor,
+                                    onBackClick = viewModel::toggleCompanion,
+                                    modifier = Modifier.fillMaxSize().statusBarsPadding().semantics { contentDescription = "Second editor pane" },
+                                    companionEnabled = false,
+                                    onChooseFile = { showReferencePicker = true })
+                            } else {
+                                Box(Modifier.fillMaxSize().statusBarsPadding().semantics { contentDescription = "Second editor pane" }) {
+                                    IconButton(onClick = viewModel::toggleCompanion, modifier = Modifier.align(Alignment.TopEnd)) {
+                                        Icon(Icons.Default.Close, contentDescription = "Close split view", tint = theme.textPrimary)
+                                    }
+                                    Column(Modifier.align(Alignment.Center).padding(theme.dimensions.spacingExtraLarge),
+                                        horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Open a second document", color = theme.textPrimary)
+                                        TextButton(onClick = { showReferencePicker = true }) { Text("Choose file", color = theme.textPrimary) }
+                                    }
+                                }
+                            }
                         }
                     } else if (isDualPane && uiState.isSidebarOpen) {
                         SidebarPane(state = uiState, viewModel = viewModel,
@@ -604,6 +688,8 @@ fun EditorHeader(
     isMetricsActive: Boolean = false,
     onMoreOptionsAction: (String) -> Unit = {},
     onTitleClick: () -> Unit = {},
+    onChooseFile: (() -> Unit)? = null,
+    onIdentityChanged: (String, String) -> Unit = { _, _ -> },
     canSplit: Boolean = false,
     isCompanionOpen: Boolean = false,
     onSplitToggle: () -> Unit = {},
@@ -613,6 +699,7 @@ fun EditorHeader(
     val fileName = filePath.split('/').last()
 
     TopAppBar(
+        modifier = Modifier.testTag("Editor header"),
         title = {
             Text(
                 text = fileName,
@@ -642,6 +729,11 @@ fun EditorHeader(
             }
         },
         actions = {
+            if (onChooseFile != null) {
+                IconButton(onClick = onChooseFile) {
+                    Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose another file", tint = theme.textPrimary)
+                }
+            }
             if (canSplit || isCompanionOpen) {
                 IconButton(onClick = onSplitToggle,
                     modifier = Modifier.semantics { stateDescription = if (isCompanionOpen) "Open" else "Closed" }) {
@@ -766,23 +858,23 @@ fun EditorCanvas(
 private fun DocumentEditorField(
     state: EditorUiState,
     viewModel: EditorViewModel,
-    isToolbarMinimized: Boolean
+    isToolbarMinimized: Boolean,
+    horizontalPadding: androidx.compose.ui.unit.Dp
 ) {
     val theme = state.activeTheme
     val scrollState = rememberScrollState()
     val editorFont = theme.toFontFamily()
+    val metrics = EditorTypography.metrics(state.editorFontSizeScale)
     val inputTransformation = remember { MarkdownDocumentInputTransformation() }
     val bottomScrollPadding = if (isToolbarMinimized) 100.dp else 220.dp
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .widthIn(max = theme.dimensions.maxTextLineWidth)
-            .verticalScroll(scrollState)
-            .padding(bottom = bottomScrollPadding)
-    ) {
+    // Capture the finite viewport before verticalScroll supplies unbounded content height.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val viewportHeight = maxHeight
+        Column(Modifier.fillMaxSize().verticalScroll(scrollState).testTag("Document scroll")) {
         BasicTextField(
             state = viewModel.documentTextFieldState,
+            readOnly = state.isFileOperationPending,
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics { contentDescription = "Document editor" }
@@ -790,8 +882,13 @@ private fun DocumentEditorField(
             textStyle = TextStyle(
                 color = theme.textPrimary,
                 fontFamily = editorFont,
-                fontSize = theme.typography.body * state.editorFontSizeScale,
-                lineHeight = theme.typography.body * state.editorFontSizeScale * 1.55f
+                fontSize = metrics.fontSize,
+                lineHeight = metrics.lineHeight,
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Proportional,
+                    trim = LineHeightStyle.Trim.None,
+                    mode = LineHeightStyle.Mode.Minimum
+                )
             ),
             lineLimits = TextFieldLineLimits.MultiLine(),
             keyboardOptions = KeyboardOptions(
@@ -799,22 +896,39 @@ private fun DocumentEditorField(
                 autoCorrectEnabled = true,
                 imeAction = ImeAction.Default
             ),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.accent),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.controlAccent),
+            decorator = TextFieldDecorator { innerTextField ->
+                // Native decoration expands the hit area without intercepting text gestures.
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(min = viewportHeight)
+                        .padding(start = horizontalPadding, end = horizontalPadding,
+                            top = theme.dimensions.spacingExtraLarge, bottom = bottomScrollPadding),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Box(Modifier.widthIn(max = theme.dimensions.maxTextLineWidth).fillMaxWidth()
+                        .testTag("Document text")) {
+                        innerTextField()
+                    }
+                }
+            },
             inputTransformation = inputTransformation,
             outputTransformation = remember(
                 state.viewMode,
-                state.editorFontSizeScale,
-                theme.textMuted,
+                metrics.fontSize,
+                metrics.lineHeight,
+                theme.textSecondary,
                 theme.codeBackground
             ) {
                 MarkdownDocumentOutputTransformation(
                     viewMode = state.viewMode,
-                    bodySize = theme.typography.body * state.editorFontSizeScale,
-                    tokenColor = theme.textMuted,
+                    bodySize = metrics.fontSize,
+                    tokenColor = theme.textSecondary,
                     codeBackgroundColor = theme.codeBackground
                 )
             }
         )
+        }
     }
 }
 
@@ -834,7 +948,7 @@ private fun EditorParagraph(
             isFocused = isFocused,
             selection = value.selection,
             viewMode = state.viewMode,
-            tokenColor = state.activeTheme.textMuted,
+            tokenColor = state.activeTheme.textSecondary,
             codeBackgroundColor = state.activeTheme.codeBackground
         )
     }
@@ -894,7 +1008,7 @@ fun splitTableLine(line: String): List<String> {
 }
 
 fun renderCellText(text: String, theme: com.attachdesign.kern.ui.theme.AppColorTheme): AnnotatedString {
-    val styleProvider = MarkdownSpanStyleProvider(theme.textMuted, theme.codeBackground)
+    val styleProvider = MarkdownSpanStyleProvider(theme.textSecondary, theme.codeBackground)
     val elements = MarkdownParser.parseInline(text, 0)
     val tokensToProcess = elements.filter { it.type.isSyntaxToken }.sortedBy { it.start }
 
@@ -1023,7 +1137,7 @@ fun ParagraphField(
             MarkdownBlockType.HEADER_5 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h5.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = (theme.typography.title.value * fontSizeScale).sp)
             MarkdownBlockType.HEADER_6 -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.h6.value * fontSizeScale).sp, fontWeight = FontWeight.Medium, color = theme.textPrimary, lineHeight = ((theme.typography.h6.value + 5f) * fontSizeScale).sp)
             MarkdownBlockType.CODE_BLOCK -> TextStyle(fontFamily = FontFamily.Monospace, fontSize = (theme.typography.body.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = ((theme.typography.body.value + 6f) * fontSizeScale).sp)
-            MarkdownBlockType.BLOCKQUOTE -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, fontStyle = FontStyle.Italic, color = theme.textMuted, lineHeight = (theme.typography.h1.value * fontSizeScale).sp)
+            MarkdownBlockType.BLOCKQUOTE -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, fontStyle = FontStyle.Italic, color = theme.textSecondary, lineHeight = (theme.typography.h1.value * fontSizeScale).sp)
             else -> TextStyle(fontFamily = editorFont, fontSize = (theme.typography.bodyLarge.value * fontSizeScale).sp, color = theme.textPrimary, lineHeight = (theme.typography.h1.value * fontSizeScale).sp) // 1.6x Line height (15sp body)
         }
     }
@@ -1117,7 +1231,7 @@ fun ParagraphField(
                         else -> BlockSelectionBoundary(documentSelectionManaged) {
                             Text(
                                 text = value.text.substring(image.start, image.end),
-                                style = textStyle.copy(color = theme.textMuted, fontStyle = FontStyle.Italic)
+                                style = textStyle.copy(color = theme.textSecondary, fontStyle = FontStyle.Italic)
                             )
                         }
                     }
@@ -1519,7 +1633,9 @@ fun SidebarPane(
         else -> ""
     }
 
-    Column(modifier = modifier.padding(theme.dimensions.spacingExtraLarge)) {
+    BoxWithConstraints(modifier = modifier) {
+    val gutter = if (maxWidth >= 600.dp) 24.dp else 16.dp
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = gutter, vertical = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1553,19 +1669,22 @@ fun SidebarPane(
                 SidebarMode.METRICS -> {
                     MetricsTab(
                         state = state,
-                        onClose = onCloseClick
+                        onClose = onCloseClick,
+                        horizontalPadding = 0.dp
                     )
                 }
                 else -> {}
             }
         }
     }
+    }
 }
 
 @Composable
 fun MetricsTab(
     state: EditorUiState,
-    onClose: () -> Unit = {}
+    onClose: () -> Unit = {},
+    horizontalPadding: Dp? = null
 ) {
     val theme = state.activeTheme
     val metrics = state.hemingwayMetrics
@@ -1575,7 +1694,7 @@ fun MetricsTab(
             modifier = Modifier.fillMaxWidth().padding(theme.dimensions.spacingMassive),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Analyzing Readability...", color = theme.textMuted, fontSize = theme.typography.body)
+            Text("Analyzing Readability...", color = theme.textSecondary, fontSize = theme.typography.body)
             Spacer(modifier = Modifier.height(theme.dimensions.spacingMedium))
             CircularProgressIndicator(color = theme.accent, strokeWidth = theme.dimensions.spacingTiny, modifier = Modifier.size(theme.dimensions.spacingHuge))
         }
@@ -1590,10 +1709,12 @@ fun MetricsTab(
         "Reading Time" to readingTime
     )
 
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val gutter = horizontalPadding ?: if (maxWidth >= 600.dp) 24.dp else 16.dp
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = theme.dimensions.spacingExtraLarge, vertical = theme.dimensions.spacingMedium)
+            .padding(horizontal = gutter, vertical = theme.dimensions.spacingMedium)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
     ) {
@@ -1603,60 +1724,26 @@ fun MetricsTab(
                 .fillMaxWidth()
                 .padding(vertical = theme.dimensions.spacingSmall)
         ) {
-            Text("READABILITY", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text("READABILITY", color = theme.textSecondary, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
             Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
-            Text(metrics.readabilityGrade, color = theme.accent, fontSize = theme.typography.h1, fontWeight = FontWeight.Bold)
+            Text(metrics.readabilityGrade, color = theme.textAccent, fontSize = theme.typography.h1, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
             Text(
                 text = "Target Grade level is Grade 8-9 for general audience.",
-                color = theme.textMuted,
-                fontSize = theme.typography.small,
-                lineHeight = theme.typography.subtitle
+                color = theme.textSecondary,
+                fontSize = theme.typography.helper,
+                lineHeight = theme.typography.helperLineHeight
             )
         }
 
         HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
 
-        // Standard counts (flat, bookish)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-        ) {
-            countItems.take(2).forEach { (label, value) ->
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = theme.surface.copy(alpha = 0.75f))
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(theme.dimensions.spacingMedium),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
-                        Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
-                    }
-                }
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingMedium)
-        ) {
-            countItems.drop(2).forEach { (label, value) ->
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = theme.surface.copy(alpha = 0.75f))
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(theme.dimensions.spacingMedium),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(value, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(theme.dimensions.spacingTiny))
-                        Text(label, color = theme.textMuted, fontSize = theme.typography.tiny)
-                    }
-                }
-            }
+        // Retain paired tiles where their available pane width supports them.
+        countItems.chunked(2).forEach { pair ->
+            AdaptiveMetricPair(
+                first = { tileModifier -> ReadabilityCount(pair[0], theme, tileModifier) },
+                second = { tileModifier -> ReadabilityCount(pair[1], theme, tileModifier) }
+            )
         }
 
         HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
@@ -1668,7 +1755,7 @@ fun MetricsTab(
                 .padding(vertical = theme.dimensions.spacingSmall),
             verticalArrangement = Arrangement.spacedBy(theme.dimensions.spacingLarge)
         ) {
-            Text("HEMINGWAY SUGGESTIONS", color = theme.textMuted, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text("HEMINGWAY SUGGESTIONS", color = theme.textSecondary, fontSize = theme.typography.tiny, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
             Spacer(modifier = Modifier.height(theme.dimensions.spacingSmall))
 
             HemingwayStatRow("Very Hard Sentences", metrics.veryHardSentenceCount, theme.danger, theme)
@@ -1677,6 +1764,22 @@ fun MetricsTab(
             HemingwayStatRow("Passive Voices", metrics.passiveVoiceCount, theme.success, theme)
         }
         Spacer(modifier = Modifier.height(theme.dimensions.spacingHuge))
+    }
+    }
+}
+
+@Composable
+private fun ReadabilityCount(
+    item: Pair<String, String>,
+    theme: com.attachdesign.kern.ui.theme.AppColorTheme,
+    modifier: Modifier
+) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = theme.surface.copy(alpha = 0.75f))) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(item.second, color = theme.textPrimary, fontSize = theme.typography.title, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(item.first, color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight)
+        }
     }
 }
 
@@ -1687,7 +1790,7 @@ fun HemingwayStatRow(label: String, count: Int, color: Color, theme: com.attachd
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .size(theme.dimensions.spacingLarge)
@@ -1698,7 +1801,7 @@ fun HemingwayStatRow(label: String, count: Int, color: Color, theme: com.attachd
         }
         Text(
             text = count.toString(),
-            color = if (count > 0) color else theme.textMuted,
+            color = if (count > 0) theme.textPrimary else theme.textSecondary,
             fontSize = theme.typography.small,
             fontWeight = FontWeight.Bold
         )

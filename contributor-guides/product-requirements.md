@@ -24,12 +24,12 @@ A high-performance, minimal, and typography-first Markdown editor designed for m
 * **Adaptive Dual-Pane Navigation (Foldables / Tablets):** When the application detects an unfolded screen state, large-screen layout, or landscape orientation, the UI automatically transitions to a persistent split-screen view. The project directory tree locks to the left margin, and the active editor maps to the right pane.
 
 #### Foldable companion workspace
-* On book-style foldables and wide windows, an explicit Split view command toggles a companion beside the existing writer. Default content is a read-only preview of the current in-memory draft; the user can choose another project file for read-only reference.
+* On book-style foldables and wide windows, an explicit Split view command opens a second editor beside the existing writer. The second pane offers a file picker before a document is chosen.
 * The companion uses two readable panes rather than adding a third file-tree column. It shares the supporting slot with Metrics/Settings and restores the previous sidebar when closed.
 * Split eligibility requires >=720dp available width and >=340dp per pane, increasing for large fonts. This is distinct from the existing 600dp utility-sidebar breakpoint. Narrowing suspends the companion without discarding its choice or document state.
-* An optional, initially disabled partial-fold/reopen shortcut invokes the same command. It requires standard hinge-angle sensing and vertical fold geometry; manual Split view remains available without sensors. Initial unfolding and sustained book/tabletop use do not invoke it.
+* An optional, initially disabled partial-fold/reopen shortcut invokes the same command. It requires standard hinge-angle sensing; manual Split view remains available without sensors. Initial unfolding and sustained book/tabletop use do not invoke it.
 * Fold feedback offers independently persisted haptics (on initially) and paper-crease sound (off initially), with a non-destructive preview. Sound respects device quiet modes and touch-sound settings; feedback occurs only when a recognized gesture commits or the user explicitly previews it.
-* Source, selection, undo, focus, IME composition, and saves remain owned by the primary document session. Reference loading cannot replace it. Diff and a second editable document are follow-on features.
+* Each editor owns its own source, selection, undo, focus, IME composition, and save path. The picker must prevent opening the same file in both editors to avoid conflicting writes. Diff remains a follow-on feature.
 
 #### 2.3 Storage Architecture & Cloud Sync Engine
 * **Dual Storage Modalities:**

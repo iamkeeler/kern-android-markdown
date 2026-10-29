@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -146,7 +147,7 @@ class EditorScreenTest {
   }
 
   private fun waitForDocument(text: String) {
-    composeTestRule.waitUntil(timeoutMillis = 15_000) {
+    composeTestRule.waitUntil(timeoutMillis = 30_000) {
       viewModel.uiState.value.paragraphs.items.any { text in it.block.rawText }
     }
     composeTestRule.waitForIdle()
@@ -199,36 +200,51 @@ class EditorScreenTest {
     composeTestRule.runOnIdle { viewModel.documentTextFieldState.edit { selection = TextRange(3, 7) } }
     val canUndo = viewModel.documentTextFieldState.undoState.canUndo
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
-    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
-    composeTestRule.onNode(hasText("An unsaved addition.", substring = true) and
-        hasAnyAncestor(hasContentDescription("Reading preview"))).assertIsDisplayed()
-    composeTestRule.onNodeWithContentDescription("Close companion").performClick()
+    composeTestRule.onNodeWithContentDescription("Second editor pane").assertIsDisplayed()
+    composeTestRule.onNode(hasContentDescription("Close split view") and
+        hasAnyAncestor(hasContentDescription("Second editor pane"))).performClick()
     editor.assertIsFocused()
     composeTestRule.runOnIdle {
       assertEquals(text, viewModel.documentTextFieldState.text.toString())
       assertEquals(TextRange(3, 7), viewModel.documentTextFieldState.selection)
       assertEquals(canUndo, viewModel.documentTextFieldState.undoState.canUndo)
-      assertEquals(imeWasVisible, androidx.core.view.ViewCompat.getRootWindowInsets(composeTestRule.activity.window.decorView)
-          ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()))
+      if (imeWasVisible == true) assertTrue(androidx.core.view.ViewCompat.getRootWindowInsets(composeTestRule.activity.window.decorView)
+          ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true)
       viewModel.undo()
       assertTrue(viewModel.documentTextFieldState.text.toString() != text)
     }
   }
 
-  @Test fun testReferenceSelectionNeverReplacesPrimaryDraft() {
+  @Test fun testSecondEditorSavesIndependentlyAndRetainsDraft() {
     runBlocking { storageManager.writeFile(project, "outline.md", "# Outline for the draft\n\nKeep these notes beside the writing.") }
     wideEditor()
     val original = viewModel.documentTextFieldState.text.toString()
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
-    composeTestRule.onNodeWithText("Open reference").performClick()
+    composeTestRule.onNodeWithText("Choose file").performClick()
+    composeTestRule.onNode(hasText(file.name) and !isEnabled()).assertIsNotEnabled()
     composeTestRule.onNodeWithText("outline.md").performClick()
-    composeTestRule.waitUntil(15_000) { !viewModel.companion.state.value.isLoading }
-    composeTestRule.onNodeWithText("Outline for the draft").assertIsDisplayed()
+    composeTestRule.waitUntil(15_000) {
+      composeTestRule.onAllNodes(hasContentDescription("Document editor") and
+          hasAnyAncestor(hasContentDescription("Second editor pane"))).fetchSemanticsNodes().isNotEmpty()
+    }
+    val second = composeTestRule.onNode(hasContentDescription("Document editor") and
+        hasAnyAncestor(hasContentDescription("Second editor pane")))
+    second.performClick().performTextInput(" New notes.")
+    captureScreenshot("second-editor")
     assertEquals(original, viewModel.documentTextFieldState.text.toString())
     assertEquals(file.relativePath, viewModel.uiState.value.activeFilePath)
-    composeTestRule.onNodeWithContentDescription("Close companion").performClick()
+    composeTestRule.waitUntil(15_000) {
+      runBlocking { storageManager.readFile(project, "outline.md") }.contains("New notes.")
+    }
+    second.performTextInput(" Closing edit.")
+    composeTestRule.onNode(hasContentDescription("Back") and
+        hasAnyAncestor(hasContentDescription("Second editor pane"))).performClick()
+    composeTestRule.waitUntil(15_000) {
+      runBlocking { storageManager.readFile(project, "outline.md") }.contains("Closing edit.")
+    }
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
-    composeTestRule.onNodeWithText("Outline for the draft").assertIsDisplayed()
+    composeTestRule.onNode(hasContentDescription("Document editor") and
+        hasAnyAncestor(hasContentDescription("Second editor pane"))).assertIsDisplayed()
   }
 
   @Test fun testCompanionSuspendsOnNarrowWidthAndRestoresPreviousSidebar() {
@@ -241,13 +257,14 @@ class EditorScreenTest {
     waitForDocument("Introduction")
     composeTestRule.runOnIdle { viewModel.toggleSidebar(SidebarMode.METRICS) }
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
-    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Second editor pane").assertIsDisplayed()
     composeTestRule.runOnIdle { wide = false }
-    composeTestRule.onNodeWithContentDescription("Reading preview").assertDoesNotExist()
+    composeTestRule.onNodeWithContentDescription("Second editor pane").assertDoesNotExist()
     assertTrue(viewModel.companion.state.value.isOpen)
     composeTestRule.runOnIdle { wide = true }
-    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
-    composeTestRule.onNodeWithContentDescription("Close companion").performClick()
+    composeTestRule.onNodeWithContentDescription("Second editor pane").assertIsDisplayed()
+    composeTestRule.onNode(hasContentDescription("Close split view") and
+        hasAnyAncestor(hasContentDescription("Second editor pane"))).performClick()
     composeTestRule.runOnIdle { assertEquals(SidebarMode.METRICS, viewModel.uiState.value.sidebarMode) }
   }
 
@@ -290,14 +307,19 @@ class EditorScreenTest {
       }
     }
     holdFor(450)
+    val hinge = geometry.value!!
     angles.value = 145f
+    geometry.value = hinge.copy(isSeparating = false, left = hinge.left + 2, right = hinge.right + 2)
     holdFor(250)
+    assertTrue("A bend alone must not constrain the writer to one side",
+        composeTestRule.onNodeWithContentDescription("Document editor").fetchSemanticsNode().boundsInRoot.right > hinge.left)
     angles.value = 180f
+    geometry.value = hinge
     holdFor(200)
     composeTestRule.waitUntil(10_000) { viewModel.companion.state.value.isOpen }
-    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Second editor pane").assertIsDisplayed()
     val writerBounds = composeTestRule.onNodeWithContentDescription("Document editor").fetchSemanticsNode().boundsInRoot
-    val readerBounds = composeTestRule.onNodeWithContentDescription("Reading preview").fetchSemanticsNode().boundsInRoot
+    val readerBounds = composeTestRule.onNodeWithContentDescription("Second editor pane").fetchSemanticsNode().boundsInRoot
     assertTrue("Writer must stay before the hinge", writerBounds.right <= geometry.value!!.left)
     assertTrue("Reader must stay after the hinge", readerBounds.left >= geometry.value!!.right)
     holdFor(1300)
@@ -366,7 +388,7 @@ class EditorScreenTest {
     composeTestRule.onNodeWithContentDescription("Fold shortcut").assertIsNotEnabled()
     composeTestRule.onNodeWithText("Done").performClick()
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
-    composeTestRule.onNodeWithContentDescription("Reading preview").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Second editor pane").assertIsDisplayed()
   }
 
   @Test

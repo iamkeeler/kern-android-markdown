@@ -15,6 +15,47 @@ import com.attachdesign.kern.parser.MarkdownResourcePathResolver
 
 class StorageManager(private val context: Context) {
 
+    private val namedStorage = NamedStorageAccess(context, ::getProjectRootFile)
+
+    /** Collision-safe leaf creation; the caller supplies its already captured destination. */
+    suspend fun createNamedFile(project: ProjectEntity, parentPath: String, leafName: String): MutationOutcome =
+        namedStorage.create(project, parentPath, leafName, directory = false)
+
+    suspend fun createNamedDirectory(project: ProjectEntity, parentPath: String, leafName: String): MutationOutcome =
+        namedStorage.create(project, parentPath, leafName, directory = true)
+
+    /** Same-parent rename only. Trash and generic move retain their separate compatibility APIs. */
+    suspend fun renameNamedNode(project: ProjectEntity, originalPath: String, leafName: String): MutationOutcome =
+        namedStorage.rename(project, originalPath, leafName)
+
+    internal suspend fun verifyNamedIdentity(project: ProjectEntity, identity: StorageIdentity): MutationOutcome =
+        namedStorage.verify(project, identity)
+
+    internal suspend fun recoverNamedIdentity(project: ProjectEntity, partial: MutationOutcome.ReconciliationRequired): MutationOutcome =
+        namedStorage.recover(project, partial)
+
+    /** Complete enumeration or an explicit error; use this instead of the compatibility list for scans. */
+    suspend fun listDirectoryOutcome(project: ProjectEntity, relativePath: String): DirectoryOutcome =
+        namedStorage.listDirectory(project, relativePath)
+
+    /** Native, same-project move only; never falls back to copying/deleting document text. */
+    suspend fun moveWithinProject(
+        project: ProjectEntity,
+        sourcePath: String,
+        destinationParentPath: String,
+        destinationLeafName: String = sourcePath.substringAfterLast('/')
+    ): MutationOutcome = namedStorage.moveWithinProject(project, sourcePath, destinationParentPath, destinationLeafName)
+
+    /** Truthful permanent deletion, separate from the legacy Boolean API. */
+    suspend fun deletePermanentlyOutcome(project: ProjectEntity, relativePath: String): DeleteOutcome =
+        namedStorage.deletePermanently(project, relativePath)
+
+    internal suspend fun confirmDeletionAbsence(
+        project: ProjectEntity,
+        relativePath: String,
+        deletedIdentity: StorageIdentity?
+    ): DeleteOutcome = namedStorage.confirmAbsence(project, relativePath, deletedIdentity)
+
     suspend fun resolveMarkdownImage(
         project: ProjectEntity,
         currentFilePath: String,

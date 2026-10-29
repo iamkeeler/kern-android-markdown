@@ -9,19 +9,29 @@ import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import java.util.UUID
 
 class FileOperationsManager(
     private val db: AppDatabase,
     private val storageManager: StorageManager,
-    private val context: Context
+    private val context: Context,
+    private val newTrashId: () -> String = { UUID.randomUUID().toString() }
 ) {
+    private val mutations = ProjectMutationCoordinator.forDatabase(db)
 
-    suspend fun duplicateNode(project: ProjectEntity, node: VfsNode): Result<VfsNode> = withContext(Dispatchers.IO) {
+    private suspend fun <T> projectMutation(project: ProjectEntity, action: suspend () -> T): T =
+        withContext(Dispatchers.IO) { mutations.withMutation(project.id, action) }
+
+    suspend fun duplicateNode(project: ProjectEntity, node: VfsNode): Result<VfsNode> = projectMutation(project) {
         try {
             val originalPath = node.relativePath
             val newPath = getDuplicatePath(project, originalPath)
@@ -72,6 +82,8 @@ class FileOperationsManager(
                     } else {
                         val content = try {
                             storageManager.readFile(project, child.relativePath)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
                         } catch (e: Exception) {
                             ""
                         }
@@ -102,79 +114,237 @@ class FileOperationsManager(
                 }
                 Result.success(VfsNode.Directory(newName, newPath))
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.e("FileOpsManager", "Failed to duplicate node", e)
             Result.failure(e)
         }
     }
 
-    suspend fun renameNode(project: ProjectEntity, node: VfsNode, newName: String): Result<VfsNode> = withContext(Dispatchers.IO) {
+    /** Compatibility for existing callers; partial changes are failures carrying their receipt. */
+    suspend fun renameNode(project: ProjectEntity, node: VfsNode, newName: String): Result<VfsNode> =
+        when (val outcome = renameNodeOutcome(project, node, newName)) {
+            is MutationOutcome.Success -> Result.success(outcome.actual.node)
+            else -> Result.failure(MutationOutcomeException(outcome))
+        }
+
+    suspend fun createFile(project: ProjectEntity, parentPath: String, submittedName: String): MutationOutcome =
+        namedMutation(project, null) {
+            val name = LeafNamePolicy.markdownFileName(submittedName)
+            storageManager.createNamedFile(project, parentPath, name)
+        }
+
+    suspend fun createFolder(project: ProjectEntity, parentPath: String, submittedName: String): MutationOutcome =
+        namedMutation(project, null) {
+            val name = LeafNamePolicy.validate(submittedName)
+            storageManager.createNamedDirectory(project, parentPath, name)
+        }
+
+    suspend fun renameNodeOutcome(project: ProjectEntity, node: VfsNode, submittedName: String): MutationOutcome =
+        namedMutation(project, node.relativePath) {
+            LeafNamePolicy.validate(submittedName)
+            storageManager.renameNamedNode(project, node.relativePath, submittedName)
+        }
+
+    private suspend fun namedMutation(
+        project: ProjectEntity,
+        originalPath: String?,
+        preserveSyncState: Boolean = false,
+        partialBelongsToSource: () -> Boolean = { true },
+        mutate: suspend () -> MutationOutcome
+    ): MutationOutcome = projectMutation(project) {
         try {
-            val cleanName = newName.trim()
-            if (cleanName.isEmpty()) return@withContext Result.failure(IllegalArgumentException("Name cannot be empty"))
-
-            val oldPath = node.relativePath
-            val parentDir = if (oldPath.contains('/')) oldPath.substringBeforeLast('/') + "/" else ""
-            val newPath = "$parentDir$cleanName"
-
-            val success = storageManager.renameFile(project, oldPath, newPath)
-            if (!success) {
-                return@withContext Result.failure(Exception("Failed to rename file on disk"))
+            currentCoroutineContext().ensureActive()
+            if (db.projectDao().getProjectById(project.id)?.path != project.path) {
+                return@projectMutation MutationOutcome.Failed(MutationFailure.Missing)
             }
-
-            if (!node.isDirectory) {
-                val currentFile = db.fileDao().getFileByPath(project.id, oldPath)
-                if (currentFile != null) {
-                    db.runInTransaction {
-                        db.fileDao().deleteFile(project.id, oldPath)
-                        db.fileDao().insertFile(
-                            currentFile.copy(
-                                id = 0,
-                                name = cleanName,
-                                relativePath = newPath,
-                                lastModified = System.currentTimeMillis(),
-                                syncState = "PENDING"
-                            )
+            // Read metrics/descendants before touching disk. A failed metadata read changes nothing.
+            val rows = if (originalPath == null) emptyList() else db.fileDao().getFilesForProject(project.id)
+                .filter { it.relativePath == originalPath || it.relativePath.startsWith("$originalPath/") }
+            when (val disk = mutate()) {
+                is MutationOutcome.Success -> {
+                    if (!disk.changed) return@projectMutation disk
+                    val receipt = metadataReceipt(project, originalPath, disk.actual, rows, preserveSyncState)
+                    try {
+                        commitMetadata(receipt)
+                        disk
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Exception) {
+                        MutationOutcome.ReconciliationRequired(
+                            actual = disk.actual,
+                            originalPath = originalPath,
+                            attemptedPath = disk.actual.node.relativePath,
+                            returnedUri = disk.actual.documentUri,
+                            returnedAbsolutePath = disk.actual.absolutePath,
+                            cause = failure,
+                            metadata = receipt
                         )
                     }
                 }
-                Result.success(VfsNode.File(cleanName, newPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
-            } else {
-                updateNodeAndDescendantsInDb(project.id, oldPath, newPath, cleanName, updateSyncState = "SYNCED")
-                Result.success(VfsNode.Directory(cleanName, newPath))
+                is MutationOutcome.ReconciliationRequired -> if (!partialBelongsToSource()) disk
+                else disk.copy(metadata = MetadataReconciliation(
+                    project.id, project.path, emptyList(), emptyList(), originalPath, rows, preserveSyncState
+                ))
+                is MutationOutcome.Failed -> disk
             }
-        } catch (e: Exception) {
-            Log.e("FileOpsManager", "Failed to rename node", e)
-            Result.failure(e)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (invalid: IllegalArgumentException) {
+            MutationOutcome.Failed(MutationFailure.InvalidName, invalid)
+        } catch (failure: Exception) {
+            MutationOutcome.Failed(MutationFailure.Metadata, failure)
         }
     }
 
-    suspend fun deleteNode(project: ProjectEntity, node: VfsNode): Result<Boolean> = withContext(Dispatchers.IO) {
+    /** Retry this Room receipt only after verifying its actual disk identity. Never creates/renames. */
+    suspend fun reconcileMetadata(
+        project: ProjectEntity,
+        partial: MutationOutcome.ReconciliationRequired
+    ): MutationOutcome = projectMutation(project) {
+        val receipt = partial.metadata ?: return@projectMutation partial
+        if (receipt.projectId != project.id || receipt.projectPath != project.path) return@projectMutation partial
         try {
-            val path = node.relativePath
-            val success = storageManager.deleteFile(project, path)
-            if (!success) {
-                // If it fails on disk, we might still want to prune DB, but let's log it or proceed.
+            val verified = partial.actual?.let { storageManager.verifyNamedIdentity(project, it) }
+                ?: storageManager.recoverNamedIdentity(project, partial)
+            when (verified) {
+                is MutationOutcome.Success -> {
+                    val mappedReceipt = if (receipt.rowsToInsert.isEmpty()) {
+                        metadataReceipt(project, receipt.originalPath, verified.actual, receipt.sourceRows, receipt.preserveSyncState)
+                    } else receipt
+                    commitMetadata(mappedReceipt)
+                    MutationOutcome.Success(verified.actual)
+                }
+                is MutationOutcome.Failed -> partial.copy(
+                    cause = verified.cause ?: IOException("Actual document is unavailable; refresh storage")
+                )
+                is MutationOutcome.ReconciliationRequired -> partial
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            partial.copy(cause = failure)
+        }
+    }
 
-            if (!node.isDirectory) {
-                db.fileDao().deleteFile(project.id, path)
-            } else {
-                val allProjectFiles = db.fileDao().getFilesForProject(project.id)
-                val prefix = "$path/"
-                val childrenToDelete = allProjectFiles.filter { it.relativePath.startsWith(prefix) }
+    private fun metadataReceipt(
+        project: ProjectEntity,
+        originalPath: String?,
+        actual: StorageIdentity,
+        sourceRows: List<FileEntity>,
+        preserveSyncState: Boolean = false
+    ): MetadataReconciliation {
+        val node = actual.node
+        val original = sourceRows.firstOrNull { it.relativePath == originalPath }
+        val modified = (node as? VfsNode.File)?.lastModified ?: System.currentTimeMillis()
+        val rootRow = (original ?: FileEntity(
+            projectId = project.id,
+            name = node.name,
+            relativePath = node.relativePath,
+            isDirectory = node.isDirectory,
+            lastModified = modified,
+            syncState = if (node.isDirectory || project.isExternal) "SYNCED" else "PENDING"
+        )).copy(
+            name = node.name,
+            relativePath = node.relativePath,
+            isDirectory = node.isDirectory,
+            lastModified = modified,
+            syncState = if (preserveSyncState && original != null) original.syncState
+                else if (preserveSyncState) if (node.isDirectory || project.isExternal) "SYNCED" else "PENDING"
+                else if (originalPath != null && !node.isDirectory) "PENDING"
+                else if (node.isDirectory || project.isExternal) "SYNCED" else "PENDING"
+        )
+        val children = if (node.isDirectory && originalPath != null) sourceRows
+            .filter { it.relativePath.startsWith("$originalPath/") }
+            .map { it.copy(relativePath = node.relativePath + it.relativePath.removePrefix(originalPath)) }
+        else emptyList()
+        val targetRows = listOf(rootRow) + children
+        return MetadataReconciliation(
+            project.id,
+            project.path,
+            (sourceRows.map { it.relativePath } + targetRows.map { it.relativePath }).distinct(),
+            targetRows,
+            originalPath,
+            sourceRows,
+            preserveSyncState
+        )
+    }
 
-                db.runInTransaction {
-                    db.fileDao().deleteFile(project.id, path)
-                    for (child in childrenToDelete) {
-                        db.fileDao().deleteFile(project.id, child.relativePath)
+    private fun commitMetadata(receipt: MetadataReconciliation) {
+        db.runInTransaction {
+            check(db.projectDao().getProjectById(receipt.projectId)?.path == receipt.projectPath) { "Workspace was removed or replaced" }
+            receipt.pathsToRemove.forEach { db.fileDao().deleteFile(receipt.projectId, it) }
+            receipt.rowsToInsert.forEach { db.fileDao().insertFile(it) }
+        }
+    }
+
+    suspend fun deleteNode(project: ProjectEntity, node: VfsNode): Result<Boolean> =
+        when (val outcome = deleteNodeOutcome(project, node)) {
+            is DeleteOutcome.Success -> Result.success(true)
+            else -> Result.failure(DeleteOutcomeException(outcome))
+        }
+
+    suspend fun deleteNodeOutcome(project: ProjectEntity, node: VfsNode): DeleteOutcome = projectMutation(project) {
+        try {
+            currentCoroutineContext().ensureActive()
+            if (db.projectDao().getProjectById(project.id)?.path != project.path) {
+                return@projectMutation DeleteOutcome.Failed(MutationFailure.Missing)
+            }
+            val paths = db.fileDao().getFilesForProject(project.id)
+                .filter { it.relativePath == node.relativePath || it.relativePath.startsWith("${node.relativePath}/") }
+                .map { it.relativePath }.plus(node.relativePath).distinct()
+            when (val disk = storageManager.deletePermanentlyOutcome(project, node.relativePath)) {
+                is DeleteOutcome.Success -> {
+                    val receipt = DeleteMetadataReconciliation(project.id, project.path, node.relativePath, paths, disk.deletedIdentity)
+                    try {
+                        commitDeleteMetadata(receipt)
+                        disk
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Exception) {
+                        DeleteOutcome.ReconciliationRequired(node.relativePath, disk.deletedIdentity, null, true, failure, receipt)
                     }
                 }
+                else -> disk
             }
-            Result.success(true)
-        } catch (e: Exception) {
-            Log.e("FileOpsManager", "Failed to delete node", e)
-            Result.failure(e)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            DeleteOutcome.Failed(MutationFailure.Metadata, failure)
+        }
+    }
+
+    suspend fun reconcileDeleteMetadata(
+        project: ProjectEntity,
+        partial: DeleteOutcome.ReconciliationRequired
+    ): DeleteOutcome = projectMutation(project) {
+        val receipt = partial.metadata ?: return@projectMutation partial
+        if (receipt.projectId != project.id || receipt.projectPath != project.path) return@projectMutation partial
+        try {
+            when (val inspected = storageManager.confirmDeletionAbsence(project, receipt.relativePath, receipt.deletedIdentity)) {
+                is DeleteOutcome.Success -> {
+                    commitDeleteMetadata(receipt)
+                    DeleteOutcome.Success(receipt.relativePath, deletedIdentity = receipt.deletedIdentity)
+                }
+                is DeleteOutcome.Failed -> partial.copy(
+                    remaining = inspected.remaining,
+                    absenceConfirmed = false,
+                    cause = inspected.cause ?: IOException("Deletion absence could not be confirmed")
+                )
+                is DeleteOutcome.ReconciliationRequired -> partial
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            partial.copy(cause = failure)
+        }
+    }
+
+    private fun commitDeleteMetadata(receipt: DeleteMetadataReconciliation) {
+        db.runInTransaction {
+            check(db.projectDao().getProjectById(receipt.projectId)?.path == receipt.projectPath) { "Workspace was removed or replaced" }
+            receipt.pathsToRemove.forEach { db.fileDao().deleteFile(receipt.projectId, it) }
         }
     }
 
@@ -245,83 +415,74 @@ class FileOperationsManager(
             } else {
                 Result.failure(IllegalStateException("Could not generate URI for ${node.name}"))
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.e("FileOpsManager", "Failed to share ${node.name}", e)
             Result.failure(e)
         }
     }
 
-    suspend fun moveToTrash(project: ProjectEntity, node: VfsNode): Result<VfsNode> = withContext(Dispatchers.IO) {
-        try {
-            val trashDir = ".trash"
-            val newName = "${System.currentTimeMillis()}_${node.name}"
-            val newPath = "$trashDir/$newName"
-            
-            val success = storageManager.renameFile(project, node.relativePath, newPath)
-            if (!success) {
-                // Try creating directory first
-                storageManager.createDirectory(project, trashDir)
-                if (!storageManager.renameFile(project, node.relativePath, newPath)) {
-                    return@withContext Result.failure(Exception("Failed to move to trash on disk"))
-                }
-            }
+    suspend fun moveToTrash(project: ProjectEntity, node: VfsNode): Result<VfsNode> =
+        when (val outcome = moveToTrashOutcome(project, node)) {
+            is MutationOutcome.Success -> Result.success(outcome.actual.node)
+            else -> Result.failure(MutationOutcomeException(outcome))
+        }
 
-            if (!node.isDirectory) {
-                val currentFile = db.fileDao().getFileByPath(project.id, node.relativePath)
-                if (currentFile != null) {
-                    db.runInTransaction {
-                        db.fileDao().deleteFile(project.id, node.relativePath)
-                        db.fileDao().insertFile(
-                            currentFile.copy(
-                                id = 0,
-                                relativePath = newPath,
-                                lastModified = System.currentTimeMillis()
-                            )
-                        )
-                    }
+    suspend fun moveToTrashOutcome(project: ProjectEntity, node: VfsNode): MutationOutcome {
+        var sourceMutationStarted = false
+        return namedMutation(project, node.relativePath, preserveSyncState = true,
+            partialBelongsToSource = { sourceMutationStarted }) {
+            val trash = prepareTrashDirectory(project)
+            if (trash !is MutationOutcome.Success) return@namedMutation trash
+            val trashPath = trash.actual.node.relativePath
+            var candidate: String? = null
+            repeat(8) {
+                if (candidate != null) return@repeat
+                val name = LeafNamePolicy.validate("${newTrashId()}_${node.name}")
+                when (val listing = storageManager.listDirectoryOutcome(project, trashPath)) {
+                    is DirectoryOutcome.Success -> if (listing.nodes.none { it.name == name }) candidate = name
+                    else -> return@namedMutation listingFailure(listing)
                 }
-                Result.success(VfsNode.File(newName, newPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
-            } else {
-                updateNodeAndDescendantsInDb(project.id, node.relativePath, newPath, newName)
-                Result.success(VfsNode.Directory(newName, newPath))
             }
-        } catch (e: Exception) {
-            Log.e("FileOpsManager", "Failed to move to trash", e)
-            Result.failure(e)
+            val name = candidate ?: return@namedMutation MutationOutcome.Failed(MutationFailure.Collision)
+            sourceMutationStarted = true
+            storageManager.moveWithinProject(project, node.relativePath, trashPath, name)
         }
     }
 
-    suspend fun restoreFromTrash(project: ProjectEntity, trashNode: VfsNode, originalPath: String): Result<VfsNode> = withContext(Dispatchers.IO) {
-        try {
-            val success = storageManager.renameFile(project, trashNode.relativePath, originalPath)
-            if (!success) {
-                return@withContext Result.failure(Exception("Failed to restore from trash on disk"))
-            }
-
-            if (!trashNode.isDirectory) {
-                val currentFile = db.fileDao().getFileByPath(project.id, trashNode.relativePath)
-                if (currentFile != null) {
-                    db.runInTransaction {
-                        db.fileDao().deleteFile(project.id, trashNode.relativePath)
-                        db.fileDao().insertFile(
-                            currentFile.copy(
-                                id = 0,
-                                relativePath = originalPath,
-                                lastModified = System.currentTimeMillis()
-                            )
-                        )
-                    }
-                }
-                Result.success(VfsNode.File(originalPath.substringAfterLast('/'), originalPath, currentFile?.characterCount?.toLong() ?: 0, System.currentTimeMillis()))
-            } else {
-                val restoredName = originalPath.substringAfterLast('/')
-                updateNodeAndDescendantsInDb(project.id, trashNode.relativePath, originalPath, restoredName)
-                Result.success(VfsNode.Directory(restoredName, originalPath))
-            }
-        } catch (e: Exception) {
-            Log.e("FileOpsManager", "Failed to restore from trash", e)
-            Result.failure(e)
+    suspend fun restoreFromTrash(project: ProjectEntity, trashNode: VfsNode, originalPath: String): Result<VfsNode> =
+        when (val outcome = restoreFromTrashOutcome(project, trashNode, originalPath)) {
+            is MutationOutcome.Success -> Result.success(outcome.actual.node)
+            else -> Result.failure(MutationOutcomeException(outcome))
         }
+
+    suspend fun restoreFromTrashOutcome(project: ProjectEntity, trashNode: VfsNode, originalPath: String): MutationOutcome =
+        namedMutation(project, trashNode.relativePath, preserveSyncState = true) {
+            LeafNamePolicy.requireRelativePath(originalPath)
+            if (originalPath.isEmpty()) return@namedMutation MutationOutcome.Failed(MutationFailure.InvalidName)
+            storageManager.moveWithinProject(project, trashNode.relativePath,
+                originalPath.substringBeforeLast('/', ""), originalPath.substringAfterLast('/'))
+        }
+
+    private suspend fun prepareTrashDirectory(project: ProjectEntity): MutationOutcome {
+        return when (val listing = storageManager.listDirectoryOutcome(project, "")) {
+            is DirectoryOutcome.Success -> {
+                val existing = listing.nodes.firstOrNull { it.name == ".trash" }
+                if (existing != null) {
+                    if (existing.isDirectory) MutationOutcome.Success(StorageIdentity(existing), changed = false)
+                    else MutationOutcome.Failed(MutationFailure.Collision)
+                } else storageManager.createNamedDirectory(project, "", ".trash")
+            }
+            else -> listingFailure(listing)
+        }
+    }
+
+    private fun listingFailure(outcome: DirectoryOutcome): MutationOutcome.Failed = when (outcome) {
+        DirectoryOutcome.AccessDenied -> MutationOutcome.Failed(MutationFailure.AccessDenied)
+        DirectoryOutcome.Missing -> MutationOutcome.Failed(MutationFailure.Missing)
+        is DirectoryOutcome.Failure -> MutationOutcome.Failed(MutationFailure.Storage, outcome.cause)
+        is DirectoryOutcome.Success -> error("A complete listing is not a failure")
     }
 
     private fun getDuplicatePath(project: ProjectEntity, originalPath: String): String {
@@ -342,44 +503,4 @@ class FileOperationsManager(
         return candidatePath
     }
 
-    private fun updateNodeAndDescendantsInDb(
-        projectId: Long,
-        oldPath: String,
-        newPath: String,
-        newName: String,
-        updateSyncState: String? = null
-    ) {
-        val allProjectFiles = db.fileDao().getFilesForProject(projectId)
-        val oldPrefix = "$oldPath/"
-        val newPrefix = "$newPath/"
-        val childrenToUpdate = allProjectFiles.filter { it.relativePath.startsWith(oldPrefix) }
-        val currentDir = db.fileDao().getFileByPath(projectId, oldPath)
-
-        db.runInTransaction {
-            if (currentDir != null) {
-                db.fileDao().deleteFile(projectId, oldPath)
-                db.fileDao().insertFile(
-                    currentDir.copy(
-                        id = 0,
-                        name = newName,
-                        relativePath = newPath,
-                        lastModified = System.currentTimeMillis(),
-                        syncState = updateSyncState ?: currentDir.syncState
-                    )
-                )
-            }
-            for (child in childrenToUpdate) {
-                val suffix = child.relativePath.removePrefix(oldPrefix)
-                val childNewPath = "$newPrefix$suffix"
-                db.fileDao().deleteFile(projectId, child.relativePath)
-                db.fileDao().insertFile(
-                    child.copy(
-                        id = 0,
-                        relativePath = childNewPath,
-                        lastModified = System.currentTimeMillis()
-                    )
-                )
-            }
-        }
-    }
 }

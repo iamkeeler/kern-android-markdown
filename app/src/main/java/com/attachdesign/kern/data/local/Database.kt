@@ -130,6 +130,9 @@ interface ThemeDao {
     @Query("SELECT * FROM themes WHERE id = :id LIMIT 1")
     fun getThemeById(id: Long): ThemeEntity?
 
+    @Query("SELECT * FROM themes WHERE jsonString = :jsonString LIMIT 1")
+    fun getThemeByJson(jsonString: String): ThemeEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertTheme(theme: ThemeEntity): Long
 

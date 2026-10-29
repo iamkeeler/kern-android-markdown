@@ -94,7 +94,17 @@ data class AppColorTheme(
     val dimensions: AppDimensions,
     val typography: AppTypographySizes
 
-)
+) {
+    // Presentation roles are derived per palette, including old saved presets. Raw fields above
+    // remain the import/export contract; a display name never selects or migrates a palette.
+    internal val accessibleRoles: AccessibleThemeRoles by lazy { accessibleThemeRoles(this) }
+    val textSecondary: Color get() = accessibleRoles.textSecondary
+    val textAccent: Color get() = accessibleRoles.textAccent
+    val textDanger: Color get() = accessibleRoles.textDanger
+    val controlAccent: Color get() = accessibleRoles.controlAccent
+    val onControlAccent: Color get() = accessibleRoles.onControlAccent
+    val indicator: Color get() = accessibleRoles.indicator
+}
 
 
 data class AppDimensions(
@@ -156,6 +166,8 @@ data class AppTypographySizes(
     val h4: TextUnit = 16.sp,
     val h5: TextUnit = 13.sp,
     val h6: TextUnit = 12.sp,
+    val helper: TextUnit = 13.sp,
+    val helperLineHeight: TextUnit = 18.sp,
 )
 
 object ThemeEngine {

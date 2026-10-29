@@ -191,21 +191,25 @@ private fun ReadOnlyMarkdownDocument(
 private fun persistentEmptyBlocks(): ImmutableList<ReadingBlock> = emptyList<ReadingBlock>().toImmutableList()
 
 @Composable
-fun ReferencePicker(viewModel: EditorViewModel, onDismiss: () -> Unit) {
+fun ReferencePicker(viewModel: EditorViewModel, onSelect: (ReferenceKey) -> Unit, onDismiss: () -> Unit) {
     val editor by viewModel.uiState.collectAsStateWithLifecycle()
     val projects by viewModel.allProjects.collectAsStateWithLifecycle()
     var projectId by rememberSaveable { mutableLongStateOf(editor.activeProject?.id ?: 0L) }
     var path by rememberSaveable { mutableStateOf("") }
     var retry by remember { mutableIntStateOf(0) }
+    var loadError by remember(projectId, path, retry) { mutableStateOf<String?>(null) }
     val files by produceState<ImmutableList<VfsNode>?>(null, projectId, path, retry) {
         value = null
         value = try { viewModel.listReferenceFiles(projectId, path) } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
-        } catch (_: Exception) { emptyList<VfsNode>().toImmutableList() }
+        } catch (failure: Exception) {
+            loadError = failure.message ?: "Could not read this folder. Refresh to try again."
+            emptyList<VfsNode>().toImmutableList()
+        }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Open reference", color = editor.activeTheme.textPrimary) },
+        title = { Text("Choose a file to edit", color = editor.activeTheme.textPrimary) },
         text = {
             Column(Modifier.heightIn(max = editor.activeTheme.dimensions.popupMaxHeight).verticalScroll(rememberScrollState())) {
                 projects.forEach { project ->
@@ -217,17 +221,18 @@ fun ReferencePicker(viewModel: EditorViewModel, onDismiss: () -> Unit) {
                 Text(path.ifEmpty { "Project root" }, color = editor.activeTheme.textPrimary)
                 if (path.isNotEmpty()) TextButton(onClick = { path = path.substringBeforeLast('/', "") }) { Text("Parent folder", color = editor.activeTheme.textPrimary) }
                 if (files == null) LinearProgressIndicator(Modifier.fillMaxWidth())
-                else if (files!!.isEmpty()) {
-                    Text("No files available. Check folder access or select another project.", color = editor.activeTheme.textPrimary)
+                else if (loadError != null || files!!.none { it.isDirectory || it.name.endsWith(".md", true) || it.name.endsWith(".markdown", true) || it.name.endsWith(".txt", true) }) {
+                    Text(loadError ?: "No supported documents in this folder.", color = editor.activeTheme.textPrimary)
                     TextButton(onClick = { retry++ }) { Text("Refresh", color = editor.activeTheme.textPrimary) }
                 }
+                if (projectId == editor.activeProject?.id) Text("The document already open in the first pane cannot be opened twice.",
+                    color = editor.activeTheme.textPrimary, fontSize = editor.activeTheme.typography.helper)
                 files?.forEach { node ->
                     if (node.isDirectory || node.name.endsWith(".md", true) || node.name.endsWith(".markdown", true) || node.name.endsWith(".txt", true)) {
-                        TextButton(onClick = {
+                        TextButton(enabled = node.isDirectory || projectId != editor.activeProject?.id || node.relativePath != editor.activeFilePath, onClick = {
                             if (node.isDirectory) path = node.relativePath
                             else {
-                                if (projectId == editor.activeProject?.id && node.relativePath == editor.activeFilePath) viewModel.companion.showPreview()
-                                else viewModel.companion.showReference(ReferenceKey(projectId, node.relativePath))
+                                onSelect(ReferenceKey(projectId, node.relativePath))
                                 onDismiss()
                             }
                         }) { Text(if (node.isDirectory) "${node.name}/" else node.name, color = editor.activeTheme.textPrimary) }
@@ -257,7 +262,7 @@ fun FoldShortcutDialog(
         title = { Text("Fold to toggle split view") },
         text = {
             Column(Modifier.heightIn(max = theme.dimensions.popupMaxHeight).verticalScroll(rememberScrollState())) {
-                Text("With the inner screen open, bend slightly and open flat again to show or hide the companion. Hold a bend to keep reading in book posture.")
+                Text("With the inner screen open, bend slightly and open flat again to show or hide the second editor. Hold a bend to keep using book posture.")
                 FoldFeedbackToggle("Fold shortcut", enabled, theme, onEnabledChange, available)
                 if (!available) Text("Hinge-angle sensing isn't available on this device. Use Split view from the document toolbar.")
                 FoldFeedbackToggle("Fold haptics", hapticsEnabled, theme, onHapticsChanged)

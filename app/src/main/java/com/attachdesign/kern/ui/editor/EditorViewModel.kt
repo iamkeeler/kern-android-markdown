@@ -9,6 +9,12 @@ import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.ViewModel
 import com.attachdesign.kern.ui.common.launchShare
 import com.attachdesign.kern.ui.common.SnackbarEvent
+import com.attachdesign.kern.ui.common.DeletionSessionViewModel
+import com.attachdesign.kern.ui.main.dialogs.*
+import com.attachdesign.kern.data.storage.MutationOutcome
+import com.attachdesign.kern.data.storage.ProjectMutationCoordinator
+import com.attachdesign.kern.data.storage.DirectoryOutcome
+import kotlinx.coroutines.CancellationException
 import com.attachdesign.kern.data.local.SettingKeys
 import com.attachdesign.kern.utils.TextAnalysisUtils
 import com.attachdesign.kern.utils.TextAnalysisUtils.countWords
@@ -34,12 +40,14 @@ import com.attachdesign.kern.parser.ParagraphBlock
 import com.attachdesign.kern.parser.MarkdownEditorEngine
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import com.attachdesign.kern.ui.theme.AppThemeJson
+import com.attachdesign.kern.ui.theme.EditorTypography
 import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.data.stats.StatsRepository
 import com.attachdesign.kern.data.analytics.AnalyticsTracker
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,6 +90,7 @@ data class EditorUiState(
     val syncProvider: SyncProvider = SyncProvider.NONE,
     val projectFiles: List<VfsNode> = emptyList(),
     val explorerCurrentPath: String = "",
+    val isFileOperationPending: Boolean = false,
     val isReadabilityPopupOpen: Boolean = false
 ) {
     val isSidebarOpen: Boolean get() = sidebarMode != SidebarMode.CLOSED
@@ -95,7 +104,32 @@ class EditorViewModel(
     private val context: Context,
     private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default
 ) : ViewModel() {
+    internal val sessionId = UUID.randomUUID().toString()
+    private var deletionSession: DeletionSessionViewModel? = null
+    internal fun attachDeletionSession(session: DeletionSessionViewModel?) { deletionSession = session }
+    val renameOperations = RetainedNamingOperations(viewModelScope)
+    var pendingRenameRequest: NamingRequest? = null
+        private set
     val database: AppDatabase get() = db
+    fun createSecondaryEditor() = EditorViewModel(db, storageManager, fileOpsManager, context, defaultDispatcher)
+
+    private val _switchingSecondaryFile = MutableStateFlow(false)
+    val switchingSecondaryFile = _switchingSecondaryFile.asStateFlow()
+
+    fun switchSecondaryFile(key: ReferenceKey) {
+        if (_switchingSecondaryFile.value) return
+        _switchingSecondaryFile.value = true
+        viewModelScope.launch {
+            try {
+                onDocumentTextChanged(documentTextFieldState.text.toString())
+                saveJob?.cancelAndJoin()
+                saveActiveFile()
+                loadFile(key.projectId, key.path)?.join()
+            } finally {
+                _switchingSecondaryFile.value = false
+            }
+        }
+    }
     val statsRepository = StatsRepository(db)
     val analyticsTracker = AnalyticsTracker(context)
 
@@ -139,7 +173,12 @@ class EditorViewModel(
     suspend fun listReferenceFiles(projectId: Long, path: String): kotlinx.collections.immutable.ImmutableList<VfsNode> {
         val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) }
             ?: error("Project unavailable")
-        return storageManager.listDirectory(project, path).toImmutableList()
+        return when (val result = storageManager.listDirectoryOutcome(project, path)) {
+            is DirectoryOutcome.Success -> result.nodes.toImmutableList()
+            DirectoryOutcome.AccessDenied -> error("Folder access was denied. Restore permission or choose another workspace.")
+            DirectoryOutcome.Missing -> error("This folder is no longer available. Choose another folder.")
+            is DirectoryOutcome.Failure -> throw java.io.IOException("Could not read this folder. Refresh to try again.", result.cause)
+        }
     }
 
     suspend fun resolveCompanionImage(target: String): String? {
@@ -181,7 +220,7 @@ class EditorViewModel(
         // Reactively observe setting changes to keep ViewModel in sync
         viewModelScope.launch(Dispatchers.IO) {
             db.settingDao().getSettingFlow(SettingKeys.EDITOR_FONT_SIZE_SCALE).collect { setting ->
-                val scale = setting?.value?.toFloatOrNull() ?: 1.0f
+                val scale = EditorTypography.normalizeScale(setting?.value)
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(editorFontSizeScale = scale)
                 }
@@ -296,7 +335,7 @@ class EditorViewModel(
         val autoCompleteParensSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_PARENS)?.value ?: "true"
         val autoCompleteBracketsSetting = db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_BRACKETS)?.value ?: "true"
         val sentenceCapitalizationSetting = db.settingDao().getSetting(SettingKeys.SENTENCE_CAPITALIZATION)?.value ?: "true"
-        val editorFontSizeScaleSetting = db.settingDao().getSetting(SettingKeys.EDITOR_FONT_SIZE_SCALE)?.value ?: "1.0"
+        val editorFontSizeScaleSetting = db.settingDao().getSetting(SettingKeys.EDITOR_FONT_SIZE_SCALE)?.value
 
         withContext(Dispatchers.Main) {
             _uiState.value = _uiState.value.copy(
@@ -310,7 +349,7 @@ class EditorViewModel(
                 autoCompleteParens = autoCompleteParensSetting.toBoolean(),
                 autoCompleteBrackets = autoCompleteBracketsSetting.toBoolean(),
                 sentenceCapitalization = sentenceCapitalizationSetting.toBoolean(),
-                editorFontSizeScale = editorFontSizeScaleSetting.toFloatOrNull() ?: 1.0f,
+                editorFontSizeScale = EditorTypography.normalizeScale(editorFontSizeScaleSetting),
                 syncProvider = SyncProvider.valueOf(syncProviderSetting)
             )
             syncEngine.setProvider(SyncProvider.valueOf(syncProviderSetting))
@@ -376,6 +415,7 @@ class EditorViewModel(
                 activeProject = project,
                 activeFilePath = filePath,
                 fileName = filePath.substringAfterLast('/'),
+                isFileOperationPending = pendingRenameRequest?.let { it.projectId == projectId && it.targetPath == filePath } == true,
                 paragraphs = ImmutableParagraphList(parsedBlocks),
                 focusedParagraphIndex = if (focusOnStart) 0 else -1,
                 hemingwayMetrics = null, // Clear metrics until requested
@@ -407,11 +447,8 @@ class EditorViewModel(
 
     fun deleteExplorerNode(node: VfsNode) {
         val project = _uiState.value.activeProject ?: return
-        viewModelScope.launch {
-            storageManager.deleteFile(project, node.relativePath)
-            withContext(Dispatchers.IO) { db.fileDao().deleteFile(project.id, node.relativePath) }
-            loadExplorerFiles(project, _uiState.value.explorerCurrentPath)
-        }
+        val session = deletionSession ?: return
+        session.requestDelete(project, node) { loadExplorerFiles(project, _uiState.value.explorerCurrentPath) }
     }
 
     fun loadExplorerFiles(path: String) {
@@ -621,6 +658,7 @@ class EditorViewModel(
     }
 
     fun applyDocumentCommand(command: DocumentEditEngine.Command) {
+        if (_uiState.value.isFileOperationPending) return
         val selection = documentTextFieldState.selection
         val result = DocumentEditEngine.apply(
             text = documentTextFieldState.text.toString(),
@@ -636,6 +674,7 @@ class EditorViewModel(
     }
 
     fun undo() {
+        if (_uiState.value.isFileOperationPending) return
         if (_uiState.value.documentEditorEnabled) {
             if (documentTextFieldState.undoState.canUndo) {
                 documentTextFieldState.undoState.undo()
@@ -644,6 +683,7 @@ class EditorViewModel(
     }
 
     fun redo() {
+        if (_uiState.value.isFileOperationPending) return
         if (_uiState.value.documentEditorEnabled) {
             if (documentTextFieldState.undoState.canRedo) {
                 documentTextFieldState.undoState.redo()
@@ -691,6 +731,7 @@ class EditorViewModel(
     }
 
     private fun applyParagraphCommand(index: Int, command: DocumentEditEngine.Command) {
+        if (_uiState.value.isFileOperationPending) return
         val currentState = _uiState.value
         val items = currentState.paragraphs.items.toMutableList()
         if (index < 0 || index >= items.size) return
@@ -813,7 +854,7 @@ class EditorViewModel(
         }
     }
 
-    private suspend fun saveActiveFile() = withContext(Dispatchers.IO) {
+    private suspend fun saveActiveFile(allowPending: Boolean = false) = withContext(Dispatchers.IO) {
         val state = _uiState.value
         val project = state.activeProject ?: return@withContext
         val filePath = state.activeFilePath
@@ -824,6 +865,9 @@ class EditorViewModel(
         } else {
             MarkdownParser.joinParsedDocument(state.paragraphs.items.map { it.block })
         }
+        ProjectMutationCoordinator.forDatabase(db).withMutation(project.id) {
+        if (_uiState.value.isFileOperationPending && !allowPending) return@withMutation
+        if (db.projectDao().getProjectById(project.id)?.path != project.path) return@withMutation
         storageManager.writeFile(project, filePath, documentContent)
 
         // Calculate metrics for DB metadata update
@@ -852,6 +896,7 @@ class EditorViewModel(
             db.fileDao().updateFile(updatedFile)
         }
 
+        }
         // If Hemingway analyzer is active, recalculate on save
         if (state.sidebarMode == SidebarMode.METRICS || state.isReadabilityPopupOpen) {
             runHemingwayAnalysis(documentContent)
@@ -1100,49 +1145,37 @@ class EditorViewModel(
             )
             fileOpsManager.shareNode(project, fileNode).onSuccess { payload ->
                 context.launchShare(payload)
-            }
+            }.onFailure { _snackbarEvent.emit(SnackbarEvent("Could not share ${fileNode.name}. Check folder access and try again.")) }
         }
     }
 
     fun deleteCurrentFile(onDeleted: () -> Unit) {
-        val currentState = _uiState.value
-        val project = currentState.activeProject ?: return
-        val filePath = currentState.activeFilePath
-        if (filePath.isEmpty()) return
-
-        saveJob?.cancel()
+        val state = _uiState.value
+        val project = state.activeProject ?: return
+        val path = state.activeFilePath.takeIf { it.isNotEmpty() } ?: return
+        val session = deletionSession ?: return
+        if (state.isFileOperationPending) return
+        _uiState.value = state.copy(isFileOperationPending = true)
         viewModelScope.launch {
-            val fileNode = VfsNode.File(
-                name = filePath.substringAfterLast('/'),
-                relativePath = filePath,
-                size = 0,
-                lastModified = System.currentTimeMillis()
-            )
-            
-            val result = fileOpsManager.moveToTrash(project, fileNode)
-            val trashNode = result.getOrNull() ?: return@launch
-            
-            _uiState.value = _uiState.value.copy(
-                activeFilePath = "",
-                paragraphs = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
-                hemingwayMetrics = null
-            )
-            withContext(Dispatchers.Main) {
-                onDeleted()
-            }
-            
-            val deleteJob = viewModelScope.launch {
-                delay(5000)
-                fileOpsManager.deleteNode(project, trashNode)
-            }
-            
-            _snackbarEvent.emit(SnackbarEvent("File deleted", "Undo") {
-                deleteJob.cancel()
-                viewModelScope.launch {
-                    fileOpsManager.restoreFromTrash(project, trashNode, filePath)
-                    loadFile(project.id, filePath)
+            try {
+                saveJob?.cancelAndJoin()
+                documentText = documentTextFieldState.text.toString()
+                saveActiveFile(allowPending = true)
+                session.requestDelete(project, VfsNode.File(path.substringAfterLast('/'), path, 0, 0),
+                    onFailure = { needsInspection -> if (_uiState.value.activeProject?.id == project.id && _uiState.value.activeFilePath == path)
+                        _uiState.value = _uiState.value.copy(isFileOperationPending = needsInspection) }) {
+                    if (_uiState.value.activeProject?.id == project.id && _uiState.value.activeFilePath == path) {
+                        _uiState.value = _uiState.value.copy(activeFilePath = "", isFileOperationPending = false)
+                        onDeleted()
+                    }
                 }
-            })
+            } catch (cancelled: CancellationException) {
+                _uiState.value = _uiState.value.copy(isFileOperationPending = false)
+                throw cancelled
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isFileOperationPending = false)
+                _snackbarEvent.emit(SnackbarEvent("Could not save the document before deletion. Your draft is preserved."))
+            }
         }
     }
 
@@ -1171,37 +1204,75 @@ class EditorViewModel(
     }
 
     fun renameCurrentFile(newName: String, onRenamed: (String) -> Unit) {
-        val currentState = _uiState.value
-        val project = currentState.activeProject ?: return
-        val filePath = currentState.activeFilePath
-        if (filePath.isEmpty()) return
+        val state = _uiState.value
+        val project = state.activeProject ?: return
+        val request = NamingRequest.create(NamingKind.RenameNode, project.id, project.name,
+            state.activeFilePath.substringBeforeLast('/', ""), state.activeFilePath, state.fileName)
+            .copy(draft = TextFieldValue(newName))
+        submitRename(request, onRenamed)
+    }
 
-        val cleanName = newName.trim()
-        if (cleanName.isEmpty()) return
-
-        viewModelScope.launch {
-            saveActiveFile()
-            val fileNode = VfsNode.File(
-                name = filePath.substringAfterLast('/'),
-                relativePath = filePath,
-                size = 0,
-                lastModified = System.currentTimeMillis()
-            )
-            val result = fileOpsManager.renameNode(project, fileNode, cleanName)
-            if (result.isSuccess) {
-                val renamedNode = result.getOrThrow()
-                _uiState.value = _uiState.value.copy(activeFilePath = renamedNode.relativePath)
-                withContext(Dispatchers.Main) {
-                    onRenamed(renamedNode.relativePath)
-                }
+    fun submitRename(request: NamingRequest, onRenamed: (String) -> Unit = {}) {
+        if (request.inspectionRequired || (request.submitted && renameOperations.records.value[request.id] == null)) return
+        val state = _uiState.value
+        if (state.activeProject?.id != request.projectId || state.activeFilePath != request.targetPath) return
+        if (state.isFileOperationPending && pendingRenameRequest?.id != request.id) return
+        pendingRenameRequest = request
+        renameOperations.submit(request.id) {
+            _uiState.value = _uiState.value.copy(isFileOperationPending = true)
+            try {
+                saveJob?.cancelAndJoin()
+                if (_uiState.value.documentEditorEnabled) documentText = documentTextFieldState.text.toString()
+                saveActiveFile(allowPending = true)
+                val result = fileOpsManager.renameNodeOutcome(state.activeProject,
+                    VfsNode.File(request.targetName, request.targetPath, 0, 0), request.draft.text)
+                finishRename(result, request, onRenamed)
+            } catch (failure: Exception) {
+                if (failure !is CancellationException) _uiState.value = _uiState.value.copy(isFileOperationPending = false)
+                throw failure
             }
         }
     }
 
+    fun holdInterruptedRename(request: NamingRequest) {
+        pendingRenameRequest = request
+        _uiState.value = _uiState.value.copy(isFileOperationPending = true)
+    }
 
+    fun recoverRename(request: NamingRequest, onRenamed: (String) -> Unit = {}) {
+        val partial = (renameOperations.records.value[request.id] as? NamingOperationState.NeedsReconciliation)?.partial
+        renameOperations.recover(request.id) {
+            val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(request.projectId) }
+                ?: return@recover NamingOperationState.Inspected("Workspace unavailable. Restore access and refresh again.", false)
+            if (partial != null) return@recover finishRename(fileOpsManager.reconcileMetadata(project, partial), request, onRenamed)
+            // After process interruption, inspect only. Never infer that re-running a rename is safe.
+            val listing = storageManager.listDirectoryOutcome(project, request.parentPath)
+            if (listing !is DirectoryOutcome.Success) return@recover NamingOperationState.Inspected("Folder unavailable. Restore access and refresh again.", false)
+            val source = listing.nodes.any { it.relativePath == request.targetPath }
+            val destination = listing.nodes.any { it.name == request.draft.text.trim() }
+            val safe = source && !destination
+            if (safe) _uiState.value = _uiState.value.copy(isFileOperationPending = false)
+            NamingOperationState.Inspected(if (safe) "Folder checked. Review the name before retrying." else
+                "The rename may already have happened. Close this document and inspect the workspace before editing.", safe)
+        }
+    }
 
-
-
+    private fun finishRename(result: MutationOutcome, request: NamingRequest, onRenamed: (String) -> Unit): NamingOperationState {
+        when (result) {
+            is MutationOutcome.Success -> {
+                if (_uiState.value.activeProject?.id == request.projectId && _uiState.value.activeFilePath == request.targetPath) {
+                    val actual = result.actual.node
+                    _uiState.value = _uiState.value.copy(activeFilePath = actual.relativePath, fileName = actual.name,
+                        explorerCurrentPath = actual.relativePath.substringBeforeLast('/', ""), isFileOperationPending = false)
+                    pendingRenameRequest = null
+                    onRenamed(actual.relativePath)
+                }
+            }
+            is MutationOutcome.Failed -> _uiState.value = _uiState.value.copy(isFileOperationPending = false)
+            is MutationOutcome.ReconciliationRequired -> Unit // Block autosave to an identity that may have moved.
+        }
+        return namingResult(result)
+    }
 
     private fun reparse(block: com.attachdesign.kern.parser.ParagraphBlock, rawText: String) =
         MarkdownParser.parseParagraph(rawText, block.id, block.separatorAfter)
@@ -1210,6 +1281,10 @@ class EditorViewModel(
         if (MarkdownParser.isListLine(previousText) && MarkdownParser.isListLine(nextText)) "\n" else "\n\n"
 
     // Testing Helpers
+    internal fun setDocumentEditorEnabledForTest(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(documentEditorEnabled = enabled)
+    }
+
     internal fun setTestParagraphs(paragraphs: List<ImmutableParagraphBlock>) {
         _uiState.value = _uiState.value.copy(paragraphs = ImmutableParagraphList(paragraphs.toImmutableList()))
     }

@@ -1,38 +1,19 @@
 # Application Visual & Interface Design Specifications
 
-## 1. Visual Theme & Atmosphere
-A restrained, gallery-airy interface with confident asymmetric layouts and fluid spring-physics motion. The atmosphere is clinical yet warm — like a well-lit architecture studio.
+Kern is a quiet, typography-led native Android writing workspace. Refinement preserves its cream, charcoal and rust identity, existing font families, navigation hierarchy, and bookish structural lines.
 
-## 2. Color Palette & Roles
-- **Canvas White** (#FCFBFA) — Primary background surface
-- **Pure Surface** (#F4F3F0) — Card and container fill
-- **Charcoal Ink** (#1A1A18) — Primary text, Zinc-950 depth
-- **Muted Steel** (#7C7A75) — Secondary text, descriptions, metadata
-- **Whisper Border** (rgba(226,232,240,0.5)) — Card borders, 1px structural lines
-- **Utility Blue** (#2E5BFF) — Single accent for CTAs, active states, focus rings
-(Max 1 accent. Saturation < 80%. No purple/neon.)
+## Palette and controls
 
-## 3. Component Stylings
-* **Buttons:** Flat, no outer glow. Tactile -1px translate on active. Accent fill for primary, ghost/outline for secondary.
-* **Cards:** Generously rounded corners (2.5rem). Diffused whisper shadow. Used only when elevation serves hierarchy. High-density: replace with border-top dividers.
-* **Inputs:** Label above, error below. Focus ring in accent color. No floating labels.
-* **Loaders:** Skeletal shimmer matching exact layout dimensions. No circular spinners.
-* **Empty States:** Composed, illustrated compositions — not just "No data" text.
+- Cream & Charcoal: background `#F7F3EB`, surface `#EDE8DC`, ink `#1C1C1A`, raw muted ink `#7A7060`, raw rust accent `#C8541A`.
+- Inky Charcoal: background `#1C1C1A`, surface `#242420`, ink `#F5F0E8`, raw muted ink `#A89F8C`, raw rust accent `#C8541A`.
+- Bind active text and indicators through the accessible presentation roles described below. Raw declarations remain compatible with saved and imported JSON.
+- Prefer Material 3 app bars, menus, buttons, tabs, dialogs, selection controls, progress indicators and insets. Native focus, text selection, IME and accessibility behavior remain platform-owned. Document product requirements for custom behavior.
+- Active controls retain native minimum touch targets of 48dp. Compound settings expose one row action with passive child indicators. Long labels wrap within the available pane.
+- Root theme ownership controls status/navigation bars on every route. Preserve the 2dp header divider and established structural tokens.
 
-## 4. Layout Principles
-(Grid-first responsive architecture. Asymmetric splits for Hero sections.
-Strict single-column collapse below 768px. Max-width containment.
-No flexbox percentage math. Generous internal padding.)
+## Layout and motion
 
-## 5. Motion & Interaction
-(Spring physics for all interactive elements. Staggered cascade reveals.
-Perpetual micro-loops on active dashboard components. Hardware-accelerated
-transforms only. Isolated Client Components for CPU-heavy animations.)
-
-## 6. Anti-Patterns (Banned)
-(Explicit list of forbidden patterns: no emojis, no Inter, no pure black,
-no neon glows, no 3-column equal grids, no AI copywriting clichés,
-no generic placeholder names, no broken image links.)
+Use one outer gutter per host: 16dp on compact panes and 24dp on wide hosts. Embedded Settings and metrics inherit the host gutter. Preserve established component spacing and avoid a broad grid or animation rewrite. Responsive decisions use actual pane constraints and system font scaling. Native motion honors the platform animation-duration setting.
 
 ## Typography, Density, and Structural Directives
 
@@ -40,19 +21,19 @@ no generic placeholder names, no broken image links.)
 The interface prioritizes reading readability, spatial organization, and intentional density layout choices. It deliberately discards structural mobile framing patterns like standard floating card configurations and visible divider lines, leaning instead on typographic weight and proportional breathing room to separate visual hierarchies.
 
 #### 1.1 Type Scales & Weight Matrix
-* **Primary Workspace Font Family:** System Sans-Serif (`Roboto` / `Inter` fallback) for interface elements, metadata headers, and structural configurations.
+* **Primary Workspace Font Family:** System Sans-Serif (`Roboto`) for interface elements, metadata headers, and structural configurations.
 * **Document Workspace Font Family:** High-Quality Monospace (`JetBrains Mono` or `Roboto Mono`) or premium Serif system options, optimized explicitly for multi-hour writing endurance.
 * **Scale Constraints:**
   * `Display Title (H1)`: 22sp / Bold / Tracking: -0.25sp
   * `Section Header (H2)`: 16sp / Medium / Tracking: 0sp
   * `Subsection Header (H3)`: 13sp / Semi-Bold / Tracking: +0.15sp
-  * `Body Markdown Workspace`: 15sp / Regular / Line Height: 1.6x (22sp equivalent line bounding)
+  * `Body Markdown Workspace`: 16sp Medium / Regular / Line Height: 1.6x (25.6sp before user/system scaling)
 
 ### 2. Layout Modalities & Surface Densities
 
 #### 2.1 Surface Layout Specs
 * **Page Margin Default Bounds:** 16dp horizontal structural gutters on typical phone form-factors; scale out to 24dp when running on tablet surfaces or fully unfolded foldable screen panels.
-* **Component Padding Systems:** Rely cleanly on an 8dp grid spacing system. Inter-component boundaries map directly to `8dp`, `16dp`, or `24dp` step increments.
+* **Component Padding Systems:** Preserve established `4dp`, `8dp`, `12dp`, `16dp`, and `24dp` spacing tokens. Each host owns one outer gutter; embedded content must not duplicate it.
 
 #### 2.2 The Breadcrumb Header (The Navigation Nexus)
 The primary system navigation relies on an integrated, high-density breadcrumb pathway anchored inside the Top App Bar.
@@ -72,16 +53,22 @@ To allow simple and robust runtime theming (via JSON theme serialization or Jetp
 
 | Semantic Token | Description | Default Light Mode | Default Dark Mode |
 | :--- | :--- | :--- | :--- |
-| `color.background` | Document and workspace main background canvas. | `#FCFBFA` (Warm off-white) | `#121212` (Pure dark depth) |
-| `color.surface` | Interface control backing, sidebar, list container surfaces. | `#F4F3F0` (Muted warm backing) | `#1E1E1E` (Raised dark grey) |
-| `color.text.primary` | Primary body text and high-contrast title content. | `#1A1A18` (Charcoal black) | `#E3E3E3` (Soft white) |
-| `color.text.muted` | Low-priority metadata labels, file paths, line numbers. | `#7C7A75` (Muted warm grey) | `#8C8C8C` (Muted cool grey) |
-| `color.accent` | Focus indicators, primary buttons, syntax accent highlights. | `#2E5BFF` (Utility blue) | `#5E81FF` (Bright utility blue) |
+| `color.background` | Document and workspace main background canvas. | `#F7F3EB` (Warm off-white) | `#1C1C1A` (Pure dark depth) |
+| `color.surface` | Interface control backing, sidebar, list container surfaces. | `#EDE8DC` (Muted warm backing) | `#242420` (Raised dark grey) |
+| `color.text.primary` | Primary body text and high-contrast title content. | `#1C1C1A` (Charcoal black) | `#F5F0E8` (Soft white) |
+| `color.text.muted` | Low-priority metadata labels, file paths, line numbers. | `#7A7060` (Muted warm grey) | `#A89F8C` (Muted cool grey) |
+| `color.accent` | Focus indicators, primary buttons, syntax accent highlights. | `#C8541A` (Rust accent) | `#C8541A` (Rust accent) |
+
+### Accessible presentation roles
+
+Raw palette values remain import/export compatible. Use derived `textSecondary`, `textAccent`, and `textDanger` for active text; `controlAccent`, `onControlAccent`, and `indicator` for controls. Built-in active text requires 4.5:1 contrast and indicators 3:1 on their actual composited surfaces. Do not force the raw accent to serve both text and filled-control roles. Material role mapping and root system bars follow the active theme.
+
+The editor uses its dedicated 16sp token; the shared interface body remains 13sp. Explanatory text uses 13sp/18sp helper tokens. Saved editor multipliers remain 0.8/1.0/1.2/1.4; preserve heading/code ratios, source, selection, and undo during typography changes. Native document decoration owns focusable whitespace and centers text at a maximum 680dp measure.
 
 ## 7. Interface Density & Aesthetic Constraints
 When writing UI bindings, you must adhere strictly to the parameters defined in this document:
 * **No Cards/Dividers:** Discard standard mobile framing patterns like floating cards. Visible divider lines are generally avoided, but structural dividers/lines that resemble formatting elements found in printed books (such as thin bookish separator lines) are permitted.
-* **Layout Margins:** Enforce an 8dp grid spacing system strictly. Line height for the core editing workspace must be locked at exactly 1.6x.
+* **Layout Margins:** Use the established spacing tokens. Body editor line height is 1.6x; heading paragraph metrics grow to accommodate their larger runs.
 * **Adaptive Split-States:** Implement the adaptive split-screen layout for width constraints >= 600dp (35% left file tree rail, 65% central document workspace canvas capped at a max text line width of 680dp).
 * **Animations:** For inline-reveal animations, use an instantaneous alpha fade pipeline (0ms to 50ms). Do not use sliding or spatial displacement dampening curves.
 
@@ -92,7 +79,7 @@ When writing UI bindings, you must adhere strictly to the parameters defined in 
 - Keep a stable primary editor composition and `TextFieldState`. Native pane bounds animation must not recreate or scale the editable text buffer. Standard Compose motion observes the platform animation-duration setting.
 - An armed fold may draw a restrained hinge cue; raw angles must not drive text measurement or parsing. Commit only after reopening. Use one platform haptic at recognition, honoring system preferences.
 - Fold feedback uses the native confirmation haptic and an optional short paper-crease sound. Haptics and sound have independent persistent controls; sound is off initially. A Try feedback action previews them without changing layout. Audio must respect silent/vibrate mode, DND, system touch sounds and volume, and must stop when backgrounded. Never queue a cue until an asynchronous sound load completes.
-- Use current theme tokens and root-owned system bars. Companion title, read-only role, open/close labels, reference failures, and a visible manual command must remain accessible.
+- Use current theme tokens and root-owned system bars. The second editor's file selection, open/close labels, and a visible manual command must remain accessible.
 
 ## 8. Performance & Concurrency Invariants
 The text insertion loop operates at a targeted threshold under **11 milliseconds** per character stroke. To guarantee frame drops are prevented:

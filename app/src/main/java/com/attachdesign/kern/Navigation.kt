@@ -1,5 +1,11 @@
 package com.attachdesign.kern
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import com.attachdesign.kern.ui.common.*
+import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBars
@@ -44,6 +50,10 @@ fun MainNavigation(
         FileOperationsManager(db, storageManager, appContext)
     }
 
+    val deletionSession: DeletionSessionViewModel = viewModel(key = "deletion-session") {
+        DeletionSessionViewModel(FileOperationsDeletionBackend(fileOpsManager))
+    }
+
     LaunchedEffect(externalOpenRequest?.id) {
         val request = externalOpenRequest ?: return@LaunchedEffect
         try {
@@ -51,6 +61,8 @@ fun MainNavigation(
             val imported = importer.import(Uri.parse(request.uriString), request.mimeType)
             backStack.add(EditorKey(imported.projectId, imported.filePath))
             Toast.makeText(context, "Imported ${imported.fileName}", Toast.LENGTH_SHORT).show()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Toast.makeText(context, e.message ?: "Cannot open file", Toast.LENGTH_LONG).show()
         } finally {
@@ -58,6 +70,8 @@ fun MainNavigation(
         }
     }
 
+    CompositionLocalProvider(LocalDeletionSession provides deletionSession) {
+    Box(Modifier.fillMaxSize()) {
     NavDisplay(
         backStack = backStack,
         onBack = { backStack.removeLastOrNull() },
@@ -128,13 +142,20 @@ fun MainNavigation(
                 EditorScreen(
                     projectId = key.projectId,
                     filePath = key.filePath,
+                    onIdentityChanged = { oldPath, newPath ->
+                        backStack.indices.forEach { index ->
+                            val entry = backStack[index]
+                            if (entry is EditorKey && entry.projectId == key.projectId && entry.filePath == oldPath)
+                                backStack[index] = entry.copy(filePath = newPath)
+                        }
+                    },
                     focusOnStart = key.focusOnStart,
                     touchOriginX = key.touchOriginX,
                     touchOriginY = key.touchOriginY,
                     viewModel = editorViewModel,
                     onBackClick = {
                         editorViewModel.closeFile()
-                        backStack.removeLastOrNull()
+                        backStack.remove(key)
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -148,4 +169,8 @@ fun MainNavigation(
             }
         },
     )
+    DeletionFeedback(deletionSession, Modifier.align(Alignment.BottomCenter)
+        .navigationBarsPadding().imePadding().padding(horizontal = 16.dp).padding(bottom = 100.dp))
+    }
+    }
 }

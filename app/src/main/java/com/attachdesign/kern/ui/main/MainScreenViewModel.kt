@@ -1,15 +1,24 @@
 package com.attachdesign.kern.ui.main
 
+import com.attachdesign.kern.ui.main.dialogs.*
+import com.attachdesign.kern.data.storage.LeafNamePolicy
+import com.attachdesign.kern.data.storage.MutationOutcome
+import com.attachdesign.kern.ui.common.DeletionSessionViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.FileEntity
 import com.attachdesign.kern.data.local.ProjectEntity
 import kotlinx.coroutines.flow.asSharedFlow
+import com.attachdesign.kern.data.storage.DirectoryOutcome
+import com.attachdesign.kern.data.storage.ProjectMutationCoordinator
 import com.attachdesign.kern.data.storage.StorageManager
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.data.storage.VfsNodeMapper
 import com.attachdesign.kern.data.storage.FileOperationsManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,6 +49,7 @@ data class ProjectExplorerUiState(
     val isLoading: Boolean = true,
     val canNavigateBack: Boolean = false,
     val canNavigateForward: Boolean = false,
+    val directoryError: String? = null,
     val showSplash: Boolean = true
 )
 
@@ -64,6 +74,11 @@ class MainScreenViewModel(
     private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
     val snackbarEvent = _snackbarEvent.asSharedFlow()
 
+    private val projectMutations = ProjectMutationCoordinator.forDatabase(db)
+    private val removedProjects = mutableSetOf<Long>()
+    private var destinationGeneration = 0L
+    private var rootListGeneration = 0L
+
     private val backStack = mutableListOf<Pair<ProjectEntity?, String>>()
     private val forwardStack = mutableListOf<Pair<ProjectEntity?, String>>()
 
@@ -86,7 +101,7 @@ class MainScreenViewModel(
             refreshAllFiles()
             selectRandomQuote()
             val selected = withContext(ioDispatcher) { db.projectDao().getSelectedProject() }
-            if (selected != null) {
+            if (selected != null && selected.id !in removedProjects) {
                 _uiState.update { it.copy(activeProject = selected) }
                 if (selected.isExternal) {
                     scanProject(selected)
@@ -284,6 +299,7 @@ class MainScreenViewModel(
     // ── Combined root list ─────────────────────────────────────────────────────
 
     suspend fun refreshAllFiles() {
+        val request = ++rootListGeneration
         val projectList = withContext(ioDispatcher) { db.projectDao().getAllProjects() }
 
         val allProjectIds = projectList.map { it.id }
@@ -291,19 +307,31 @@ class MainScreenViewModel(
         val dbFilesByProject = allDbFiles.groupBy { it.projectId }
 
         val items = mutableListOf<FileListItem>()
+        var error: String? = null
         for (proj in projectList) {
-            val diskFiles = storageManager.listDirectory(proj, "")
+            val listing = storageManager.listDirectoryOutcome(proj, "")
+            if (listing !is DirectoryOutcome.Success) {
+                error = "Could not read ${proj.name}. Restore folder access or refresh to try again."
+                items += FileListItem.ProjectHeader(proj)
+                items += _uiState.value.allItems.filterIsInstance<FileListItem.FileRow>().filter { it.project.id == proj.id }
+                continue
+            }
+            val diskFiles = listing.nodes
             val projDbFiles = dbFilesByProject[proj.id] ?: emptyList()
             val enriched = VfsNodeMapper.enrichFiles(diskFiles, projDbFiles)
             items += FileListItem.ProjectHeader(proj)
             enriched.forEach { items += FileListItem.FileRow(it, proj) }
         }
-        _uiState.update { it.copy(allItems = items) }
+        if (request == rootListGeneration) {
+            _uiState.update { it.copy(allItems = items, directoryError = error) }
+        }
     }
 
     // ── Folder drill-down ──────────────────────────────────────────────────────
 
     private fun changeDestination(project: ProjectEntity?, path: String, saveToBackStack: Boolean = true, clearForward: Boolean = true) {
+        if (project != null && project.id in removedProjects) return
+        destinationGeneration++
         val currentState = _uiState.value
         val prevProj = currentState.activeProject
         val prevPath = currentState.currentPath
@@ -322,6 +350,8 @@ class MainScreenViewModel(
             it.copy(
                 activeProject = project,
                 currentPath = path,
+                drillFiles = emptyList(),
+                directoryError = null,
                 canNavigateBack = backStack.isNotEmpty(),
                 canNavigateForward = forwardStack.isNotEmpty()
             )
@@ -399,21 +429,35 @@ class MainScreenViewModel(
 
     fun selectProject(project: ProjectEntity) {
         viewModelScope.launch {
-            withContext(ioDispatcher) {
-                db.projectDao().deselectAllProjects()
-                db.projectDao().updateProject(project.copy(isSelected = true))
-            }
-            changeDestination(project, "")
+            val selected = withContext(ioDispatcher) {
+                projectMutations.withMutation(project.id) {
+                    val stored = db.projectDao().getProjectById(project.id) ?: return@withMutation null
+                    db.runInTransaction {
+                        db.projectDao().deselectAllProjects()
+                        db.projectDao().updateProject(stored.copy(isSelected = true))
+                    }
+                    stored
+                }
+            } ?: return@launch
+            changeDestination(selected, "")
         }
     }
 
     private suspend fun loadDrillFiles(project: ProjectEntity, path: String) {
-        val diskFiles = storageManager.listDirectory(project, path)
+        val request = destinationGeneration
+        val listing = storageManager.listDirectoryOutcome(project, path)
+        if (listing !is DirectoryOutcome.Success) {
+            _uiState.update { state ->
+                if (request == destinationGeneration && state.activeProject?.id == project.id && state.currentPath == path)
+                    state.copy(directoryError = "Could not read ${project.name}. Restore folder access or refresh to try again.") else state
+            }
+            return
+        }
+        val diskFiles = listing.nodes
         var enriched = withContext(ioDispatcher) {
             VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(project.id))
         }
 
-        // If we are at the root level of the default sandbox project, append external projects as directories
         if (!project.isExternal && project.path == "root" && path.isEmpty()) {
             val allProjects = withContext(ioDispatcher) { db.projectDao().getAllProjects() }
             val externalDirs = allProjects.filter { it.isExternal }.map { extProj ->
@@ -422,55 +466,108 @@ class MainScreenViewModel(
             enriched = externalDirs + enriched
         }
 
-        _uiState.update { it.copy(drillFiles = enriched) }
+        _uiState.update { state ->
+            if (request == destinationGeneration && state.activeProject?.id == project.id &&
+                state.currentPath == path && project.id !in removedProjects
+            ) state.copy(drillFiles = enriched, directoryError = null) else state
+        }
+    }
+
+    fun refreshCurrentDirectory() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val project = state.activeProject
+            if (project == null) refreshAllFiles() else {
+                loadDrillFiles(project, state.currentPath)
+                if (project.isExternal) scanProject(project)
+            }
+        }
+    }
+
+    fun reportShareFailure(name: String) {
+        viewModelScope.launch { _snackbarEvent.emit(SnackbarEvent("Could not share $name. Check folder access and try again.")) }
+    }
+
+    fun reportFolderLinkFailure() {
+        viewModelScope.launch { _snackbarEvent.emit(SnackbarEvent("Could not link this folder. Check access and use Add workspace to try again.")) }
     }
 
     fun scanProject(project: ProjectEntity) {
         viewModelScope.launch {
-            val foundPaths = mutableSetOf<String>()
-            scanProjectFilesRecursively(project, "", foundPaths)
-            
-            // Prune files in DB that no longer exist on disk
+            val token = projectMutations.beginScan(project.id)
+            // Collect everything before touching Room. An unavailable descendant invalidates
+            // even the successfully enumerated portion of this snapshot.
+            val found = linkedMapOf<String, VfsNode>()
+            val complete = try {
+                collectProjectFiles(project, "", found)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+            if (!complete) {
+                _uiState.update { state -> if (state.activeProject?.id == project.id)
+                    state.copy(directoryError = "Could not read ${project.name}. Restore folder access or refresh to try again.") else state }
+                _snackbarEvent.emit(SnackbarEvent("Unable to refresh ${project.name}. Check folder access and retry."))
+                return@launch
+            }
+            currentCoroutineContext().ensureActive()
             withContext(ioDispatcher) {
-                val dbFiles = db.fileDao().getFilesForProject(project.id)
-                for (dbFile in dbFiles) {
-                    if (!foundPaths.contains(dbFile.relativePath)) {
-                        db.fileDao().deleteFile(project.id, dbFile.relativePath)
+                projectMutations.commitScan(token) {
+                    db.runInTransaction {
+                        // The association may have been removed or replaced during enumeration.
+                        val current = db.projectDao().getProjectById(project.id)
+                        if (current != null && current.path == project.path && current.isExternal == project.isExternal) {
+                            val rows = db.fileDao().getFilesForProject(project.id)
+                            val existing = rows.associateBy { it.relativePath }
+                            found.values.forEach { node ->
+                                if (existing[node.relativePath] == null) {
+                                    db.fileDao().insertFile(FileEntity(
+                                        projectId = project.id,
+                                        name = node.name,
+                                        relativePath = node.relativePath,
+                                        isDirectory = node.isDirectory,
+                                        lastModified = (node as? VfsNode.File)?.lastModified ?: System.currentTimeMillis(),
+                                        syncState = "SYNCED"
+                                    ))
+                                }
+                            }
+                            // Internal root selection can create/fall back/migrate a directory.
+                            // Its empty listing cannot prove that the previous root lost files.
+                            // Preserve indexed rows until storage exposes an authoritative root.
+                            if (project.path.startsWith("content://")) {
+                                rows.filter { it.relativePath !in found }.forEach {
+                                    db.fileDao().deleteFile(project.id, it.relativePath)
+                                }
+                            }
+                        }
                     }
                 }
             }
-            
             refreshAllFiles()
             val active = _uiState.value.activeProject
-            if (active != null && active.id == project.id) {
-                loadDrillFiles(active, _uiState.value.currentPath)
-            }
+            if (active?.id == project.id) loadDrillFiles(active, _uiState.value.currentPath)
         }
     }
 
-    private suspend fun scanProjectFilesRecursively(project: ProjectEntity, relativePath: String, foundPaths: MutableSet<String>) {
-        val diskFiles = storageManager.listDirectory(project, relativePath)
-        for (node in diskFiles) {
-            foundPaths.add(node.relativePath)
-            val dbFile = withContext(ioDispatcher) { db.fileDao().getFileByPath(project.id, node.relativePath) }
-            if (dbFile == null) {
-                withContext(ioDispatcher) {
-                    db.fileDao().insertFile(
-                        FileEntity(
-                            projectId = project.id,
-                            name = node.name,
-                            relativePath = node.relativePath,
-                            isDirectory = node.isDirectory,
-                            lastModified = if (node is VfsNode.File) node.lastModified else System.currentTimeMillis(),
-                            syncState = "SYNCED"
-                        )
-                    )
-                }
-            }
-            if (node.isDirectory) {
-                scanProjectFilesRecursively(project, node.relativePath, foundPaths)
-            }
+    private suspend fun collectProjectFiles(
+        project: ProjectEntity,
+        path: String,
+        found: MutableMap<String, VfsNode>
+    ): Boolean {
+        currentCoroutineContext().ensureActive()
+        val outcome = storageManager.listDirectoryOutcome(project, path)
+        if (outcome !is DirectoryOutcome.Success) return false
+        for (node in outcome.nodes) {
+            // Duplicate/non-descendant identities cannot establish a complete tree snapshot.
+            val prefix = if (path.isEmpty()) "" else "$path/"
+            val leaf = node.relativePath.removePrefix(prefix)
+            if (!node.relativePath.startsWith(prefix) || leaf.isEmpty() || '/' in leaf ||
+                leaf == "." || leaf == ".." || found.put(node.relativePath, node) != null
+            ) return false
+            if (node.isDirectory && !collectProjectFiles(project, node.relativePath, found)) return false
         }
+        return true
     }
 
     // ── Dialog / create ────────────────────────────────────────────────────────
@@ -503,101 +600,193 @@ class MainScreenViewModel(
         }
     }
 
-    fun createFile(name: String, targetProject: ProjectEntity? = null, onCreated: ((String) -> Unit)? = null) {
-        val currentState = _uiState.value
-        val destinationProject = targetProject ?: currentState.activeProject
-        val destinationPath = currentState.currentPath
-        val isDrillDown = currentState.activeProject != null
-        viewModelScope.launch {
-            val proj = destinationProject ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
-            val fileName = if (name.endsWith(".md")) name else "$name.md"
-            val relativePath = if (destinationPath.isEmpty()) fileName else "$destinationPath/$fileName"
-            val created = storageManager.createFile(proj, relativePath)
-            if (!created) {
-                return@launch
+    val namingOperations = RetainedNamingOperations(viewModelScope)
+    private var deletionSession: DeletionSessionViewModel? = null
+
+    internal fun attachDeletionSession(session: DeletionSessionViewModel?) {
+        deletionSession = session
+    }
+
+    internal fun refreshAfterExternalMutation() {
+        viewModelScope.launch { refreshAfterNaming() }
+    }
+
+    private suspend fun refreshAfterNaming() {
+        refreshAllFiles()
+        val current = _uiState.value
+        val active = current.activeProject ?: return
+        val stored = withContext(ioDispatcher) { db.projectDao().getProjectById(active.id) } ?: return
+        if (stored.id in removedProjects) return
+        _uiState.update {
+            if (it.activeProject?.id == active.id) it.copy(activeProject = stored) else it
+        }
+        loadDrillFiles(stored, current.currentPath)
+    }
+
+    fun submitNaming(request: NamingRequest) {
+        if (request.inspectionRequired) return
+        // A restored submitting marker without a retained receipt cannot replay a disk mutation.
+        if (request.submitted && namingOperations.records.value[request.id] == null) return
+        namingOperations.submit(request.id) {
+            val project = withContext(ioDispatcher) { db.projectDao().getProjectById(request.projectId) }
+                ?: return@submit NamingOperationState.Failed("The workspace is no longer available.")
+            val result = when (request.kind) {
+                NamingKind.CreateFile -> namingResult(fileOpsManager.createFile(project, request.parentPath, request.draft.text))
+                NamingKind.CreateFolder -> namingResult(fileOpsManager.createFolder(project, request.parentPath, request.draft.text))
+                NamingKind.RenameNode -> {
+                    val node = if (request.directory) VfsNode.Directory(request.targetName, request.targetPath)
+                        else VfsNode.File(request.targetName, request.targetPath, 0L, 0L)
+                    namingResult(fileOpsManager.renameNodeOutcome(project, node, request.draft.text))
+                }
+                NamingKind.RenameWorkspaceAlias -> renameAlias(project, request.draft.text)
             }
-            withContext(ioDispatcher) {
-                db.fileDao().insertFile(FileEntity(projectId = proj.id, name = fileName,
-                    relativePath = relativePath, isDirectory = false,
-                    lastModified = System.currentTimeMillis(),
-                    syncState = if (proj.isExternal) "SYNCED" else "PENDING"))
+            if (result is NamingOperationState.Succeeded) refreshAfterNaming()
+            result
+        }
+    }
+
+    private suspend fun renameAlias(project: ProjectEntity, name: String): NamingOperationState {
+        val alias = try { validateWorkspaceAlias(name) } catch (invalid: IllegalArgumentException) {
+            return NamingOperationState.Failed(invalid.message ?: "Enter a workspace name.")
+        }
+        return withContext(ioDispatcher) {
+            var exists = false
+            db.runInTransaction {
+                db.projectDao().getProjectById(project.id)?.let { stored ->
+                    db.projectDao().updateProject(stored.copy(name = alias))
+                    exists = true
+                }
             }
-            if (isDrillDown) {
-                loadDrillFiles(proj, destinationPath)
+            if (exists) NamingOperationState.Succeeded()
+            else NamingOperationState.Failed("The workspace is no longer available.")
+        }
+    }
+
+    fun recoverNaming(request: NamingRequest) {
+        val partial = (namingOperations.records.value[request.id] as? NamingOperationState.NeedsReconciliation)?.partial
+        namingOperations.recover(request.id) {
+            val project = withContext(ioDispatcher) { db.projectDao().getProjectById(request.projectId) }
+                ?: return@recover NamingOperationState.Inspected("The workspace is no longer available. Close this action.", false)
+            if (partial != null) {
+                val result = namingResult(fileOpsManager.reconcileMetadata(project, partial))
+                if (result is NamingOperationState.Succeeded) refreshAfterNaming()
+                return@recover result
+            }
+            if (request.kind == NamingKind.RenameWorkspaceAlias) {
+                val alias = runCatching { validateWorkspaceAlias(request.draft.text) }.getOrNull()
+                if (project.name == alias) {
+                    refreshAfterNaming()
+                    return@recover NamingOperationState.Succeeded()
+                }
+                return@recover NamingOperationState.Inspected("Workspace checked. Review the name before retrying.", true)
+            }
+            val listing = storageManager.listDirectoryOutcome(project, request.parentPath)
+            if (listing !is DirectoryOutcome.Success) {
+                return@recover NamingOperationState.Inspected("The folder could not be checked. Restore access, then refresh again.", false)
+            }
+            refreshAfterNaming()
+            val expected = runCatching {
+                if (request.kind == NamingKind.CreateFile) LeafNamePolicy.markdownFileName(request.draft.text)
+                else LeafNamePolicy.validate(request.draft.text)
+            }.getOrNull()
+            val matching = listing.nodes.firstOrNull { it.name == expected }
+            val sourceExists = request.kind != NamingKind.RenameNode || listing.nodes.any { it.relativePath == request.targetPath }
+            if (matching != null || !sourceExists) {
+                NamingOperationState.Inspected("The folder may already contain this change. Close this action and review the files before starting another action.", false)
             } else {
-                refreshAllFiles()
+                NamingOperationState.Inspected("Folder checked. No matching change was found. Review the name before retrying.", true)
             }
-            onCreated?.invoke(relativePath)
+        }
+    }
+
+    // Compatibility commands preserve the original project fallback/current-directory policy.
+    fun createFile(name: String, targetProject: ProjectEntity? = null, onCreated: ((String) -> Unit)? = null) {
+        val destinationProject = targetProject ?: _uiState.value.activeProject
+        val destinationPath = _uiState.value.currentPath
+        viewModelScope.launch {
+            val project = destinationProject ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
+            val outcome = fileOpsManager.createFile(project, destinationPath, name)
+            if (outcome is MutationOutcome.Success) {
+                refreshAfterNaming()
+                onCreated?.invoke(outcome.actual.node.relativePath)
+            }
         }
     }
 
     fun createFolder(name: String, targetProject: ProjectEntity? = null) {
-        val currentState = _uiState.value
-        val destinationProject = targetProject ?: currentState.activeProject
-        val destinationPath = currentState.currentPath
-        val isDrillDown = currentState.activeProject != null
+        val destinationProject = targetProject ?: _uiState.value.activeProject
+        val destinationPath = _uiState.value.currentPath
         viewModelScope.launch {
-            val proj = destinationProject ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
-            val relativePath = if (destinationPath.isEmpty()) name else "$destinationPath/$name"
-            storageManager.createDirectory(proj, relativePath)
-            withContext(ioDispatcher) {
-                db.fileDao().insertFile(FileEntity(projectId = proj.id, name = name,
-                    relativePath = relativePath, isDirectory = true,
-                    lastModified = System.currentTimeMillis(), syncState = "SYNCED"))
-            }
-            if (isDrillDown) {
-                loadDrillFiles(proj, destinationPath)
-            } else {
-                refreshAllFiles()
-            }
+            val project = destinationProject ?: withContext(ioDispatcher) { db.projectDao().getSelectedProject() } ?: return@launch
+            if (fileOpsManager.createFolder(project, destinationPath, name) is MutationOutcome.Success) refreshAfterNaming()
         }
     }
 
     fun deleteNode(node: VfsNode, project: ProjectEntity) {
-        viewModelScope.launch {
-            val result = fileOpsManager.moveToTrash(project, node)
-            val trashNode = result.getOrNull() ?: return@launch
-            
-            val active = _uiState.value.activeProject
-            if (active != null) loadDrillFiles(active, _uiState.value.currentPath)
-            else refreshAllFiles()
-
-            val deleteJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(5000)
-                fileOpsManager.deleteNode(project, trashNode)
-            }
-
-            _snackbarEvent.emit(SnackbarEvent("File deleted", "Undo") {
-                deleteJob.cancel()
-                viewModelScope.launch {
-                    fileOpsManager.restoreFromTrash(project, trashNode, node.relativePath)
-                    val act = _uiState.value.activeProject
-                    if (act != null) loadDrillFiles(act, _uiState.value.currentPath)
-                    else refreshAllFiles()
-                }
-            })
+        val session = deletionSession
+        if (session == null) {
+            viewModelScope.launch { _snackbarEvent.emit(SnackbarEvent("Deletion is unavailable. Try reopening the workspace.")) }
+            return
         }
+        session.requestDelete(project, node) { refreshAfterExternalMutation() }
     }
 
     fun deleteProject(project: ProjectEntity) {
+        // Only linked associations are removable. Their files and shared grants belong to the user.
+        if (!project.isExternal) return
         viewModelScope.launch {
-            withContext(ioDispatcher) {
-                db.projectDao().deleteProjectById(project.id)
-                db.fileDao().deleteFilesForProject(project.id)
+            val remaining = withContext(ioDispatcher) {
+                projectMutations.withMutation(project.id) {
+                    var projects: List<ProjectEntity>? = null
+                    db.runInTransaction {
+                        val stored = db.projectDao().getProjectById(project.id)
+                        if (stored?.isExternal == true) {
+                            db.fileDao().deleteFilesForProject(project.id)
+                            db.projectDao().deleteProjectById(project.id)
+                            projects = db.projectDao().getAllProjects()
+                            if (stored.isSelected || projects!!.none { it.isSelected }) {
+                                val replacement = projects!!.firstOrNull { !it.isExternal && it.path == "root" }
+                                    ?: projects!!.firstOrNull()
+                                db.projectDao().deselectAllProjects()
+                                replacement?.let { db.projectDao().updateProject(it.copy(isSelected = true)) }
+                            }
+                        }
+                    }
+                    projects
+                }
+            } ?: return@launch
+            removedProjects.add(project.id)
+            destinationGeneration++
+            rootListGeneration++
+            backStack.removeAll { it.first?.id == project.id }
+            forwardStack.removeAll { it.first?.id == project.id }
+            _uiState.update { state ->
+                val removedActive = state.activeProject?.id == project.id
+                val destination = if (removedActive) {
+                    remaining.firstOrNull { !it.isExternal && it.path == "root" } ?: remaining.firstOrNull()
+                } else state.activeProject
+                state.copy(
+                    activeProject = destination,
+                    currentPath = if (removedActive) "" else state.currentPath,
+                    drillFiles = if (removedActive) emptyList() else state.drillFiles,
+                    allItems = state.allItems.filter { item ->
+                        when (item) {
+                            is FileListItem.ProjectHeader -> item.project.id != project.id
+                            is FileListItem.FileRow -> item.project.id != project.id
+                        }
+                    },
+                    canNavigateBack = backStack.isNotEmpty(),
+                    canNavigateForward = forwardStack.isNotEmpty()
+                )
             }
-            val defaultProj = withContext(ioDispatcher) { db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" } }
-            if (defaultProj != null) {
-                loadDrillFiles(defaultProj, "")
-            }
+            refreshAllFiles()
+            _uiState.value.activeProject?.let { loadDrillFiles(it, _uiState.value.currentPath) }
         }
     }
 
     fun renameNode(node: VfsNode, newName: String, project: ProjectEntity) {
         viewModelScope.launch {
-            fileOpsManager.renameNode(project, node, newName)
-            val active = _uiState.value.activeProject
-            if (active != null) loadDrillFiles(active, _uiState.value.currentPath)
-            else refreshAllFiles()
+            if (fileOpsManager.renameNodeOutcome(project, node, newName) is MutationOutcome.Success) refreshAfterNaming()
         }
     }
 
@@ -612,13 +801,7 @@ class MainScreenViewModel(
 
     fun renameProject(project: ProjectEntity, newName: String) {
         viewModelScope.launch {
-            withContext(ioDispatcher) {
-                db.projectDao().updateProject(project.copy(name = newName))
-            }
-            val defaultProj = withContext(ioDispatcher) { db.projectDao().getAllProjects().find { !it.isExternal && it.path == "root" } }
-            if (defaultProj != null) {
-                loadDrillFiles(defaultProj, "")
-            }
+            if (renameAlias(project, newName) is NamingOperationState.Succeeded) refreshAfterNaming()
         }
     }
 
@@ -626,20 +809,24 @@ class MainScreenViewModel(
         viewModelScope.launch {
             val fromPath = fromNode.relativePath
             val toPath = if (toDir.relativePath.isEmpty()) fromNode.name else "${toDir.relativePath}/${fromNode.name}"
-            val success = storageManager.moveNode(project, fromPath, project, toPath)
-            if (success) {
-                withContext(ioDispatcher) {
-                    db.fileDao().deleteFile(project.id, fromPath)
-                    db.fileDao().insertFile(
-                        com.attachdesign.kern.data.local.FileEntity(
-                            projectId = project.id,
-                            name = fromNode.name,
-                            relativePath = toPath,
-                            isDirectory = fromNode.isDirectory,
-                            lastModified = System.currentTimeMillis(),
-                            syncState = "PENDING"
+            projectMutations.withMutation(project.id) {
+                val exists = withContext(ioDispatcher) { db.projectDao().getProjectById(project.id) }
+                if (exists == null || exists.path != project.path) return@withMutation
+                val success = storageManager.moveNode(project, fromPath, project, toPath)
+                if (success) {
+                    withContext(ioDispatcher) {
+                        db.fileDao().deleteFile(project.id, fromPath)
+                        db.fileDao().insertFile(
+                            com.attachdesign.kern.data.local.FileEntity(
+                                projectId = project.id,
+                                name = fromNode.name,
+                                relativePath = toPath,
+                                isDirectory = fromNode.isDirectory,
+                                lastModified = System.currentTimeMillis(),
+                                syncState = "PENDING"
+                            )
                         )
-                    )
+                    }
                 }
             }
             val active = _uiState.value.activeProject
@@ -658,20 +845,24 @@ class MainScreenViewModel(
                 } else {
                     parts.dropLast(2).joinToString("/") + "/" + parts.last()
                 }
-                val success = storageManager.moveNode(project, fromPath, project, newPath)
-                if (success) {
-                    withContext(ioDispatcher) {
-                        db.fileDao().deleteFile(project.id, fromPath)
-                        db.fileDao().insertFile(
-                            com.attachdesign.kern.data.local.FileEntity(
-                                projectId = project.id,
-                                name = fromNode.name,
-                                relativePath = newPath,
-                                isDirectory = fromNode.isDirectory,
-                                lastModified = System.currentTimeMillis(),
-                                syncState = "PENDING"
+                projectMutations.withMutation(project.id) {
+                    val exists = withContext(ioDispatcher) { db.projectDao().getProjectById(project.id) }
+                    if (exists == null || exists.path != project.path) return@withMutation
+                    val success = storageManager.moveNode(project, fromPath, project, newPath)
+                    if (success) {
+                        withContext(ioDispatcher) {
+                            db.fileDao().deleteFile(project.id, fromPath)
+                            db.fileDao().insertFile(
+                                com.attachdesign.kern.data.local.FileEntity(
+                                    projectId = project.id,
+                                    name = fromNode.name,
+                                    relativePath = newPath,
+                                    isDirectory = fromNode.isDirectory,
+                                    lastModified = System.currentTimeMillis(),
+                                    syncState = "PENDING"
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }

@@ -60,6 +60,8 @@ class IncomingFileImporter(
         } ?: throw IllegalArgumentException("Unable to read selected file")
 
         val project = getOrCreateOpenedFilesProject()
+        ProjectMutationCoordinator.forDatabase(db).withMutation(project.id) {
+        check(db.projectDao().getProjectById(project.id) != null) { "Workspace is no longer available" }
         val targetPath = uniqueFilePath(project, fileName)
         storageManager.writeFile(project, targetPath, content)
 
@@ -79,6 +81,7 @@ class IncomingFileImporter(
             filePath = targetPath,
             fileName = targetPath.substringAfterLast('/')
         )
+        }
     }
 
     private fun getOrCreateOpenedFilesProject(): ProjectEntity {

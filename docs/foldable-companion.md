@@ -1,21 +1,21 @@
 # Foldable companion workspace
 
-The companion keeps a read-only document beside the existing writer. This first version supports reading preview and reference files; diff and editing a second file remain follow-on work.
+The split workspace places a second editable document beside the existing writer. Diff remains follow-on work.
 
 ## Using the companion
 
-- On a sufficiently wide inner display or tablet window, tap **Open split view** in the editor toolbar. The companion initially previews the current draft, including unsaved changes, with inactive Markdown syntax hidden and rich blocks rendered.
-- Choose **Open reference** to browse the existing project workspaces and select another Markdown/text file. Choosing the active file returns to its in-memory preview rather than reading a stale disk copy.
-- Close with the companion's close control or **Close split view**. The prior Metrics/Settings sidebar is restored. Opening again retains the companion choice and reading position within the editor session.
+- On a sufficiently wide inner display or tablet window, tap **Open split view** in the editor toolbar. Choose a second file from the project workspaces; the current file is disabled to avoid competing writes.
+- The second pane uses the same native editor, with independent source, selection, undo, and autosave. Choose another file using its folder button; the current second document is saved before switching.
+- Close with the second pane's back control or **Close split view**. The prior Metrics/Settings sidebar is restored. Opening again retains the second document within the editor session.
 - Narrow windows and horizontal folds suspend the companion. Minimum width is 720dp overall and 340dp per pane, increasing with both system and editor font scaling. Normal utility sidebars retain their separate 600dp breakpoint.
 
 ## Optional physical shortcut
 
-Open the document's **More Options → Fold shortcut** dialog to enable **Fold to toggle split view**. It is off initially. Standard Android hinge-angle sensing and vertical folding geometry are required; the manual toolbar command remains usable without sensors.
+Open the document's **More Options → Fold shortcut** dialog to enable **Fold to toggle split view**. It is off initially. Standard Android hinge-angle sensing is required; the manual toolbar command remains usable without sensors.
 
 Recognition starts from a stable flat baseline (approximately >=175° for 300ms). A deliberate bend (<=150° for 100ms) followed by a stable reopening (>=175° for 100ms within 1.5 seconds) produces one toggle. A 700ms cooldown and fresh baseline separate repetitions. These are starting thresholds for device testing, not a requirement to move forcefully or quickly.
 
-Initial unfolding, sustained book/tabletop posture, deep closure, lifecycle interruption, changed geometry, modal UI, and invalid/discontinuous readings cancel recognition. Commits defer briefly while a pointer is held or the IME owns an active composition. Sensors are registered only for an eligible, opted-in, resumed editor. A timer advances dwell checks even for on-change sensors that emit no new events while stationary.
+Initial unfolding, sustained book/tabletop posture, deep closure, lifecycle interruption, horizontal folds, modal UI, and invalid/discontinuous readings cancel recognition. Transient vertical geometry changes do not restart recognition. Commits defer briefly while a pointer is held, a pane cannot fit, or either IME owns an active composition. Sensors are registered only for an eligible, opted-in, resumed editor. A timer advances dwell checks even for on-change sensors that emit no new events while stationary.
 
 The gutter cue tracks the bend without measuring or parsing text on each angle update. Material 3 `SupportingPaneScaffold`/`AnimatedPane` supply pane motion and honor the platform animation-duration setting. A recognized command produces one feedback request with the current preferences.
 
@@ -32,11 +32,8 @@ The custom audio helper implements the explicitly requested paper-fold feel; ges
 ## State and storage boundaries
 
 - `EditorViewModel` retains the primary document's `TextFieldState`, undo history, active file identity, and save path. Loading an already-active file is idempotent; repeated requests during its initial load share the same job.
-- `CompanionWorkspace` owns cancellable reference reads, reference identity, parsing, loading, and recoverable errors. Generation checks reject stale completions. Its API cannot mutate or save the writer.
-- Preview projects current editor blocks on a background dispatcher. Projection is disposable and never writes back to source.
-- References use strict storage reads to distinguish empty files from missing/revoked access. Image resolution uses the reference's own project and path.
-- Saveable pane state retains independent preview/reference scroll positions while the companion is hidden or replaced by a utility sidebar. Reference choice belongs to the current ViewModel session; it is not a separate persisted multi-document workspace.
-- Separating vertical hinge bounds are passed to the platform pane scaffold. Narrow writer panes use phone-sized gutters. When the full formatting row cannot fit with native 48dp controls, history actions move into the formatting overflow; primary Markdown actions and collapse remain visible in one row.
+- A separate `EditorViewModel` owns the second document's editing and save state. A switch waits for its current save before loading the new document. The second session is retained while the split is hidden.
+- Separating vertical hinge bounds are passed to the platform pane scaffold only while a supporting pane is visible; bending a single-pane window does not force the writer onto one half. Narrow writer panes use phone-sized gutters. When the full formatting row cannot fit with native 48dp controls, history actions move into the formatting overflow.
 
 ## Verification
 

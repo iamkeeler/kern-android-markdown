@@ -1,6 +1,10 @@
 package com.attachdesign.kern.ui.main
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -24,6 +28,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +48,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.documentfile.provider.DocumentFile
 import android.widget.Toast
 import kotlinx.coroutines.delay
@@ -65,6 +74,10 @@ import com.attachdesign.kern.ui.theme.ThemeEngine
 import com.attachdesign.kern.ui.theme.toFontFamily
 import com.attachdesign.kern.ui.theme.AppColorTheme
 import com.attachdesign.kern.ui.main.dialogs.InputDialog
+import com.attachdesign.kern.ui.main.dialogs.NamingRequest
+import com.attachdesign.kern.ui.main.dialogs.NamingKind
+import com.attachdesign.kern.ui.main.dialogs.NamingOperationState
+import com.attachdesign.kern.ui.common.LocalDeletionSession
 import com.attachdesign.kern.ui.main.dialogs.NodeActionsDialog
 import com.attachdesign.kern.ui.main.dialogs.CreateProjectDialog
 import androidx.compose.animation.AnimatedContent
@@ -134,12 +147,17 @@ fun MainScreen(
     val showWorkspaceIntroSetting by db.settingDao().getSettingFlow(SettingKeys.SHOW_WORKSPACE_INTRO).collectAsState(initial = null)
     val showWorkspaceIntro = showWorkspaceIntroSetting?.value?.toBoolean() ?: true
 
-    var createFileDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
-    var createFolderDialogTargetProject by remember { mutableStateOf<ProjectEntity?>(null) }
+    var namingDialog by rememberSaveable(stateSaver = NamingRequest.Saver) { mutableStateOf<NamingRequest?>(null) }
+    val namingRecords by vm.namingOperations.records.collectAsStateWithLifecycle()
+    val deletionSession = LocalDeletionSession.current
+    SideEffect { vm.attachDeletionSession(deletionSession) }
+    LaunchedEffect(deletionSession) {
+        deletionSession?.revision?.collect { revision ->
+            if (revision > 0) vm.refreshAfterExternalMutation()
+        }
+    }
     var nodeToDelete           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
     var projectToDelete        by remember { mutableStateOf<ProjectEntity?>(null) }
-    var nodeToRename           by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
-    var projectToRename        by remember { mutableStateOf<ProjectEntity?>(null) }
     var activeNodeActionsTarget by remember { mutableStateOf<Pair<VfsNode, ProjectEntity>?>(null) }
 
     var selectedFolderUri by remember { mutableStateOf("") }
@@ -154,13 +172,18 @@ fun MainScreen(
                 val folderName = doc?.name ?: "Local Folder"
                 vm.createProject(folderName, isExternal = true, path = it.toString())
             } catch (e: Exception) {
-                e.printStackTrace()
+                vm.reportFolderLinkFailure()
             }
         }
     }
 
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    var requestSearchFocus by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val isSearchImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     var sortMode by remember { mutableStateOf(SortMode.ALPHA_ASC) }
     var isSortMenuOpen by remember { mutableStateOf(false) }
     var draggedNode by remember { mutableStateOf<VfsNode?>(null) }
@@ -168,7 +191,16 @@ fun MainScreen(
     val folderBounds = remember { mutableStateMapOf<String, Rect>() }
 
     var backPressedOnce by remember { mutableStateOf(false) }
-    BackHandler {
+    val closeSearch = {
+        isSearchActive = false
+        searchQuery = ""
+        requestSearchFocus = false
+        backPressedOnce = false
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        Unit
+    }
+    BackHandler(enabled = !isSearchActive) {
         if (backPressedOnce) {
             (context as? android.app.Activity)?.finish()
         } else {
@@ -176,6 +208,8 @@ fun MainScreen(
             Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
         }
     }
+    // Android owns the first Back while its IME is visible. The next closes search.
+    BackHandler(enabled = isSearchActive && !isSearchImeVisible) { closeSearch() }
     LaunchedEffect(backPressedOnce) {
         if (backPressedOnce) {
             delay(2000)
@@ -216,6 +250,17 @@ fun MainScreen(
             )
             vm.dismissSplash()
         }
+    }
+
+    fun openNaming(kind: NamingKind, project: ProjectEntity, node: VfsNode? = null) {
+        namingDialog = NamingRequest.create(
+            kind, project.id, project.name,
+            parentPath = if (kind == NamingKind.RenameNode) node?.relativePath?.substringBeforeLast('/', "") ?: "" else state.currentPath,
+            targetPath = node?.relativePath ?: "",
+            targetName = if (kind == NamingKind.RenameWorkspaceAlias) project.name else node?.name ?: "",
+            directory = node?.isDirectory ?: false,
+            openCreatedFile = kind == NamingKind.CreateFile && shouldLaunchNewFile
+        )
     }
 
     val appFont = theme.toFontFamily()
@@ -270,8 +315,8 @@ fun MainScreen(
                             }
 
                             // Centered highlighted New Document Button
-                            val docBgColor = if (targetProj != null) theme.accent else disabledColor.copy(alpha = 0.12f)
-                            val docIconColor = if (targetProj != null) Color.White else disabledColor
+                            val docBgColor = if (targetProj != null) theme.controlAccent else disabledColor.copy(alpha = 0.12f)
+                            val docIconColor = if (targetProj != null) theme.onControlAccent else disabledColor
                             Box(
                                 modifier = Modifier
                                     .size(48.dp)
@@ -280,7 +325,7 @@ fun MainScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 IconButton(
-                                    onClick = { targetProj?.let { createFileDialogTargetProject = it } },
+                                    onClick = { targetProj?.let { openNaming(NamingKind.CreateFile, it) } },
                                     enabled = targetProj != null,
                                     modifier = Modifier.fillMaxSize()
                                 ) {
@@ -294,7 +339,7 @@ fun MainScreen(
 
                             // New Folder Button
                             IconButton(
-                                onClick = { targetProj?.let { createFolderDialogTargetProject = it } },
+                                onClick = { targetProj?.let { openNaming(NamingKind.CreateFolder, it) } },
                                 enabled = targetProj != null,
                                 modifier = Modifier.size(48.dp)
                             ) {
@@ -308,8 +353,13 @@ fun MainScreen(
                             // Search Button
                             IconButton(
                                 onClick = {
-                                    isSearchActive = !isSearchActive
-                                    if (!isSearchActive) searchQuery = ""
+                                    backPressedOnce = false
+                                    if (isSearchActive) {
+                                        closeSearch()
+                                    } else {
+                                        requestSearchFocus = true
+                                        isSearchActive = true
+                                    }
                                 },
                                 modifier = Modifier.size(48.dp)
                             ) {
@@ -344,7 +394,7 @@ fun MainScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.Settings,
                                     contentDescription = "Settings",
-                                    tint = theme.textMuted,
+                                    tint = theme.indicator,
                                     modifier = Modifier.size(theme.dimensions.iconMedium)
                                 )
                             }
@@ -352,7 +402,7 @@ fun MainScreen(
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent,
                             titleContentColor = theme.textPrimary,
-                            actionIconContentColor = theme.textMuted
+                            actionIconContentColor = theme.indicator
                         ),
                         windowInsets = WindowInsets(0, 0, 0, 0),
                         modifier = Modifier.fillMaxWidth()
@@ -361,11 +411,11 @@ fun MainScreen(
                     state.activeQuote?.let { quote ->
                         Text(
                             text = "“${quote.text}” — ${quote.author}, ${quote.year}",
-                            fontSize = theme.typography.small,
+                            fontSize = theme.typography.helper,
                             fontFamily = appFont,
                             fontWeight = FontWeight.Normal,
-                            color = theme.textMuted,
-                            lineHeight = theme.typography.subtitle,
+                            color = theme.textSecondary,
+                            lineHeight = theme.typography.helperLineHeight,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = theme.dimensions.spacingExtraLarge)
@@ -388,38 +438,52 @@ fun MainScreen(
             enter = fadeIn(animationSpec = tween(150)) + expandVertically(animationSpec = tween(150)),
             exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = tween(150))
         ) {
+            LaunchedEffect(requestSearchFocus) {
+                if (requestSearchFocus) {
+                    searchFocusRequester.requestFocus()
+                    keyboardController?.show()
+                    requestSearchFocus = false
+                }
+            }
             DockedSearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                onSearch = {},
-                active = false,
-                onActiveChange = {},
-                placeholder = { Text("Search files...", color = theme.textMuted) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.Search,
-                        contentDescription = "Search",
-                        tint = theme.textMuted
+                inputField = {
+                    SearchBarDefaults.InputField(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearch = {},
+                        expanded = false,
+                        onExpandedChange = {},
+                        modifier = Modifier.fillMaxWidth().focusRequester(searchFocusRequester),
+                        placeholder = { Text("Search files...", color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight) },
+                        leadingIcon = {
+                            IconButton(onClick = closeSearch) {
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Close search", tint = theme.indicator)
+                            }
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = ""; backPressedOnce = false }) {
+                                    Icon(Icons.Default.Close, "Clear search", tint = theme.indicator)
+                                }
+                            }
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = theme.textPrimary,
+                            unfocusedTextColor = theme.textPrimary,
+                            cursorColor = theme.controlAccent,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent
+                        )
                     )
                 },
-                trailingIcon = {
-                    IconButton(onClick = {
-                        isSearchActive = false
-                        searchQuery = ""
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = theme.textMuted
-                        )
-                    }
-                },
+                expanded = false,
+                onExpandedChange = {},
                 colors = SearchBarDefaults.colors(
                     containerColor = theme.surface,
                     inputFieldColors = TextFieldDefaults.colors(
                         focusedTextColor = theme.textPrimary,
                         unfocusedTextColor = theme.textPrimary,
-                        cursorColor = theme.accent,
+                        cursorColor = theme.controlAccent,
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent
                     )
@@ -431,34 +495,35 @@ fun MainScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(theme.dimensions.iconHuge)
-                .padding(bottom = theme.dimensions.spacingMedium),
+                .padding(bottom = theme.dimensions.spacingMedium)
+                .heightIn(min = 48.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                val activeProjectLocal = state.activeProject
+                val showBackArrow = activeProjectLocal != null &&
+                    (activeProjectLocal.isExternal || state.currentPath.isNotEmpty())
+                if (showBackArrow) {
+                    IconButton(onClick = { vm.navigateUp() }) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Up", tint = theme.controlAccent)
+                    }
+                }
                 Row(
+                    modifier = Modifier.weight(1f)
+                        .testTag("explorer-breadcrumbs")
+                        .horizontalScroll(rememberScrollState()),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(theme.dimensions.spacingSmall)
                 ) {
-                    val activeProjectLocal = state.activeProject
-                    val showBackArrow = activeProjectLocal != null &&
-                        (activeProjectLocal.isExternal || state.currentPath.isNotEmpty())
-
-                    if (showBackArrow) {
-                        IconButton(onClick = { vm.navigateUp() }) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Up", tint = theme.accent)
-                        }
-                    }
-
                     val isAtFilesRoot = activeProjectLocal == null ||
                         (!activeProjectLocal.isExternal && activeProjectLocal.path == "root" && state.currentPath.isEmpty())
 
                     TextButton(onClick = { if (activeProjectLocal != null) vm.navigateUpToRoot() }) {
-                        Text("files", color = if (isAtFilesRoot) theme.textPrimary else theme.accent,
+                        Text("files", color = if (isAtFilesRoot) theme.textPrimary else theme.textAccent,
                             fontSize = theme.typography.small, fontFamily = FontFamily.Monospace,
                             fontWeight = if (isAtFilesRoot) FontWeight.Bold else FontWeight.Normal)
                     }
@@ -466,11 +531,11 @@ fun MainScreen(
                     activeProjectLocal?.let { proj ->
                         val isSandboxRoot = !proj.isExternal && proj.path == "root"
                         if (!isSandboxRoot) {
-                            Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
+                            Text("/", color = theme.textSecondary, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
 
                             val isProjRoot = state.currentPath.isEmpty()
                             TextButton(onClick = { if (!isProjRoot) vm.navigateToFolderRoot(proj) }) {
-                                Text(proj.name.lowercase(), color = if (isProjRoot) theme.textPrimary else theme.accent,
+                                Text(proj.name, color = if (isProjRoot) theme.textPrimary else theme.textAccent,
                                     fontSize = theme.typography.small, fontFamily = FontFamily.Monospace,
                                     fontWeight = if (isProjRoot) FontWeight.Bold else FontWeight.Normal)
                             }
@@ -479,11 +544,11 @@ fun MainScreen(
                         if (state.currentPath.isNotEmpty()) {
                             val segments = state.currentPath.split('/')
                             segments.forEachIndexed { index, segment ->
-                                Text("/", color = theme.textMuted, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
+                                Text("/", color = theme.textSecondary, fontSize = theme.typography.small, fontFamily = FontFamily.Monospace)
                                 val isLast = index == segments.lastIndex
                                 val segmentPath = segments.take(index + 1).joinToString("/")
                                 TextButton(onClick = { if (!isLast) vm.navigateToSegment(proj, segmentPath) }) {
-                                    Text(segment, color = if (isLast) theme.textPrimary else theme.accent,
+                                    Text(segment, color = if (isLast) theme.textPrimary else theme.textAccent,
                                         fontSize = theme.typography.small, fontFamily = FontFamily.Monospace,
                                         fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal)
                                 }
@@ -501,18 +566,31 @@ fun MainScreen(
                                 } else {
                                     openDocumentTreeLauncher.launch(null)
                                 }
-                            }) { Text("Add workspace", color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace) }
+                            }) { Text("Add workspace", color = theme.textAccent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace) }
                     }
 
                     Box {
-                        TextButton(onClick = { isSortMenuOpen = true }) { Text(sortMode.displayName, color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace) }
+                        TextButton(onClick = { isSortMenuOpen = true }, modifier = Modifier.semantics { contentDescription = "Sort" }) { Text(sortMode.displayName, color = theme.textAccent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace) }
                         DropdownMenu(expanded = isSortMenuOpen, onDismissRequest = { isSortMenuOpen = false }) {
                             SortMode.entries.forEach { mode ->
-                                DropdownMenuItem(text = { Text(mode.displayName) }, onClick = { sortMode = mode; isSortMenuOpen = false })
+                                val label = when (mode) {
+                                    SortMode.ALPHA_ASC -> "Name (A–Z)"
+                                    SortMode.ALPHA_DESC -> "Name (Z–A)"
+                                    SortMode.RECENT -> if (state.activeProject == null && !(isSearchActive && searchQuery.isNotEmpty())) "Recently added" else "Recently modified"
+                                }
+                                DropdownMenuItem(text = { Text(label) }, onClick = { sortMode = mode; isSortMenuOpen = false })
                             }
                         }
                     }
                 }
+            }
+        }
+
+        state.directoryError?.let { message ->
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text(message, color = theme.textSecondary, fontSize = theme.typography.helper,
+                    lineHeight = theme.typography.helperLineHeight)
+                TextButton(onClick = vm::refreshCurrentDirectory) { Text("Refresh", color = theme.textAccent) }
             }
         }
 
@@ -566,7 +644,7 @@ fun MainScreen(
                     if (filteredItems.isEmpty()) {
                         EmptyStateHint(
                             title = "No matches found",
-                            body = "Try searching for another filename.",
+                            body = "Try another filename in Search.",
                             theme = theme
                         )
                     } else {
@@ -589,8 +667,8 @@ fun MainScreen(
                                             onItemClick(EditorKey(item.project.id, item.node.relativePath))
                                         }
                                     },
-                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(item.project, item.node).onSuccess { context.launchShare(it) } } },
-                                    onEdit = { nodeToRename = Pair(item.node, item.project) },
+                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(item.project, item.node).onSuccess { context.launchShare(it) }.onFailure { vm.reportShareFailure(item.node.name) } } },
+                                    onEdit = { openNaming(NamingKind.RenameNode, item.project, item.node) },
                                     onDelete = { nodeToDelete = Pair(item.node, item.project) }
                                 )
                             }
@@ -609,9 +687,9 @@ fun MainScreen(
                     if (sortedProjects.isEmpty()) {
                         EmptyStateHint(
                             title = "No workspaces",
-                            body = "Tap [+ workspace] above or button below to add a folder.",
+                            body = "Use Add workspace to open a folder on your device.",
                             theme = theme,
-                            actionLabel = "+ Add Workspace",
+                            actionLabel = "Add workspace",
                             onAction = {
                                 if (showWorkspaceIntro) {
                                     isIntroDialogOpen = true
@@ -632,8 +710,8 @@ fun MainScreen(
                                     theme = theme,
                                     appFont = appFont,
                                     onClick = { vm.navigateToFolderRoot(proj) },
-                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(proj, VfsNode.Directory(name = proj.name, relativePath = "")).onSuccess { context.launchShare(it) } } },
-                                    onEdit = { projectToRename = proj },
+                                    onShare = { coroutineScope.launch { fileOpsManager.shareNode(proj, VfsNode.Directory(name = proj.name, relativePath = "")).onSuccess { context.launchShare(it) }.onFailure { vm.reportShareFailure(proj.name) } } },
+                                    onEdit = { openNaming(NamingKind.RenameWorkspaceAlias, proj) },
                                     onDelete = { projectToDelete = proj }
                                 )
                             }
@@ -649,13 +727,16 @@ fun MainScreen(
                         }
                     }
 
-                    if (sortedFiles.isEmpty()) {
+                    if (sortedFiles.isEmpty() && state.directoryError != null) {
+                        EmptyStateHint("Folder unavailable", "Restore folder permission or choose another workspace.", theme,
+                            actionLabel = "Refresh", onAction = vm::refreshCurrentDirectory)
+                    } else if (sortedFiles.isEmpty()) {
                         EmptyStateHint(
                             title = "Folder is empty",
-                            body = "Tap [+ file] or [+ folder] to add content.",
+                            body = "Use New Document or New Folder to add content.",
                             theme = theme,
-                            actionLabel = "+ New Document",
-                            onAction = { targetProj?.let { createFileDialogTargetProject = it } }
+                            actionLabel = "New Document",
+                            onAction = { targetProj?.let { openNaming(NamingKind.CreateFile, it) } }
                         )
                     } else {
                         LazyColumn(
@@ -677,13 +758,13 @@ fun MainScreen(
                                                     .padding(bottom = theme.dimensions.spacingMedium)
                                                     .height(54.dp)
                                                     .background(theme.surface.copy(alpha = 0.5f))
-                                                    .border(BorderStroke(1.dp, theme.textMuted.copy(alpha = 0.2f)), RoundedCornerShape(8.dp))
+                                                    .border(BorderStroke(1.dp, theme.indicator), RoundedCornerShape(8.dp))
                                                     .onGloballyPositioned { coordinates ->
                                                         folderBounds["..parent.."] = coordinates.boundsInRoot()
                                                     },
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text("📁 Drop here to move up one level", color = theme.textMuted, fontSize = theme.typography.body)
+                                                Text("📁 Drop here to move up one level", color = theme.textSecondary, fontSize = theme.typography.body)
                                             }
                                         }
                                     }
@@ -715,7 +796,7 @@ fun MainScreen(
                                         },
                                         onShare = {
                                             if (!node.relativePath.startsWith("external:")) {
-                                                coroutineScope.launch { fileOpsManager.shareNode(activeProj, node).onSuccess { context.launchShare(it) } }
+                                                coroutineScope.launch { fileOpsManager.shareNode(activeProj, node).onSuccess { context.launchShare(it) }.onFailure { vm.reportShareFailure(node.name) } }
                                             }
                                         },
                                         onEdit = {
@@ -723,10 +804,10 @@ fun MainScreen(
                                                 val extId = node.relativePath.substringAfter("external:").toLong()
                                                 val extProj = state.projects.find { it.id == extId }
                                                 if (extProj != null) {
-                                                    projectToRename = extProj
+                                                    openNaming(NamingKind.RenameWorkspaceAlias, extProj)
                                                 }
                                             } else {
-                                                nodeToRename = Pair(node, activeProj)
+                                                openNaming(NamingKind.RenameNode, activeProj, node)
                                             }
                                         },
                                         onDelete = {
@@ -792,7 +873,7 @@ fun MainScreen(
                         modifier = Modifier
                             .offset { androidx.compose.ui.unit.IntOffset(previewX.toInt(), previewY.toInt()) }
                             .background(theme.surface.copy(alpha = 0.9f))
-                            .border(BorderStroke(1.dp, theme.accent), RoundedCornerShape(4.dp))
+                            .border(BorderStroke(1.dp, theme.controlAccent), RoundedCornerShape(4.dp))
                             .padding(theme.dimensions.spacingMedium)
                     ) {
                         Text(
@@ -831,7 +912,7 @@ fun MainScreen(
                         Checkbox(
                             checked = dontShowAgainCheck,
                             onCheckedChange = { dontShowAgainCheck = it },
-                            colors = CheckboxDefaults.colors(checkedColor = theme.accent)
+                            colors = CheckboxDefaults.colors(checkedColor = theme.controlAccent, uncheckedColor = theme.indicator, checkmarkColor = theme.onControlAccent)
                         )
                         Spacer(modifier = Modifier.width(theme.dimensions.spacingSmall))
                         Text(
@@ -855,49 +936,72 @@ fun MainScreen(
                         openDocumentTreeLauncher.launch(null)
                     }
                 ) {
-                    Text("Select Folder", color = theme.accent)
+                    Text("Select Folder", color = theme.textAccent)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { isIntroDialogOpen = false }) {
-                    Text("Cancel", color = theme.textMuted)
+                    Text("Cancel", color = theme.textSecondary)
                 }
             },
             containerColor = theme.surface
         )
     }
 
-    createFileDialogTargetProject?.let { targetProj ->
-        InputDialog(
-            title       = "New File in ${targetProj.name}",
-            label       = "Document name",
-            confirmText = "Create",
-            theme       = theme,
-            onDismiss   = { createFileDialogTargetProject = null },
-            onConfirm   = { name ->
-                if (shouldLaunchNewFile) {
-                    vm.createFile(name, targetProj) { relativePath ->
-                        onItemClick(EditorKey(targetProj.id, relativePath, focusOnStart = true))
+    namingDialog?.let { request ->
+        val record = namingRecords[request.id]
+        LaunchedEffect(request.id, record) {
+            when (record) {
+                is NamingOperationState.Succeeded -> {
+                    val success = vm.namingOperations.consumeSuccess(request.id)
+                    if (success != null && namingDialog?.id == request.id) {
+                        namingDialog = null
+                        if (request.kind == NamingKind.CreateFile && request.openCreatedFile) {
+                            success.actual?.node?.relativePath?.let { path ->
+                                onItemClick(EditorKey(request.projectId, path, focusOnStart = true))
+                            }
+                        }
                     }
-                } else {
-                    vm.createFile(name, targetProj)
                 }
-                createFileDialogTargetProject = null
+                NamingOperationState.Consumed -> if (namingDialog?.id == request.id) namingDialog = null
+                is NamingOperationState.Failed -> namingDialog = request.copy(submitted = false)
+                is NamingOperationState.NeedsReconciliation -> namingDialog = request.copy(submitted = false, inspectionRequired = true)
+                is NamingOperationState.Inspected -> namingDialog = request.copy(submitted = false, inspectionRequired = !record.mayRetry)
+                null -> if (request.submitted) namingDialog = request.copy(inspectionRequired = true)
+                NamingOperationState.Pending -> Unit
             }
-        )
-    }
-
-    createFolderDialogTargetProject?.let { targetProj ->
+        }
+        val interrupted = request.inspectionRequired || (request.submitted && record == null)
+        val partial = record is NamingOperationState.NeedsReconciliation
+        val message = when (record) {
+            is NamingOperationState.Failed -> record.message
+            is NamingOperationState.NeedsReconciliation -> "Storage may already have changed. Retry indexing to finish without repeating the file action."
+            is NamingOperationState.Inspected -> record.message
+            else -> if (interrupted) "This action was interrupted. Refresh files to check what changed before retrying." else null
+        }
+        val title = when (request.kind) {
+            NamingKind.CreateFile -> "New File in ${request.projectName}"
+            NamingKind.CreateFolder -> "New Folder in ${request.projectName}"
+            NamingKind.RenameNode -> "Rename ${if (request.directory) "Folder" else "Document"}"
+            NamingKind.RenameWorkspaceAlias -> "Rename Workspace"
+        }
         InputDialog(
-            title       = "New Folder in ${targetProj.name}",
-            label       = "Folder name",
-            confirmText = "Create",
-            theme       = theme,
-            onDismiss   = { createFolderDialogTargetProject = null },
-            onConfirm   = { name ->
-                vm.createFolder(name, targetProj)
-                createFolderDialogTargetProject = null
-            }
+            title = title,
+            label = if (request.kind == NamingKind.RenameWorkspaceAlias) "Workspace name" else if (request.directory || request.kind == NamingKind.CreateFolder) "Folder name" else "Document name",
+            confirmText = if (request.kind == NamingKind.CreateFile || request.kind == NamingKind.CreateFolder) "Create" else "Rename",
+            theme = theme,
+            value = request.draft,
+            onValueChange = { value -> namingDialog = request.copy(draft = value) },
+            isSubmitting = record == NamingOperationState.Pending,
+            error = message,
+            canSubmit = !interrupted && !partial && (record !is NamingOperationState.Inspected || record.mayRetry),
+            onDismiss = { namingDialog = null },
+            onConfirm = {
+                vm.submitNaming(request)
+                namingDialog = request.copy(submitted = true)
+            },
+            recoveryText = if (partial) "Retry indexing" else if (interrupted) "Refresh files" else null,
+            onRecovery = if (partial || interrupted) ({ vm.recoverNaming(request) }) else null
         )
     }
 
@@ -906,62 +1010,34 @@ fun MainScreen(
             onDismissRequest = { nodeToDelete = null },
             title = { Text("Delete ${if (node.isDirectory) "folder" else "document"}?",
                 color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text  = { Text("This will permanently remove '${node.name}'. You cannot undo this action.",
+            text  = { Text("Delete '${node.name}'? You can Undo from the confirmation. When that offer ends, the item is permanently deleted.",
                 color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteNode(node, project); nodeToDelete = null }) {
-                    Text("Delete", color = theme.accent)
+                    Text("Delete", color = theme.textDanger)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { nodeToDelete = null }) { Text("Cancel", color = theme.textMuted) }
+                TextButton(onClick = { nodeToDelete = null }) { Text("Cancel", color = theme.textSecondary) }
             },
             containerColor = theme.surface
-        )
-    }
-
-    nodeToRename?.let { (node, project) ->
-        InputDialog(
-            title       = "Rename ${if (node.isDirectory) "Folder" else "File"}",
-            label       = if (node.isDirectory) "Folder name" else "Document name",
-            confirmText = "Rename",
-            theme       = theme,
-            onDismiss   = { nodeToRename = null },
-            onConfirm   = { newName ->
-                vm.renameNode(node, newName, project)
-                nodeToRename = null
-            }
-        )
-    }
-
-    projectToRename?.let { proj ->
-        InputDialog(
-            title       = "Rename Workspace",
-            label       = "Folder name",
-            confirmText = "Rename",
-            theme       = theme,
-            onDismiss   = { projectToRename = null },
-            onConfirm   = { newName ->
-                vm.renameProject(proj, newName)
-                projectToRename = null
-            }
         )
     }
 
     projectToDelete?.let { proj ->
         AlertDialog(
             onDismissRequest = { projectToDelete = null },
-            title = { Text("Delete workspace?",
+            title = { Text("Remove workspace?",
                 color = theme.textPrimary, fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold) },
-            text  = { Text("This will permanently remove '${proj.name}'. You cannot undo this action.",
+            text  = { Text("Remove '${proj.name}' from Kern? Its files stay in the linked folder. You can add the workspace again.",
                 color = theme.textPrimary, fontSize = theme.typography.body) },
             confirmButton = {
                 TextButton(onClick = { vm.deleteProject(proj); projectToDelete = null }) {
-                    Text("Delete", color = theme.accent)
+                    Text("Remove", color = theme.textDanger)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { projectToDelete = null }) { Text("Cancel", color = theme.textMuted) }
+                TextButton(onClick = { projectToDelete = null }) { Text("Cancel", color = theme.textSecondary) }
             },
             containerColor = theme.surface
         )
@@ -975,8 +1051,8 @@ fun MainScreen(
                 activeNodeActionsTarget = null
                 when (action) {
                     "duplicate" -> vm.duplicateNode(node, project)
-                    "rename" -> nodeToRename = Pair(node, project)
-                    "share" -> coroutineScope.launch { fileOpsManager.shareNode(project, node).onSuccess { context.launchShare(it) } }
+                    "rename" -> openNaming(NamingKind.RenameNode, project, node)
+                    "share" -> coroutineScope.launch { fileOpsManager.shareNode(project, node).onSuccess { context.launchShare(it) }.onFailure { vm.reportShareFailure(node.name) } }
                     "delete" -> nodeToDelete = Pair(node, project)
                 }
             },
@@ -1028,10 +1104,10 @@ private fun ProjectSectionHeader(
         TextButton(onClick = onHeaderClick) {
             Text(
                 text = buildString {
-                    append(project.name.uppercase())
+                    append(project.name)
                     if (project.isExternal) append("  ☁️")
                 },
-                color = if (isSelected) theme.accent else theme.textMuted,
+                color = if (isSelected) theme.textAccent else theme.textSecondary,
                 fontSize = theme.typography.tiny,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
@@ -1040,7 +1116,7 @@ private fun ProjectSectionHeader(
             if (isSelected) {
                 Text(
                     text = "• active",
-                    color = theme.accent,
+                    color = theme.textAccent,
                     fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Normal
@@ -1053,10 +1129,10 @@ private fun ProjectSectionHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onCreateFileClick) {
-                Text("Add file", color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace)
+                Text("Add file", color = theme.textAccent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace)
             }
             TextButton(onClick = onCreateFolderClick) {
-                Text("Add folder", color = theme.accent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace)
+                Text("Add folder", color = theme.textAccent, fontSize = theme.typography.tiny, fontFamily = FontFamily.Monospace)
             }
         }
     }
@@ -1077,7 +1153,7 @@ private fun EmptyStateHint(
     ) {
         Text(
             text = "[ empty ]",
-            color = theme.textMuted.copy(alpha = 0.5f),
+            color = theme.textSecondary,
             fontSize = theme.typography.tiny,
             fontFamily = FontFamily.Monospace,
             letterSpacing = (theme.typography.tiny.value * 0.1f).sp,
@@ -1086,14 +1162,14 @@ private fun EmptyStateHint(
         Text(title, color = theme.textPrimary, fontFamily = appFont,
             fontSize = theme.typography.subtitle, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(theme.dimensions.spacingSmall))
-        Text(body, color = theme.textMuted, fontSize = theme.typography.small, textAlign = TextAlign.Center)
+        Text(body, color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight, textAlign = TextAlign.Center)
 
         if (!actionLabel.isNullOrEmpty() && onAction != null) {
             Spacer(Modifier.height(theme.dimensions.spacingLarge))
             OutlinedButton(
                 onClick = onAction,
-                border = BorderStroke(1.dp, theme.accent),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = theme.accent)
+                border = BorderStroke(1.dp, theme.controlAccent),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = theme.textAccent)
             ) {
                 Text(
                     text = actionLabel,
@@ -1109,20 +1185,33 @@ private fun EmptyStateHint(
 @Composable
 private fun OverflowActions(
     theme: AppColorTheme,
+    itemDescription: String,
     onShare: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    deleteLabel: String = "Delete",
+    allowDelete: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Outlined.MoreVert, contentDescription = "More actions", tint = theme.textMuted)
+            Icon(Icons.Outlined.MoreVert, contentDescription = "More actions for $itemDescription", tint = theme.indicator)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { expanded = false; onShare() })
             DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = { expanded = false; onEdit() })
-            DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) }, onClick = { expanded = false; onDelete() })
+            if (allowDelete) DropdownMenuItem(text = { Text(deleteLabel, color = theme.textDanger) }, leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = theme.textDanger) }, onClick = { expanded = false; onDelete() })
         }
+    }
+}
+
+@Composable
+private fun ExplorerLeadingIcon(glyph: String, theme: AppColorTheme) {
+    Box(
+        modifier = Modifier.sizeIn(minWidth = 24.dp, minHeight = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(glyph, fontSize = theme.typography.bodyLarge)
     }
 }
 
@@ -1143,10 +1232,10 @@ private fun FileOverflowRow(
     val isExternal = node.relativePath.startsWith("external:")
     val details = if (node.isDirectory) "Directory" else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0} KB"
     ListItem(
-        headlineContent = { Text(node.name, fontFamily = appFont, fontWeight = if (isExternal || node.isDirectory) FontWeight.Bold else FontWeight.Normal) },
-        supportingContent = { Text(details, fontFamily = FontFamily.Monospace, color = theme.textMuted) },
-        leadingContent = { Text(if (isExternal || node.isDirectory) "📁" else "📄", fontSize = theme.typography.bodyLarge) },
-        trailingContent = { OverflowActions(theme, onShare, onEdit, onDelete) },
+        headlineContent = { Text(node.name, fontFamily = appFont, fontSize = theme.typography.subtitle, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = if (isExternal || node.isDirectory) FontWeight.Bold else FontWeight.Normal) },
+        supportingContent = { Text(details, fontFamily = FontFamily.Monospace, color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        leadingContent = { ExplorerLeadingIcon(if (isExternal || node.isDirectory) "📁" else "📄", theme) },
+        trailingContent = { OverflowActions(theme, "${node.name} (${node.relativePath})", onShare, onEdit, onDelete, deleteLabel = if (isExternal) "Remove workspace" else "Delete") },
         modifier = Modifier
             .fillMaxWidth()
             .pointerInput(node.relativePath) {
@@ -1173,10 +1262,10 @@ private fun ProjectOverflowRow(
     onDelete: () -> Unit
 ) {
     ListItem(
-        headlineContent = { Text(project.name, fontFamily = appFont, fontWeight = FontWeight.Bold) },
-        supportingContent = { Text(if (project.isExternal) "Linked workspace" else "Workspace", color = theme.textMuted) },
-        leadingContent = { Text("📁", fontSize = theme.typography.bodyLarge) },
-        trailingContent = { OverflowActions(theme, onShare, onEdit, onDelete) },
+        headlineContent = { Text(project.name, fontFamily = appFont, fontSize = theme.typography.subtitle, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold) },
+        supportingContent = { Text(if (project.isExternal) "Linked workspace" else "Workspace", color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        leadingContent = { ExplorerLeadingIcon("📁", theme) },
+        trailingContent = { OverflowActions(theme, "workspace ${project.name}", onShare, onEdit, onDelete, deleteLabel = "Remove workspace", allowDelete = project.isExternal) },
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent, headlineColor = theme.textPrimary)
     )
@@ -1193,10 +1282,10 @@ private fun SearchOverflowRow(
     onDelete: () -> Unit
 ) {
     ListItem(
-        headlineContent = { Text(node.name, fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal) },
-        supportingContent = { Text("${project.name}/${node.relativePath.substringBeforeLast('/', "")}", color = theme.textMuted) },
-        leadingContent = { Text(if (node.isDirectory) "📁" else "📄", fontSize = theme.typography.bodyLarge) },
-        trailingContent = { OverflowActions(theme, onShare, onEdit, onDelete) },
+        headlineContent = { Text(node.name, fontFamily = theme.toFontFamily(), fontSize = theme.typography.subtitle, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal) },
+        supportingContent = { Text("${project.name}/${node.relativePath.substringBeforeLast('/', "")}", color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        leadingContent = { ExplorerLeadingIcon(if (node.isDirectory) "📁" else "📄", theme) },
+        trailingContent = { OverflowActions(theme, "${node.name} in ${project.name}/${node.relativePath}", onShare, onEdit, onDelete) },
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent, headlineColor = theme.textPrimary)
     )
@@ -1270,15 +1359,15 @@ fun SwipeableFileRow(
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
-            SwipeAction(label = "Share", color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
+            SwipeAction(label = "Share", color = theme.controlAccent, contentColor = theme.onControlAccent, theme = theme, onClick = {
                 onShare()
                 scope.launch { offsetX.animateTo(0f) }
             })
-            SwipeAction(label = "Edit",  color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
+            SwipeAction(label = "Edit",  color = theme.surface, contentColor = theme.textSecondary, theme = theme, onClick = {
                 onEdit()
                 scope.launch { offsetX.animateTo(0f) }
             })
-            SwipeAction(label = "Delete",color = theme.danger, theme = theme, onClick = {
+            SwipeAction(label = "Delete",color = theme.surface, contentColor = theme.textDanger, theme = theme, onClick = {
                 onDelete()
                 scope.launch { offsetX.animateTo(0f) }
             })
@@ -1361,7 +1450,7 @@ fun SwipeableFileRow(
                 Spacer(Modifier.width(theme.dimensions.spacingMedium))
                 val details = if (node.isDirectory) "DIR"
                 else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-                Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
+                Text(details, color = theme.textSecondary, fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
@@ -1432,15 +1521,15 @@ fun SwipeableProjectRow(
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
-            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = {
+            SwipeAction(label = "Share",  color = theme.controlAccent, contentColor = theme.onControlAccent, theme = theme, onClick = {
                 onShare()
                 scope.launch { offsetX.animateTo(0f) }
             })
-            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = {
+            SwipeAction(label = "Edit",   color = theme.surface, contentColor = theme.textSecondary, theme = theme, onClick = {
                 onEdit()
                 scope.launch { offsetX.animateTo(0f) }
             })
-            SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = {
+            SwipeAction(label = "Delete", color = theme.surface, contentColor = theme.textDanger, theme = theme, onClick = {
                 onDelete()
                 scope.launch { offsetX.animateTo(0f) }
             })
@@ -1503,7 +1592,7 @@ fun SwipeableProjectRow(
                     )
                 }
                 Spacer(Modifier.width(theme.dimensions.spacingMedium))
-                Text("DIR", color = theme.textMuted, fontSize = theme.typography.tiny,
+                Text("DIR", color = theme.textSecondary, fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }
@@ -1514,6 +1603,7 @@ fun SwipeableProjectRow(
 private fun SwipeAction(
     label: String,
     color: Color,
+    contentColor: Color,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,
     onClick: () -> Unit
 ) {
@@ -1527,7 +1617,7 @@ private fun SwipeAction(
     ) {
         Text(
             text = label,
-            color = Color.White,
+            color = contentColor,
             fontSize = theme.typography.tiny,
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.SansSerif,
@@ -1604,9 +1694,9 @@ fun SearchVfsNodeRow(
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.End
         ) {
-            SwipeAction(label = "Share",  color = theme.accent.copy(alpha = 0.85f), theme = theme, onClick = { onShareClick(node) })
-            SwipeAction(label = "Edit",   color = theme.textMuted.copy(alpha = 0.55f), theme = theme, onClick = { onEditClick(node) })
-            SwipeAction(label = "Delete", color = theme.danger, theme = theme, onClick = { onDeleteClick(node) })
+            SwipeAction(label = "Share",  color = theme.controlAccent, contentColor = theme.onControlAccent, theme = theme, onClick = { onShareClick(node) })
+            SwipeAction(label = "Edit",   color = theme.surface, contentColor = theme.textSecondary, theme = theme, onClick = { onEditClick(node) })
+            SwipeAction(label = "Delete", color = theme.surface, contentColor = theme.textDanger, theme = theme, onClick = { onDeleteClick(node) })
         }
 
         var rowPositionInRoot by remember { mutableStateOf(Offset.Zero) }
@@ -1655,8 +1745,9 @@ fun SearchVfsNodeRow(
                         )
                         Text(
                             text = "in ${project.name}/${node.relativePath.substringBeforeLast('/', "")}",
-                            color = theme.textMuted,
-                            fontSize = theme.typography.tiny,
+                            color = theme.textSecondary,
+                            fontSize = theme.typography.helper,
+                            lineHeight = theme.typography.helperLineHeight,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -1673,7 +1764,7 @@ fun SearchVfsNodeRow(
                 Spacer(Modifier.width(theme.dimensions.spacingMedium))
                 val details = if (node.isDirectory) "DIR"
                 else "${(node as? VfsNode.File)?.size?.div(1024) ?: 0}KB"
-                Text(details, color = theme.textMuted, fontSize = theme.typography.tiny,
+                Text(details, color = theme.textSecondary, fontSize = theme.typography.tiny,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.alignByBaseline())
             }
         }

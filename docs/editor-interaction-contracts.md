@@ -143,13 +143,14 @@ This document records user-visible editor behavior that must survive refactors. 
 
 ### Foldable companion preserves the writing session
 
-- Feature: book-style foldables and sufficiently wide windows expose an explicit Split view command. A companion offers a clean reading preview or a separately loaded, read-only project file. Diff and editing a second file are follow-on features.
-- Behavioral invariant: split open/close, sidebar substitution, and width changes never replace the primary `TextFieldState`, clear undo/selection, steal focus, or write rendered/reference text over the draft. Preview derives from current in-memory source. Reference loading, cancellation, permission failures, and image resolution have separate ownership.
-- Repeating the command restores the previous sidebar. Preview/reference choice and reading positions survive hiding or compact-window suspension. Each pane owns its IME inset; the editor toolbar retains its clearance.
+- Feature: book-style foldables and sufficiently wide windows expose a Split view command and a second native editor with a file picker. Diff is follow-on work.
+- Behavioral invariant: each document has its own `TextFieldState`, selection, undo history and save path. Split open/close, sidebar substitution and width changes preserve the primary draft; the picker prevents two editors from writing the same file. Switching the second file saves its current draft before loading another.
+- Repeating the command restores the previous sidebar. The second document survives hiding or compact-window suspension. Each pane owns its IME inset; the editor toolbar retains its clearance.
 - The manual command requires >=720dp and >=340dp per pane, with minimum pane width increasing for large fonts. Vertical separating hinges are excluded from pane bounds. Horizontal folds do not enable this feature.
-- The shortcut is initially off and requires a standard angle sensor, vertical fold geometry, and a resumed editor. Stable flat baseline, deliberate brief bend, stable reopening, and cooldown produce one toggle. Initial unfolding, sustained postures, full closure, invalid/stale samples, geometry changes, modal UI, and lifecycle interruption must not toggle. Never interrupt pointer selection or IME composition to commit.
+- The shortcut is initially off and requires a standard angle sensor and a resumed editor. Stable flat baseline, deliberate brief bend, stable reopening, and cooldown produce one toggle. Initial unfolding, sustained postures, full closure, horizontal folds, modal UI, and lifecycle interruption must not toggle. Transient vertical geometry changes do not cancel a gesture. Never interrupt pointer selection or either editor's IME composition to commit.
 - Platform deviation: a custom recognizer implements the explicitly requested physical toggle. Native editing/selection/focus, Material 3 supporting-pane layout/animation, system haptics, and disabled-animation behavior remain platform-owned.
-- Automated coverage: `FoldGestureRecognizerTest`, `CompanionWorkspaceTest`, `EditorViewModelTest.split restores prior sidebar without changing document state`, `StorageManagerTest.referenceRead_distinguishesEmptyFromMissingFile`, and `EditorScreenTest.testCompanion*`, `testReferenceSelectionNeverReplacesPrimaryDraft`, and `testInjectedHingeGestureTogglesCompanionExactlyOnceEachWay`.
+- Symptom: on Pixel 10 Pro Fold, a partial fold moved the writer to the left with a blank right half and the reopening gesture failed to toggle the layout. Identified contributing causes: the scaffold excluded the hinge even for a single pane, and the recognizer restarted on changing fold geometry or window bounds. Physical-device confirmation is still required. Invariant: a bend alone retains the full-width writer; a completed deliberate gesture toggles the split even when vertical geometry changes during the bend. Coverage: `EditorScreenTest.testInjectedHingeGestureTogglesCompanionExactlyOnceEachWay`.
+- Automated coverage also includes `FoldGestureRecognizerTest`, `EditorViewModelTest.split restores prior sidebar without changing document state`, `EditorScreenTest.testCompanion*` and `testSecondEditorSavesIndependentlyAndRetainsDraft`.
 
 ### Fold feedback follows the committed action and device preferences
 
@@ -174,6 +175,21 @@ This document records user-visible editor behavior that must survive refactors. 
 - Invariant: inline images resolve in the context of the displayed document on every document switch. Companion projection reuses each parsed block and its image spans on a background dispatcher; displaying a large companion document must not reparse all blocks on the UI thread.
 - Regression coverage: `EditorScreenTest.testInlineImageResolutionFollowsDocumentSwitch` and `MarkdownVisualTransformationTest.testExistingProjectionPreservesRenderedTextAndStyles`.
 
+### Editor typography remains readable without changing document state
+
+- Symptom: Medium used the 13sp interface body size and felt too small; enlarging the document exposed clipped heading ascent within body-height line boxes.
+- Root cause: interface and editor shared one size token, while heading spans grew inside paragraph metrics sized only for body text.
+- Invariant: the editor owns a 16sp Medium token and 1.6 body line ratio, preserving saved multipliers, heading/code ratios and font families. Heading paragraphs reserve sufficient proportional line height. Presentation changes never rewrite source, reset selection or undo, or reload a live session. Shared interface body remains 13sp.
+- Regression tests: `EditorTypographyTest`, `EditorTypographyInstrumentedTest.documentFieldUsesEditorMetricsForEveryPresetAndViewMode`, `renderedRunsKeepCompleteStylesAndHeadingsHaveSafeMeasuredLineBounds`, and `typographyChangesPreserveSelectionHistoryAndExactPlainTextSaveReload`.
+
+### The entire document canvas participates in native focus
+
+- Symptom: short/empty documents exposed a small, invisible active area; tapping surrounding whitespace cleared focus. Wide text also exceeded the intended 680dp reading measure.
+- Root cause: gutters belonged to an outer focus-clearing container, and an unbounded scrolling field used ineffective width constraints without a finite viewport minimum.
+- Invariant: a native `TextFieldDecorator` contains top, side and bottom whitespace and calls its inner field once. The outer document scroll remains the effective scroll owner; a finite viewport supplies minimum height, while centered text can shrink below its 680dp cap. Native nearest-offset caret placement and selection behavior are retained. The toolbar remains above this area with 220dp/100dp clearance and one IME inset owner.
+- Regression tests: `EditorCanvasFocusTest.emptyCanvasCenterTapOpensRealImeAndAcceptsTyping`, `shortDocumentTapBelowTextOpensRealImeAndAcceptsTyping`, `shortDocumentSideGutterTapOpensRealImeAndAcceptsTyping`, `shortDocumentTopPaddingTapOpensRealImeAndAcceptsTyping`, `wideCanvasLimitsMeasuredTextLayoutTo680Dp`, `focusingAScrolledVisibleLinePreservesItsViewportAnchor`, and `finalLineScrollsAboveExpandedAndMinimizedToolbarWithRealIme`.
+- Legacy characterization: `legacyParagraphEditingAndBackgroundFocusBehaviorRemainAvailable` protects the retained fallback without applying new document decoration behavior to it. No overlay, custom tap interception, or forced caret-to-end behavior is introduced.
+
 ## Preferred direction
 
 - Prefer state-based `TextFieldState`. The editor uses `BasicTextField` because the writing canvas intentionally does not use Material filled or outlined field decorations.
@@ -189,3 +205,18 @@ Append to this document when an interaction defect is fixed:
 - Behavioral invariant
 - Automated test name
 - Any intentional platform-default deviation and why it is necessary
+
+### Renaming keeps the live editor session and truthful identity
+
+- Symptom: Rename opened with an empty name, closed before success, and updated only the active path, leaving the title/navigation identity stale.
+- Root cause: presentation owned an optimistic callback without retained request state; route keys still carried the old path.
+- Invariant: Rename starts with the full leaf name and selected stem. A retained request saves the draft before the operation and consumes the provider's actual identity. Failure preserves input; partial outcomes block autosave to an uncertain path and offer metadata-only recovery. Success updates the path/title and matching navigation keys without loading over source, selection, or undo. Secondary editor ownership uses the retained primary session identity, independent of renames.
+- Regression test: `EditorTypographyInstrumentedTest.failedRenameRetainsDraftAndSuccessfulRenameKeepsSessionAcrossRestoration` plus `RetainedNamingOperationsTest` and provider naming tests.
+
+### Deletion Undo belongs to the activity session
+
+- Symptom: an editor navigated away before presenting Undo, and independent five-second purge jobs could delete data while the offer was queued or extended for accessibility.
+- Root cause: route-owned presentation and timers independently decided the same deletion's terminal action.
+- Invariant: one activity-owned session receives confirmed trash identities from both editors and the browser. A matching presentation lease chooses either restore or finalization once; canceled/backgrounded presentation requeues its offer. Unsupported/partial moves never enter the ordinary Undo queue. Failed restore/finalization preserves recoverable data and reports actual-location inspection. Provider cancellation becomes an interrupted receipt, never a permanent spinner or automatic disk replay.
+- Regression tests: `DeletionSessionViewModelTest`, `TrashDeletionOutcomeTest`, and `EditorTypographyInstrumentedTest.deleteUndoSurvivesLeavingEditorAndRestoringPresentation`.
+- Session limitation: process death loses Undo UI and original-path receipts. Unfinalized trash stays on disk; no lost timer purges it. Persistent receipts, restart cleanup, and guaranteed cross-process Undo remain outside this pass.
