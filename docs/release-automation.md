@@ -14,7 +14,7 @@ This project now has four release-oriented GitHub Actions workflows:
    - Attaches the signed APK and AAB to the tagged GitHub Release.
 
 3. `.github/workflows/android-build-distribution.yml`
-   - Runs when the `test` tag is pushed.
+   - Runs manually on a working branch or when the `test` tag is pushed.
    - Builds a debug APK and sends it to Firebase App Distribution.
    - Uploads the APK as a workflow artifact.
    - Attaches the APK to the `test` GitHub prerelease for direct downloads.
@@ -22,6 +22,27 @@ This project now has four release-oriented GitHub Actions workflows:
 4. `.github/workflows/deploy-website-ftp.yml`
    - Runs manually or when a `website-v*` tag is pushed.
    - Uploads the static `website/` directory to the configured FTPS server.
+
+## Version and build number allocation
+
+Every Firebase and Play distribution reserves its version before Gradle starts. `scripts/build_version.py` uses the shared `codex/build-version-counter` branch, whose `version.json` and commit history record each reserved version, Android version code, source commit, ref, workflow run and attempt. Both publishing workflows share a concurrency group; fast-forward-only counter updates also reject and retry competing reservations safely.
+
+- Branch/manual builds and the generic `test`/`release` tags increase the latest patch and version code by one. For example, the existing `0.1.39 (40)` becomes `0.1.40 (41)`, then `0.1.41 (42)`, including reruns of the same source commit.
+- The counter is shared across branches and Firebase/Play workflows. An older checkout cannot reuse or decrease its values. The checked-in `gradle.properties` provides the initial baseline and a lower bound for intentional major/minor changes; it is not the latest distributed-build record.
+- A semantic `vX.Y.Z` tag reserves that exact version only if it is newer than the counter and at least the source version. Reusing an already reserved version tag fails before distribution; use a newer tag or manual dispatch. This prevents a tag from claiming a different APK version.
+- Reservations are durable before building. Failed/canceled builds consume their numbers, so gaps are expected and numbers are never recycled. Do not force-push, delete or reset the counter branch.
+- Gradle runs in a **separate process after allocation** so it reads the updated properties. The existing `incrementVersionPatch` task remains a local development helper; calling it alongside a packaging task in one invocation does not update that invocation's already configured version.
+- Before upload, `aapt` reads the APK's actual `versionName` and `versionCode`; either mismatch fails the workflow. Artifacts include `build/build-version.json` with the reserved values, source commit/run/attempt and verified APK SHA-256. Firebase notes and artifact names include both version and build number.
+- Ordinary local compiles, unit tests and release-readiness checks do not reserve distribution numbers. Shared builds must go through the Firebase or Play workflow rather than uploading an unversioned local artifact.
+
+Versioning regression checks (no Android build required):
+
+```sh
+python3 -m unittest discover -s scripts/tests -v
+actionlint .github/workflows/android-build-distribution.yml .github/workflows/google-play-release.yml .github/workflows/release-readiness.yml
+```
+
+The tests use temporary bare Git repositories to exercise fresh checkouts, competing reservations, failed pushes and retries without modifying the real counter.
 
 ## Required GitHub repository secrets
 
@@ -73,11 +94,11 @@ Paste that value into `GOOGLE_SERVICES_JSON_BASE64`.
 ## Recommended release flow
 
 1. Merge code to `main` only after `Release Readiness` is green.
-2. Create a version tag, for example:
+2. Choose a version strictly newer than the shared counter, then create its version tag, for example:
 
 ```bash
-git tag v0.1.11
-git push origin v0.1.11
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 3. The Google Play release workflow builds and uploads the signed `.aab`, then attaches the signed APK and AAB to the GitHub Release for the tag.
@@ -88,7 +109,7 @@ GitHub download locations:
 
 - Test builds: the `test` prerelease assets.
 - Public release builds: the APK asset on the matching `v*` or `release` GitHub Release.
-- Manual workflow runs: the Actions run’s `signed-release-apk` and `signed-release-aab` artifacts.
+- Manual workflow runs: the Actions run’s `signed-release-apk-<version>-<build>` and `signed-release-aab-<version>-<build>` artifacts, each including build metadata.
 
 ## Website deployment
 

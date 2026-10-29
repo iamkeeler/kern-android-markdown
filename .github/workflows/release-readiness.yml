@@ -36,6 +36,9 @@ jobs:
             cp app/google-services.json.example app/google-services.json
           fi
 
+      - name: Test build versioning
+        run: python3 -m unittest discover -s scripts/tests -v
+
       - name: Test, lint, and package release APK
         run: ./gradlew testDebugUnitTest lint assembleRelease --no-daemon
 

@@ -31,6 +31,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: android-app-distribution
+  cancel-in-progress: false
+
 jobs:
   upload:
     name: Build signed AAB and upload to Google Play
@@ -94,8 +98,18 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
 
+      - name: Test build versioning
+        run: python3 -m unittest discover -s scripts/tests -v
+
+      - name: Reserve version and build number
+        id: version
+        run: python3 scripts/build_version.py reserve
+
       - name: Test, lint, and build signed release APK and bundle
         run: ./gradlew testDebugUnitTest lintDebug assembleRelease bundleRelease --no-daemon
+
+      - name: Verify packaged version
+        run: python3 scripts/build_version.py verify-apk --apk app/build/outputs/apk/release/app-release.apk
 
       - name: Fail on Android lint errors
         run: |
@@ -107,15 +121,19 @@ jobs:
       - name: Upload signed AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: signed-release-aab
-          path: app/build/outputs/bundle/release/*.aab
+          name: signed-release-aab-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.version_code }}
+          path: |
+            app/build/outputs/bundle/release/*.aab
+            build/build-version.json
           if-no-files-found: error
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: signed-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: signed-release-apk-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.version_code }}
+          path: |
+            app/build/outputs/apk/release/*.apk
+            build/build-version.json
           if-no-files-found: error
 
       - name: Validate Play service-account JSON
@@ -129,12 +147,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Kern ${{ github.ref_name }}
+          name: Kern ${{ steps.version.outputs.version_name }} (build ${{ steps.version.outputs.version_code }})
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
             app/build/outputs/apk/release/app-release.apk
             app/build/outputs/bundle/release/app-release.aab
+            build/build-version.json
 
       - name: Upload to Google Play
         uses: r0adkll/upload-google-play@v1

@@ -14,6 +14,10 @@ Do not mark an editor change complete until every applicable contract and verifi
 
 Prefer stable Android, Jetpack Compose, Kotlin, and Material 3 APIs and platform interaction behavior. Use custom gesture, focus, selection, layout, and text-input behavior only when the platform component cannot satisfy a documented product requirement.
 
+## Distributed build versions
+
+Every shared Firebase or Play build must have a new version name and a strictly greater Android version code. Use the repository's distribution workflows: they reserve both numbers from the shared counter, verify the packaged APK, and record its source commit. Never distribute a build using unchanged numbers or a per-workflow run counter. See [release automation](docs/release-automation.md#version-and-build-number-allocation).
+
 ## Theme, system UI, and accessibility requirements
 
 - Apply the active app theme to system status and navigation bars at the app root. Light themes require a light system-bar background with dark icons; dark themes require a dark background with light icons. Do not rely on a screen-local side effect for this.
