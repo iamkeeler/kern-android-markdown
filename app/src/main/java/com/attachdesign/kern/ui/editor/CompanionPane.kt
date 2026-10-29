@@ -3,7 +3,6 @@
 package com.attachdesign.kern.ui.editor
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -20,7 +19,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -243,51 +241,4 @@ fun ReferencePicker(viewModel: EditorViewModel, onSelect: (ReferenceKey) -> Unit
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = editor.activeTheme.textPrimary) } },
         containerColor = editor.activeTheme.surface
     )
-}
-
-@Composable
-fun FoldShortcutDialog(
-    theme: AppColorTheme,
-    enabled: Boolean,
-    available: Boolean,
-    onEnabledChange: (Boolean) -> Unit,
-    hapticsEnabled: Boolean,
-    soundEnabled: Boolean,
-    onHapticsChanged: (Boolean) -> Unit,
-    onSoundChanged: (Boolean) -> Unit,
-    onTryFeedback: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(onDismissRequest = onDismiss,
-        title = { Text("Fold to toggle split view") },
-        text = {
-            Column(Modifier.heightIn(max = theme.dimensions.popupMaxHeight).verticalScroll(rememberScrollState())) {
-                Text("With the inner screen open, bend slightly and open flat again to show or hide the second editor. Hold a bend to keep using book posture.")
-                FoldFeedbackToggle("Fold shortcut", enabled, theme, onEnabledChange, available)
-                if (!available) Text("Hinge-angle sensing isn't available on this device. Use Split view from the document toolbar.")
-                FoldFeedbackToggle("Fold haptics", hapticsEnabled, theme, onHapticsChanged)
-                FoldFeedbackToggle("Paper crease sound", soundEnabled, theme, onSoundChanged)
-                Text("Sound follows your device's touch-sound, volume, silent-mode and Do Not Disturb settings.",
-                    fontSize = theme.typography.small)
-                TextButton(onClick = onTryFeedback, enabled = hapticsEnabled || soundEnabled,
-                    colors = ButtonDefaults.textButtonColors(contentColor = theme.textPrimary)) { Text("Try feedback") }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = theme.textPrimary) } },
-        containerColor = theme.surface, titleContentColor = theme.textPrimary, textContentColor = theme.textPrimary
-    )
-}
-
-@Composable
-private fun FoldFeedbackToggle(label: String, checked: Boolean, theme: AppColorTheme,
-    onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {
-    Row(Modifier.fillMaxWidth().heightIn(min = theme.dimensions.buttonHeight)
-        .toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
-        .semantics { contentDescription = label }, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = theme.textPrimary, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled,
-            colors = SwitchDefaults.colors(checkedThumbColor = theme.background, checkedTrackColor = theme.textPrimary,
-                uncheckedThumbColor = theme.textPrimary, uncheckedTrackColor = theme.surface,
-                uncheckedBorderColor = theme.textPrimary))
-    }
 }

@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
@@ -153,15 +154,17 @@ class EditorScreenTest {
     composeTestRule.waitForIdle()
   }
 
-  private fun wideEditor(feedback: FoldFeedback? = null) {
+  private fun wideEditor(feedback: FoldFeedback? = null, environment: FoldEnvironment? = null,
+      overlay: @androidx.compose.runtime.Composable () -> Unit = {}) {
     composeTestRule.setContent {
       // ForcedSize rescales the phone density but leaves the real keyboard's pixel inset
       // intact. Reserve enough virtual height to test editing with that real IME open.
       DeviceConfigurationOverride(DeviceConfigurationOverride.ForcedSize(DpSize(900.dp, 1400.dp))) {
         val editorState by viewModel.uiState.collectAsStateWithLifecycle()
         com.attachdesign.kern.theme.ModernAndroidMarkdownEditorTheme(activeTheme = editorState.activeTheme) {
-          CompositionLocalProvider(LocalFoldFeedback provides feedback) {
+          CompositionLocalProvider(LocalFoldFeedback provides feedback, LocalFoldEnvironment provides environment) {
             EditorScreen(project.id, file.relativePath, viewModel, onBackClick = {})
+            overlay()
           }
         }
       }
@@ -348,34 +351,44 @@ class EditorScreenTest {
         calls += hapticsEnabled to soundEnabled
       }
     }
-    wideEditor(feedback)
+    val angles = MutableStateFlow(173f)
+    val environment = object : FoldEnvironment {
+      override val sensorAvailable = true
+      override val angles = angles
+      override val geometry = MutableStateFlow<FoldGeometry?>(null)
+    }
+    wideEditor(feedback, environment)
     val draft = viewModel.documentTextFieldState.text.toString()
-    composeTestRule.onNodeWithContentDescription("More Options").performClick()
-    composeTestRule.onNodeWithText("Fold shortcut").performClick()
+    openFoldSettings()
+    composeTestRule.onNodeWithText("Hinge angle: 173°.", substring = true).performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Fold shortcut").performScrollTo().performClick()
+    composeTestRule.waitUntil(5_000) { viewModel.foldToSplit.value?.value == "true" }
+    angles.value = 158f
+    composeTestRule.onNodeWithText("Hinge angle: 158°.", substring = true).performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("Fold haptics").assertIsOn()
     composeTestRule.onNodeWithContentDescription("Paper crease sound").assertIsOff()
-    composeTestRule.onNodeWithText("Try feedback").performClick()
+    composeTestRule.onNodeWithText("Try feedback").performScrollTo().performClick()
     composeTestRule.runOnIdle { assertEquals(listOf(true to false), calls) }
-    composeTestRule.onNodeWithContentDescription("Fold haptics").performClick()
-    composeTestRule.onNodeWithContentDescription("Paper crease sound").performClick()
+    composeTestRule.onNodeWithContentDescription("Fold haptics").performScrollTo().performClick()
+    composeTestRule.onNodeWithContentDescription("Paper crease sound").performScrollTo().performClick()
     composeTestRule.waitUntil(10_000) {
       viewModel.foldHaptics.value?.value == "false" && viewModel.foldSound.value?.value == "true"
     }
-    composeTestRule.onNodeWithText("Try feedback").performClick()
+    composeTestRule.onNodeWithText("Try feedback").performScrollTo().performClick()
     composeTestRule.runOnIdle {
       assertEquals(listOf(true to false, false to true), calls)
       assertEquals(draft, viewModel.documentTextFieldState.text.toString())
       assertTrue(!viewModel.companion.state.value.isOpen)
     }
     composeTestRule.onNodeWithText("Done").performClick()
-    composeTestRule.onNodeWithContentDescription("More Options").performClick()
-    composeTestRule.onNodeWithText("Fold shortcut").performClick()
-    composeTestRule.onNodeWithContentDescription("Fold haptics").assertIsOff()
-    composeTestRule.onNodeWithContentDescription("Paper crease sound").assertIsOn()
+    composeTestRule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
+    composeTestRule.onNodeWithContentDescription("Fold haptics").performScrollTo().assertIsOff()
+    composeTestRule.onNodeWithContentDescription("Paper crease sound").performScrollTo().assertIsOn()
     assertEquals("false", db.settingDao().getSetting("fold_haptics")?.value)
     assertEquals("true", db.settingDao().getSetting("fold_sound")?.value)
     captureScreenshot("fold-feedback-dialog")
     composeTestRule.onNodeWithText("Done").performClick()
+    composeTestRule.onNodeWithContentDescription("Close sidebar").performClick()
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
     composeTestRule.runOnIdle { assertEquals(2, calls.size) }
   }
@@ -383,12 +396,129 @@ class EditorScreenTest {
   @Test fun testFoldShortcutUnavailableKeepsManualSplitControl() {
     wideEditor()
     composeTestRule.onNodeWithContentDescription("Open split view").assertIsDisplayed()
-    composeTestRule.onNodeWithContentDescription("More Options").performClick()
-    composeTestRule.onNodeWithText("Fold shortcut").performClick()
+    openFoldSettings()
     composeTestRule.onNodeWithContentDescription("Fold shortcut").assertIsNotEnabled()
     composeTestRule.onNodeWithText("Done").performClick()
+    composeTestRule.onNodeWithContentDescription("Close sidebar").performClick()
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
     composeTestRule.onNodeWithContentDescription("Second editor pane").assertIsDisplayed()
+  }
+
+  private fun openFoldSettings() {
+    composeTestRule.onNodeWithContentDescription("More Options").performClick()
+    composeTestRule.onNodeWithText("Fold shortcut").assertDoesNotExist()
+    composeTestRule.onNodeWithText("Settings", substring = false).performClick()
+    composeTestRule.onNodeWithText("Behavior").performClick()
+    composeTestRule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
+  }
+
+  @Test fun testInjectedGentleFoldOpensMetricsWithoutRoomForSecondEditor() {
+    db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
+    db.settingDao().insertSetting(SettingEntity("fold_shortcut_action", "METRICS"))
+    val angles = MutableStateFlow(173f)
+    val clock = java.util.concurrent.atomic.AtomicLong(0)
+    var feedbackCount = 0
+    val environment = object : FoldEnvironment {
+      override val sensorAvailable = true
+      override val angles = angles
+      override val geometry = MutableStateFlow<FoldGeometry?>(null)
+      override fun monotonicTimeMillis() = clock.get()
+    }
+    val feedback = object : FoldFeedback {
+      override fun triggerFoldFeedback(hapticsEnabled: Boolean, soundEnabled: Boolean) { feedbackCount++ }
+    }
+    composeTestRule.setContent {
+      DeviceConfigurationOverride(DeviceConfigurationOverride.ForcedSize(DpSize(650.dp, 900.dp))) {
+        CompositionLocalProvider(LocalFoldEnvironment provides environment, LocalFoldFeedback provides feedback) {
+          EditorScreen(project.id, file.relativePath, viewModel, onBackClick = {})
+        }
+      }
+    }
+    waitForDocument("Introduction")
+    composeTestRule.waitUntil(10_000) { angles.subscriptionCount.value > 0 }
+    val draft = viewModel.documentTextFieldState.text.toString()
+    fun holdFor(duration: Long) {
+      repeat((duration / 50).toInt()) {
+        clock.addAndGet(50)
+        composeTestRule.mainClock.advanceTimeBy(50)
+        composeTestRule.waitForIdle()
+      }
+    }
+    holdFor(500)
+    angles.value = 158f
+    holdFor(250)
+    angles.value = 173f
+    holdFor(250)
+    composeTestRule.waitUntil(10_000) { viewModel.uiState.value.hemingwayMetrics != null }
+    composeTestRule.onNodeWithText("Words").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      assertEquals(SidebarMode.METRICS, viewModel.uiState.value.sidebarMode)
+      assertEquals(draft, viewModel.documentTextFieldState.text.toString())
+      assertTrue(!viewModel.companion.state.value.isOpen)
+      assertEquals(1, feedbackCount)
+    }
+    holdFor(1300)
+    angles.value = 158f
+    holdFor(250)
+    angles.value = 173f
+    holdFor(250)
+    composeTestRule.runOnIdle {
+      assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
+      assertEquals(2, feedbackCount)
+    }
+  }
+
+  @Test fun testInjectedFoldCannotCommitBehindAnotherWindow() {
+    db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
+    val angles = MutableStateFlow(180f)
+    val clock = java.util.concurrent.atomic.AtomicLong(0)
+    val dialog = mutableStateOf(false)
+    var feedbackCount = 0
+    val environment = object : FoldEnvironment {
+      override val sensorAvailable = true
+      override val angles = angles
+      override val geometry = MutableStateFlow<FoldGeometry?>(null)
+      override fun monotonicTimeMillis() = clock.get()
+    }
+    val feedback = object : FoldFeedback {
+      override fun triggerFoldFeedback(hapticsEnabled: Boolean, soundEnabled: Boolean) { feedbackCount++ }
+    }
+    wideEditor(feedback, environment) {
+      if (dialog.value) androidx.compose.material3.AlertDialog(
+          onDismissRequest = { dialog.value = false },
+          title = { androidx.compose.material3.Text("Modal test") },
+          confirmButton = { androidx.compose.material3.TextButton(onClick = { dialog.value = false }) {
+            androidx.compose.material3.Text("Dismiss modal")
+          } })
+    }
+    composeTestRule.waitUntil(5_000) { angles.subscriptionCount.value > 0 }
+    fun holdFor(duration: Long) {
+      repeat((duration / 50).toInt()) {
+        clock.addAndGet(50)
+        composeTestRule.mainClock.advanceTimeBy(50)
+        composeTestRule.waitForIdle()
+      }
+    }
+    holdFor(500)
+    composeTestRule.runOnIdle { dialog.value = true }
+    angles.value = 145f
+    holdFor(250)
+    angles.value = 180f
+    holdFor(250)
+    composeTestRule.runOnIdle {
+      assertTrue("An unrelated modal window must block the main editor's gesture", !viewModel.companion.state.value.isOpen)
+      assertEquals(0, feedbackCount)
+    }
+    composeTestRule.onNodeWithText("Dismiss modal").performClick()
+    holdFor(500)
+    angles.value = 145f
+    holdFor(250)
+    angles.value = 180f
+    holdFor(250)
+    composeTestRule.runOnIdle {
+      assertTrue(viewModel.companion.state.value.isOpen)
+      assertEquals(1, feedbackCount)
+    }
   }
 
   @Test

@@ -114,6 +114,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.semantics.stateDescription
@@ -146,6 +147,8 @@ fun EditorScreen(
     val secondaryState = secondaryEditor?.uiState?.collectAsStateWithLifecycle()?.value
     val secondarySwitching = secondaryEditor?.switchingSecondaryFile?.collectAsStateWithLifecycle()?.value == true
     val foldSetting by viewModel.foldToSplit.collectAsStateWithLifecycle()
+    val foldActionSetting by viewModel.foldShortcutAction.collectAsStateWithLifecycle()
+    val foldAction = FoldShortcutAction.fromSetting(foldActionSetting?.value)
     val foldHaptics by viewModel.foldHaptics.collectAsStateWithLifecycle()
     val foldSound by viewModel.foldSound.collectAsStateWithLifecycle()
     val hapticsEnabled = foldHaptics?.value != "false"
@@ -154,23 +157,14 @@ fun EditorScreen(
     val foldEnvironment = rememberFoldEnvironment()
     val foldGeometry by foldEnvironment.geometry.collectAsStateWithLifecycle(initialValue = null)
     var showReferencePicker by remember { mutableStateOf(false) }
-    var showFoldSettings by remember { mutableStateOf(false) }
     var headerMenuOpen by remember { mutableStateOf(false) }
     var pointerHeld by remember { mutableStateOf(false) }
     val companionSavedState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val platformView = LocalView.current
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
     if (showReferencePicker) ReferencePicker(viewModel,
         onSelect = { secondaryEditor?.switchSecondaryFile(it) },
         onDismiss = { showReferencePicker = false })
-    if (showFoldSettings) FoldShortcutDialog(
-        theme = theme,
-        enabled = foldSetting?.value == "true", available = foldEnvironment.sensorAvailable,
-        onEnabledChange = viewModel::setFoldToSplit,
-        hapticsEnabled = hapticsEnabled, soundEnabled = soundEnabled,
-        onHapticsChanged = viewModel::setFoldHaptics, onSoundChanged = viewModel::setFoldSound,
-        onTryFeedback = { tactileFeedback.triggerFoldFeedback(hapticsEnabled, soundEnabled) },
-        onDismiss = { showFoldSettings = false }
-    )
 
     LaunchedEffect(viewModel.documentTextFieldState) {
         snapshotFlow { viewModel.documentTextFieldState.text.toString() }
@@ -309,19 +303,29 @@ fun EditorScreen(
         }
         val supportingVisible = companionVisible || (isDualPane && uiState.isSidebarOpen)
         val imeVisible = WindowInsets.ime.getBottom(density) > 0
-        BackHandler(enabled = companion.isOpen && !imeVisible && !showReferencePicker && !showFoldSettings && !headerMenuOpen) {
+        BackHandler(enabled = companion.isOpen && !imeVisible && !showReferencePicker && !headerMenuOpen) {
             if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED) else viewModel.toggleCompanion()
         }
         val bend = rememberFoldGestureProgress(
             environment = foldEnvironment, enabled = foldSetting?.value == "true",
-            eligible = companionEnabled && geometry?.isVertical != false && !showRenameDialog && !showDeleteDialog &&
-                !showReferencePicker && !showFoldSettings && !headerMenuOpen,
-            inputSafe = { canSplit && !pointerHeld && viewModel.documentTextFieldState.composition == null &&
+            eligible = companionEnabled && windowFocused && geometry?.isVertical != false && !showRenameDialog && !showDeleteDialog &&
+                !showReferencePicker && !headerMenuOpen && uiState.sidebarMode != SidebarMode.SETTINGS,
+            resetKey = foldAction,
+            inputSafe = { !pointerHeld && viewModel.documentTextFieldState.composition == null &&
                 secondaryEditor?.documentTextFieldState?.composition == null },
             onToggle = {
-                viewModel.toggleCompanion()
-                tactileFeedback.triggerFoldFeedback(hapticsEnabled, soundEnabled)
-                platformView.announceForAccessibility(if (viewModel.companion.state.value.isOpen) "Split view opened" else "Split view closed")
+                if (viewModel.performFoldShortcut(foldAction, canSplit)) {
+                    tactileFeedback.triggerFoldFeedback(hapticsEnabled, soundEnabled)
+                    val announcement = when (foldAction) {
+                        FoldShortcutAction.METRICS -> if (viewModel.uiState.value.sidebarMode == SidebarMode.METRICS)
+                            "Reader metrics opened" else "Reader metrics closed"
+                        FoldShortcutAction.SECOND_EDITOR -> if (viewModel.companion.state.value.isOpen)
+                            "Split view opened" else "Split view closed"
+                    }
+                    platformView.announceForAccessibility(announcement)
+                } else {
+                    Toast.makeText(context, "Second editor needs a wider window. Choose Reader metrics in Settings → Behavior → Fold shortcut.", Toast.LENGTH_LONG).show()
+                }
             }
         )
 
@@ -370,7 +374,6 @@ fun EditorScreen(
                                     isCompanionOpen = companion.isOpen,
                                     onChooseFile = onChooseFile,
                                     onSplitToggle = viewModel::toggleCompanion,
-                                    onFoldSettings = { showFoldSettings = true },
                                     onMenuVisibilityChanged = { headerMenuOpen = it },
                                     onBackClick = {
                                         if (companion.isOpen) {
@@ -693,7 +696,6 @@ fun EditorHeader(
     canSplit: Boolean = false,
     isCompanionOpen: Boolean = false,
     onSplitToggle: () -> Unit = {},
-    onFoldSettings: () -> Unit = {},
     onMenuVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val fileName = filePath.split('/').last()
@@ -776,7 +778,6 @@ fun EditorHeader(
                     )
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Fold shortcut") }, onClick = { showMenu = false; onFoldSettings() })
                     DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; onMoreOptionsAction("Settings") })
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
                     DropdownMenuItem(text = { Text("Copy Markdown") }, onClick = { showMenu = false; onMoreOptionsAction("Copy Markdown") })

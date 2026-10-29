@@ -145,6 +145,8 @@ class EditorViewModel(
     }, dispatcher = defaultDispatcher)
     val foldToSplit = db.settingDao().getSettingFlow(SettingKeys.FOLD_TO_SPLIT)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val foldShortcutAction = db.settingDao().getSettingFlow(SettingKeys.FOLD_SHORTCUT_ACTION)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val foldHaptics = db.settingDao().getSettingFlow(SettingKeys.FOLD_HAPTICS)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val foldSound = db.settingDao().getSettingFlow(SettingKeys.FOLD_SOUND)
@@ -160,14 +162,20 @@ class EditorViewModel(
         companion.setOpen(opening)
     }
 
-    fun setFoldToSplit(enabled: Boolean) = setFoldPreference(SettingKeys.FOLD_TO_SPLIT, enabled)
-    fun setFoldHaptics(enabled: Boolean) = setFoldPreference(SettingKeys.FOLD_HAPTICS, enabled)
-    fun setFoldSound(enabled: Boolean) = setFoldPreference(SettingKeys.FOLD_SOUND, enabled)
-
-    private fun setFoldPreference(key: String, enabled: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            db.settingDao().insertSetting(SettingEntity(key, enabled.toString()))
+    /** Returns false when the selected second-editor action cannot fit the current window. */
+    fun performFoldShortcut(action: FoldShortcutAction, canSplit: Boolean): Boolean {
+        when (action) {
+            FoldShortcutAction.METRICS -> toggleSidebar(
+                if (_uiState.value.sidebarMode == SidebarMode.METRICS) SidebarMode.CLOSED else SidebarMode.METRICS
+            )
+            FoldShortcutAction.SECOND_EDITOR -> {
+                if (!canSplit) return false
+                if (companion.state.value.isOpen && _uiState.value.isSidebarOpen) {
+                    toggleSidebar(SidebarMode.CLOSED)
+                } else toggleCompanion()
+            }
         }
+        return true
     }
 
     suspend fun listReferenceFiles(projectId: Long, path: String): kotlinx.collections.immutable.ImmutableList<VfsNode> {

@@ -677,6 +677,8 @@ fun SettingsTabsContent(
                               }, theme = theme)
                           }
                       }
+                    Spacer(Modifier.height(theme.dimensions.spacingExtraLarge))
+                    FoldShortcutSettings(db = db, theme = theme)
                 }
                 2 -> { // Stats tab
                     StatsTabContent(db = db, theme = theme, appFont = appFont)
@@ -933,7 +935,7 @@ private fun AboutLinkRow(
 }
 
 @Composable
-private fun SettingsRadioRow(
+internal fun SettingsRadioRow(
     label: String,
     selected: Boolean,
     theme: com.attachdesign.kern.ui.theme.AppColorTheme,

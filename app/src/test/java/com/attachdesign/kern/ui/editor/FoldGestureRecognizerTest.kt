@@ -22,6 +22,13 @@ class FoldGestureRecognizerTest {
         gesture()
         assertEquals(2, commits)
     }
+    @Test fun `gentle bend works when a flat hinge reports less than 175 degrees`() {
+        hold(173f, 500)
+        hold(158f, 200)
+        hold(165f, 1500)
+        hold(173f, 200)
+        assertEquals(1, commits)
+    }
     @Test fun `initial unfolding and noise near flat never toggle`() {
         hold(100f, 500); hold(180f, 500)
         repeat(8) { hold(171f, 100); hold(178f, 100) }
@@ -29,12 +36,12 @@ class FoldGestureRecognizerTest {
     }
     @Test fun `brief jitter at bend threshold does not arm`() {
         hold(180f, 400)
-        repeat(5) { hold(145f, 50); hold(160f, 50) }
+        repeat(5) { hold(155f, 50); hold(165f, 50) }
         hold(180f, 200)
         assertEquals(0, commits)
     }
     @Test fun `sustained book posture cancels until a fresh baseline`() {
-        hold(180f, 400); hold(140f, 2400); hold(180f, 200)
+        hold(180f, 400); hold(140f, 3000); hold(180f, 200)
         assertEquals(0, commits)
         hold(180f, 500); hold(145f, 200); hold(180f, 200)
         assertEquals(1, commits)
@@ -54,7 +61,7 @@ class FoldGestureRecognizerTest {
         assertEquals(0, commits)
     }
     @Test fun `reopening must settle and cooldown suppresses repeats`() {
-        hold(180f, 400); hold(145f, 200); hold(180f, 50); hold(170f, 100)
+        hold(180f, 400); hold(145f, 200); hold(180f, 50); hold(165f, 100)
         assertEquals(0, commits)
         hold(180f, 200)
         assertEquals(1, commits)

@@ -257,6 +257,37 @@ class EditorViewModelTest {
     }
 
     @Test
+    fun `fold metrics ignores split width and preserves the live draft`() = runTest {
+        val source = "An unsaved **draft** with a sentence."
+        viewModel.documentTextFieldState.edit { replace(0, length, source); selection = androidx.compose.ui.text.TextRange(4) }
+        assertTrue(viewModel.performFoldShortcut(FoldShortcutAction.METRICS, canSplit = false))
+        advanceUntilIdle()
+        assertEquals(SidebarMode.METRICS, viewModel.uiState.value.sidebarMode)
+        assertTrue(viewModel.uiState.value.hemingwayMetrics != null)
+        assertEquals(source, viewModel.documentTextFieldState.text.toString())
+        assertEquals(androidx.compose.ui.text.TextRange(4), viewModel.documentTextFieldState.selection)
+        assertTrue(!viewModel.companion.state.value.isOpen)
+        viewModel.performFoldShortcut(FoldShortcutAction.METRICS, canSplit = false)
+        assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
+    }
+
+    @Test
+    fun `fold second editor respects width and reveals an existing editor behind metrics`() = runTest {
+        assertTrue(!viewModel.performFoldShortcut(FoldShortcutAction.SECOND_EDITOR, canSplit = false))
+        assertTrue(!viewModel.companion.state.value.isOpen)
+        assertTrue(viewModel.performFoldShortcut(FoldShortcutAction.SECOND_EDITOR, canSplit = true))
+        viewModel.toggleSidebar(SidebarMode.METRICS)
+        viewModel.performFoldShortcut(FoldShortcutAction.SECOND_EDITOR, canSplit = true)
+        assertTrue(viewModel.companion.state.value.isOpen)
+        assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
+        viewModel.performFoldShortcut(FoldShortcutAction.SECOND_EDITOR, canSplit = true)
+        assertTrue(!viewModel.companion.state.value.isOpen)
+        assertEquals(FoldShortcutAction.SECOND_EDITOR, FoldShortcutAction.fromSetting(null))
+        assertEquals(FoldShortcutAction.SECOND_EDITOR, FoldShortcutAction.fromSetting("invalid"))
+        assertEquals(FoldShortcutAction.METRICS, FoldShortcutAction.fromSetting("METRICS"))
+    }
+
+    @Test
     fun `split restores prior sidebar without changing document state`() = runTest {
         viewModel.documentTextFieldState.edit { replace(0, length, "Unsaved **draft**") }
         viewModel.toggleSidebar(SidebarMode.SETTINGS)

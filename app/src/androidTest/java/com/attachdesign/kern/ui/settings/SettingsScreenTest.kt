@@ -74,6 +74,25 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun foldActionLivesInBehaviorSettingsAndPersistsAcrossReopening() {
+        show(fontScale = 2f)
+        rule.onNodeWithText("Behavior").performClick()
+        rule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
+        rule.onNodeWithText("Second editor").performScrollTo().assertIsSelected()
+        rule.onNodeWithText("Reader metrics (Hemingway)").performScrollTo().performClick()
+        rule.waitUntil(5_000) {
+            db.settingDao().getSetting(SettingKeys.FOLD_SHORTCUT_ACTION)?.value == "METRICS"
+        }
+        rule.onNodeWithText("Done").performClick()
+        rule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
+        rule.onNodeWithText("Reader metrics (Hemingway)").performScrollTo().assertIsSelected()
+        rule.onNodeWithText("Second editor").performScrollTo().performClick()
+        rule.waitUntil(5_000) {
+            db.settingDao().getSetting(SettingKeys.FOLD_SHORTCUT_ACTION)?.value == "SECOND_EDITOR"
+        }
+    }
+
+    @Test
     fun settingRowHasOneSwitchActionAndPersistsOneToggle() {
         show()
         rule.onNodeWithText("Behavior").performClick()
@@ -141,6 +160,11 @@ class SettingsScreenTest {
         rule.onNodeWithContentDescription("Auto-pair brackets").performClick()
         rule.waitUntil(5_000) {
             db.settingDao().getSetting(SettingKeys.AUTO_COMPLETE_BRACKETS)?.value == "false"
+        }
+        // Room writes finish before the observed Flow necessarily reaches Compose.
+        rule.waitUntil(5_000) {
+            rule.onNodeWithContentDescription("Auto-pair brackets").fetchSemanticsNode()
+                .config[SemanticsProperties.Selected] == false
         }
         rule.onNodeWithContentDescription("Auto-pair brackets").assertIsNotSelected()
     }

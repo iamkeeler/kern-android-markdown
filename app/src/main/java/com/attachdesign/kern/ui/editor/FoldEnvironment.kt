@@ -120,10 +120,10 @@ fun rememberFoldGestureProgress(
                         latest?.let { angle ->
                             if (recognizer.onAngle(angle, now)) pendingUntil = now + 500
                             progress.floatValue = recognizer.bendProgress
-                            if (pendingUntil >= now && angle >= 175f && currentSafe.value()) {
+                            if (pendingUntil >= now && angle >= FoldGestureRecognizer.FLAT_ANGLE && currentSafe.value()) {
                                 currentToggle.value()
                                 pendingUntil = -1L
-                            } else if (angle < 175f || now > pendingUntil) pendingUntil = -1L
+                            } else if (angle < FoldGestureRecognizer.FLAT_ANGLE || now > pendingUntil) pendingUntil = -1L
                         }
                         delay(50)
                     }
