@@ -1,0 +1,12 @@
+{
+  "code": 41,
+  "major": 0,
+  "minor": 1,
+  "patch": 40,
+  "ref": "codex/application-polish",
+  "reservation_id": "0e035cfb-9b40-4df5-bf4b-7cb435cc44c9",
+  "run_attempt": "1",
+  "run_id": "40895078796",
+  "source_commit": "c7c9a7c467c1ea56d3c3d5d7269db4cf50c02cf0",
+  "version_name": "0.1.40"
+}
