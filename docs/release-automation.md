@@ -48,7 +48,21 @@ The tests use temporary bare Git repositories to exercise fresh checkouts, compe
 
 Maintain `release-notes/whatsnew-en-US` as the English What's New text for the upcoming release (1–500 characters). The [Play upload action](https://github.com/r0adkll/upload-google-play#inputs) uses the `whatsnew-<locale>` naming convention. Update this file whenever user-visible changes are added; `docs/play-store-listing.md` links to the current draft rather than duplicating it.
 
-Both distribution workflows prepare `build/release-notes.txt` with `scripts/prepare_release_notes.py` after packaged-version verification. The prepared notes combine the maintained text with the actual reserved version/build, source commit, ref, run and attempt; Firebase dispatch notes add optional tester context. Firebase and tagged GitHub releases use the prepared file, while Play uses the localized source. Notes are also included in build artifacts. Blank or oversized English notes fail the preparation/tests before upload.
+Maintain the detailed Markdown document at `app/src/main/assets/release-notes/current.md` alongside the short store summary. It has no hardcoded version title: preparation supplies the actual reserved version/build and source commit.
+
+After version reservation and **before Gradle builds**, `scripts/prepare_release_notes.py` prepares:
+
+- `build/release-notes.txt`: short summary plus actual build/source/run metadata and optional Firebase tester context.
+- `build/Release Notes/Kern-<version>-build-<code>.md`: detailed, versioned Markdown for release downloads.
+- The identical Markdown under `build/releaseNotesAssets/release-notes/`, included by the Android asset source set.
+
+After packaged-version verification, `scripts/prepare_release_notes.py --verify-apk <apk>` opens the APK and checks that its current versioned Markdown asset exists and matches the prepared document byte for byte. Missing or outdated bundled notes block distribution. Both publishing workflows include the Markdown in build artifacts; tagged GitHub releases attach it alongside the APK/AAB. Firebase/GitHub release descriptions use the prepared summary and Play uses the localized short source. Blank or oversized short notes and empty detailed Markdown fail preparation/tests.
+
+### Notes visible to the user
+
+On the first Files view after installing/updating a build, Kern copies the bundled document into the app-owned **Files → Release Notes** folder as `Kern-<version>-build-<code>.md`. It uses the existing file browser and Markdown editor, with no new reader screen or automatic navigation. Versions already installed are recorded only after a confirmed disk write and index transaction. Restarts preserve edits, moved notes and intentional deletions; later installed builds add their own file and retain earlier notes. Folder/filename collisions receive a numbered alternative without overwriting existing content. External workspaces and the selected workspace are preserved. Failure to install optional notes does not block Files startup and can retry on the next launch.
+
+Local builds can use the authored Markdown asset with their actual package version/build without reserving distribution numbers. Shared builds require the generated versioned asset and APK-content verification above. For a restored workspace with missing metadata, a matching existing note is reindexed without rewriting it.
 
 The checked-in Gradle version remains the baseline/lower bound described above. The next shared build receives fresh version and build numbers from the shared counter; release notes avoid hardcoded version labels so the content stays attached to the actual packaged version.
 

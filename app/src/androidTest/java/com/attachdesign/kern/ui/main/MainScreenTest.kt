@@ -124,6 +124,38 @@ class MainScreenTest {
   }
 
   @Test
+  fun testBundledReleaseNotesAppearInFilesAndOpenAsMarkdown() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val version = com.attachdesign.kern.data.storage.BundledReleaseNotesInstaller.currentVersion(context)
+    var opened: EditorKey? = null
+    composeTestRule.setContent {
+      MainScreen({ opened = it as? EditorKey }, db, storageManager, fileOpsManager, Modifier.fillMaxSize())
+    }
+    waitForStartup()
+    val root = db.projectDao().getAllProjects().single { !it.isExternal && it.path == "root" }
+    val path = db.settingDao().getSetting(version.installedKey)!!.value
+    val filename = path.substringAfterLast('/')
+    composeTestRule.onNodeWithText(path.substringBeforeLast('/')).assertIsDisplayed().performClick()
+    waitForText(filename)
+    composeTestRule.onNodeWithText(filename).assertIsDisplayed()
+    val contents = runBlocking { storageManager.readFile(root, path) }
+    assertTrue(contents.startsWith(version.heading + "\n"))
+    assertTrue(contents.contains("## What's new"))
+    assertEquals(com.attachdesign.kern.data.storage.BundledReleaseNotesInstaller.currentMarkdown(storageManager, version), contents)
+    android.os.ParcelFileDescriptor.AutoCloseInputStream(
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
+            "screencap -p /sdcard/Download/kern-bundled-release-notes.png"
+        )
+    ).use { it.readBytes() }
+    composeTestRule.onNodeWithText(filename).performClick()
+    composeTestRule.waitUntil(5_000) { opened != null }
+    composeTestRule.runOnIdle {
+      assertEquals(root.id, opened?.projectId)
+      assertEquals(path, opened?.filePath)
+    }
+  }
+
+  @Test
   fun testSearchOpensReadyToTypeAndClearKeepsSearchOpen() {
     composeTestRule.setContent {
       MainScreen({}, db, storageManager, fileOpsManager, Modifier.fillMaxSize())
@@ -231,6 +263,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("files").performClick()
 
     // Click on the project item to navigate into the workspace directory
+    waitForText("Release Notes")
     waitForText("Main Project")
     composeTestRule.onNodeWithText("Main Project").performClick()
 

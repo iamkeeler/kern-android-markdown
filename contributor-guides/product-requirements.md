@@ -54,6 +54,10 @@ A high-performance, minimal, and typography-first Markdown editor designed for m
 
 ---
 
+### Bundled release notes
+
+Every distributed build includes a detailed Markdown document labeled with its actual version and build number. The first Files view after an install/update adds it once under Files → Release Notes. Users can read, edit, move or share it through the existing Markdown/file interfaces. Previous notes, edits, filename collisions and intentional deletions are preserved. Notes installation never writes into external workspaces or changes the selected workspace, and optional installation errors must not block startup. Distribution verifies the bundled Markdown before upload and also includes it in release downloads.
+
 ### 3. Technical Stack & Implementation Constraints
 
 | Layer | Technology Choice | Architectural Justification |

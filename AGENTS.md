@@ -18,7 +18,7 @@ Prefer stable Android, Jetpack Compose, Kotlin, and Material 3 APIs and platform
 
 Every shared Firebase or Play build must have a new version name and a strictly greater Android version code. Use the repository's distribution workflows: they reserve both numbers from the shared counter, verify the packaged APK, and record its source commit. Never distribute a build using unchanged numbers or a per-workflow run counter. See [release automation](docs/release-automation.md#version-and-build-number-allocation).
 
-Keep `release-notes/whatsnew-en-US` current for user-visible changes before distributing a build. Firebase, Play and tagged GitHub releases use these maintained What's New notes.
+Keep `release-notes/whatsnew-en-US` and the detailed Markdown in `app/src/main/assets/release-notes/current.md` current for user-visible changes before distributing a build. Distribution prepares and verifies the versioned Markdown inside the APK, attaches it to release artifacts, and installs it once under Files → Release Notes. Preserve users' earlier notes and edits; never overwrite them or recreate a deliberately deleted note on every launch.
 
 ## Theme, system UI, and accessibility requirements
 

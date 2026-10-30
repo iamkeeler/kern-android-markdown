@@ -60,6 +60,11 @@ jobs:
         id: version
         run: python3 scripts/build_version.py reserve
 
+      - name: Prepare release notes
+        env:
+          EXTRA_RELEASE_NOTES: ${{ github.event.inputs.release_notes || '' }}
+        run: python3 scripts/prepare_release_notes.py
+
       # Run unit tests to ensure stability before distributing
       - name: Test and build Debug APK
         run: ./gradlew testDebugUnitTest assembleDebug --no-daemon
@@ -67,10 +72,8 @@ jobs:
       - name: Verify packaged version
         run: python3 scripts/build_version.py verify-apk --apk app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Prepare release notes
-        env:
-          EXTRA_RELEASE_NOTES: ${{ github.event.inputs.release_notes || '' }}
-        run: python3 scripts/prepare_release_notes.py
+      - name: Verify bundled Markdown release notes
+        run: python3 scripts/prepare_release_notes.py --verify-apk app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
@@ -80,6 +83,7 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
             build/build-version.json
             build/release-notes.txt
+            build/Release Notes/*.md
           if-no-files-found: error
 
       # Extract Firebase App ID dynamically from google-services.json to prevent secret missing errors
@@ -110,4 +114,6 @@ jobs:
           generate_release_notes: false
           body_path: build/release-notes.txt
           fail_on_unmatched_files: true
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            build/Release Notes/*.md

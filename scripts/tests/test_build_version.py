@@ -31,8 +31,11 @@ class VersionPolicyTest(unittest.TestCase):
                 build = workflow.index("run: ./gradlew")
                 verify = workflow.index("run: python3 scripts/build_version.py verify-apk")
                 self.assertLess(reserve, build)
+                self.assertLess(workflow.index("run: python3 scripts/prepare_release_notes.py\n"), build)
                 self.assertLess(build, verify)
+                self.assertLess(build, workflow.index("prepare_release_notes.py --verify-apk"))
                 self.assertLess(verify, workflow.index(upload))
+                self.assertLess(workflow.index("prepare_release_notes.py --verify-apk"), workflow.index(upload))
 
     def test_both_numbers_advance_from_latest_source_or_counter(self):
         old_branch = dict(BASE, patch=12, code=13)

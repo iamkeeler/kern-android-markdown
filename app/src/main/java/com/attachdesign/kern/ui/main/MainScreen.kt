@@ -1,5 +1,6 @@
 package com.attachdesign.kern.ui.main
 
+import com.attachdesign.kern.data.storage.BundledReleaseNotesInstaller
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -124,7 +125,14 @@ fun MainScreen(
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val vm: MainScreenViewModel = viewModel { MainScreenViewModel(db, storageManager, fileOpsManager) }
+    val applicationContext = context.applicationContext
+    val vm: MainScreenViewModel = viewModel {
+        MainScreenViewModel(db, storageManager, fileOpsManager, installReleaseNotes = {
+            val installer = BundledReleaseNotesInstaller(db, storageManager)
+            val version = BundledReleaseNotesInstaller.currentVersion(applicationContext)
+            installer.install(version, BundledReleaseNotesInstaller.currentMarkdown(storageManager, version))
+        })
+    }
     val state by vm.explorerState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }

@@ -98,6 +98,41 @@ class MainScreenViewModelTest {
     }
 
     @Test
+    fun `Files root keeps internal and external workspaces reachable without linking itself`() = runTest {
+        val root = ProjectEntity(1, "Files", "root", false, true)
+        val imported = ProjectEntity(2, "Opened Files", "opened_files", false, false)
+        val external = ProjectEntity(3, "Work", "content://work", true, false)
+        val projects = listOf(root, imported, external, root.copy(id = 4))
+        coEvery { projectDao.getAllProjects() } returns projects
+        coEvery { projectDao.getAllProjectsFlow() } returns kotlinx.coroutines.flow.flowOf(projects)
+        coEvery { projectDao.getSelectedProject() } returns root
+        coEvery { fileDao.getFileByPath(any(), any()) } returns null
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+        viewModel.explorerState.test {
+            advanceUntilIdle()
+            val names = viewModel.explorerState.value.drillFiles.map { it.name }
+            assertTrue(names.contains("Opened Files"))
+            assertTrue(names.contains("Work"))
+            assertFalse(names.contains("Files"))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `release note installation failure does not block the files workspace`() = runTest {
+        coEvery { projectDao.getAllProjectsFlow() } returns kotlinx.coroutines.flow.flowOf(emptyList())
+        var attempted = false
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher,
+            installReleaseNotes = { attempted = true; throw java.io.IOException("No writable space") })
+        viewModel.explorerState.test {
+            advanceUntilIdle()
+            assertTrue(attempted)
+            assertFalse(viewModel.explorerState.value.isLoading)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `creation delegates the submitted leaf and returns actual provider identity`() = runTest {
         val project = ProjectEntity(1, "Test", "test", false, true)
         coEvery { projectDao.getSelectedProject() } returns project

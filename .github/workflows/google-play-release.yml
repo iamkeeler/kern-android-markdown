@@ -105,14 +105,17 @@ jobs:
         id: version
         run: python3 scripts/build_version.py reserve
 
+      - name: Prepare release notes
+        run: python3 scripts/prepare_release_notes.py
+
       - name: Test, lint, and build signed release APK and bundle
         run: ./gradlew testDebugUnitTest lintDebug assembleRelease bundleRelease --no-daemon
 
       - name: Verify packaged version
         run: python3 scripts/build_version.py verify-apk --apk app/build/outputs/apk/release/app-release.apk
 
-      - name: Prepare release notes
-        run: python3 scripts/prepare_release_notes.py
+      - name: Verify bundled Markdown release notes
+        run: python3 scripts/prepare_release_notes.py --verify-apk app/build/outputs/apk/release/app-release.apk
 
       - name: Fail on Android lint errors
         run: |
@@ -129,6 +132,7 @@ jobs:
             app/build/outputs/bundle/release/*.aab
             build/build-version.json
             build/release-notes.txt
+            build/Release Notes/*.md
           if-no-files-found: error
 
       - name: Upload signed APK artifact
@@ -139,6 +143,7 @@ jobs:
             app/build/outputs/apk/release/*.apk
             build/build-version.json
             build/release-notes.txt
+            build/Release Notes/*.md
           if-no-files-found: error
 
       - name: Validate Play service-account JSON
@@ -160,6 +165,7 @@ jobs:
             app/build/outputs/apk/release/app-release.apk
             app/build/outputs/bundle/release/app-release.aab
             build/build-version.json
+            build/Release Notes/*.md
 
       - name: Upload to Google Play
         uses: r0adkll/upload-google-play@v1

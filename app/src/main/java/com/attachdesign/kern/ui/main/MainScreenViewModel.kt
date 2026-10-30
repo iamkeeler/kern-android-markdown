@@ -57,7 +57,8 @@ class MainScreenViewModel(
     private val db: AppDatabase,
     private val storageManager: StorageManager,
     private val fileOpsManager: FileOperationsManager,
-    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
+    private val installReleaseNotes: suspend () -> Unit = {}
 ) : ViewModel() {
 
     companion object {
@@ -97,6 +98,13 @@ class MainScreenViewModel(
     init {
         viewModelScope.launch {
             seedInitialData()
+            try {
+                withContext(ioDispatcher) { installReleaseNotes() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                System.err.println("Bundled release notes could not be installed; will retry on next launch.")
+            }
             seedQuotes()
             refreshAllFiles()
             selectRandomQuote()
@@ -460,10 +468,12 @@ class MainScreenViewModel(
 
         if (!project.isExternal && project.path == "root" && path.isEmpty()) {
             val allProjects = withContext(ioDispatcher) { db.projectDao().getAllProjects() }
-            val externalDirs = allProjects.filter { it.isExternal }.map { extProj ->
-                VfsNode.Directory(name = extProj.name, relativePath = "external:${extProj.id}")
+            // Keep every other workspace reachable when the default Files root is present,
+            // including app-owned workspaces such as imported files. The link prefix is legacy.
+            val workspaceDirs = allProjects.filter { it.isExternal || it.path != "root" }.map { workspace ->
+                VfsNode.Directory(name = workspace.name, relativePath = "external:${workspace.id}")
             }
-            enriched = externalDirs + enriched
+            enriched = workspaceDirs + enriched
         }
 
         _uiState.update { state ->
