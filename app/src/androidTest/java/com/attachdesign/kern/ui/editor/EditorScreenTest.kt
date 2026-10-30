@@ -380,14 +380,18 @@ class EditorScreenTest {
       assertEquals(draft, viewModel.documentTextFieldState.text.toString())
       assertTrue(!viewModel.companion.state.value.isOpen)
     }
-    composeTestRule.onNodeWithText("Done").performClick()
-    composeTestRule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
+    composeTestRule.onNodeWithText("Appearance").performClick()
+    composeTestRule.onNodeWithText("Behavior").performClick()
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onNodeWithContentDescription("Fold haptics").fetchSemanticsNode()
+          .config[androidx.compose.ui.semantics.SemanticsProperties.ToggleableState] ==
+          androidx.compose.ui.state.ToggleableState.Off
+    }
     composeTestRule.onNodeWithContentDescription("Fold haptics").performScrollTo().assertIsOff()
     composeTestRule.onNodeWithContentDescription("Paper crease sound").performScrollTo().assertIsOn()
     assertEquals("false", db.settingDao().getSetting("fold_haptics")?.value)
     assertEquals("true", db.settingDao().getSetting("fold_sound")?.value)
-    captureScreenshot("fold-feedback-dialog")
-    composeTestRule.onNodeWithText("Done").performClick()
+    captureScreenshot("inline-fold-settings")
     composeTestRule.onNodeWithContentDescription("Close sidebar").performClick()
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
     composeTestRule.runOnIdle { assertEquals(2, calls.size) }
@@ -398,7 +402,6 @@ class EditorScreenTest {
     composeTestRule.onNodeWithContentDescription("Open split view").assertIsDisplayed()
     openFoldSettings()
     composeTestRule.onNodeWithContentDescription("Fold shortcut").assertIsNotEnabled()
-    composeTestRule.onNodeWithText("Done").performClick()
     composeTestRule.onNodeWithContentDescription("Close sidebar").performClick()
     composeTestRule.onNodeWithContentDescription("Open split view").performClick()
     composeTestRule.onNodeWithContentDescription("Second editor pane").assertIsDisplayed()
@@ -409,7 +412,7 @@ class EditorScreenTest {
     composeTestRule.onNodeWithText("Fold shortcut").assertDoesNotExist()
     composeTestRule.onNodeWithText("Settings", substring = false).performClick()
     composeTestRule.onNodeWithText("Behavior").performClick()
-    composeTestRule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
+    composeTestRule.onNodeWithText("FOLD SHORTCUT").performScrollTo().assertIsDisplayed()
   }
 
   @Test fun testInjectedStudyCompanionGestureOpensMetricsWithoutRoomForSecondEditor() {
@@ -465,6 +468,63 @@ class EditorScreenTest {
     composeTestRule.runOnIdle {
       assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
       assertEquals(2, feedbackCount)
+    }
+  }
+
+  @Test fun testInjectedFoldPausesWhileInlineSettingsAreOpenInSecondEditor() {
+    runBlocking { storageManager.writeFile(project, "outline.md", "# Notes beside the draft") }
+    db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
+    val angles = MutableStateFlow(162f)
+    val clock = java.util.concurrent.atomic.AtomicLong(0)
+    var feedbackCount = 0
+    val environment = object : FoldEnvironment {
+      override val sensorAvailable = true
+      override val angles = angles
+      override val geometry = MutableStateFlow<FoldGeometry?>(null)
+      override fun monotonicTimeMillis() = clock.get()
+    }
+    val feedback = object : FoldFeedback {
+      override fun triggerFoldFeedback(hapticsEnabled: Boolean, soundEnabled: Boolean) { feedbackCount++ }
+    }
+    wideEditor(feedback, environment)
+    val draft = viewModel.documentTextFieldState.text.toString()
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.onNodeWithText("Choose file").performClick()
+    composeTestRule.onNodeWithText("outline.md").performClick()
+    val inSecond = hasAnyAncestor(hasContentDescription("Second editor pane"))
+    composeTestRule.waitUntil(15_000) {
+      composeTestRule.onAllNodes(hasContentDescription("Document editor") and inSecond).fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNode(hasContentDescription("More Options") and inSecond).performClick()
+    composeTestRule.onNodeWithText("Settings", substring = false).performClick()
+    composeTestRule.onNodeWithText("Behavior").performClick()
+    composeTestRule.onNodeWithText("Second editor").performScrollTo().assertIsDisplayed()
+    fun holdFor(duration: Long) {
+      repeat((duration / 50).toInt()) {
+        clock.addAndGet(50)
+        composeTestRule.mainClock.advanceTimeBy(50)
+        composeTestRule.waitForIdle()
+      }
+    }
+    holdFor(500)
+    angles.value = 135f
+    holdFor(250)
+    angles.value = 165f
+    holdFor(250)
+    composeTestRule.runOnIdle {
+      assertTrue(viewModel.companion.state.value.isOpen)
+      assertEquals(draft, viewModel.documentTextFieldState.text.toString())
+      assertEquals(0, feedbackCount)
+    }
+    composeTestRule.onNode(hasContentDescription("Close sidebar") and inSecond).performClick()
+    holdFor(500)
+    angles.value = 135f
+    holdFor(250)
+    angles.value = 165f
+    holdFor(250)
+    composeTestRule.runOnIdle {
+      assertTrue(!viewModel.companion.state.value.isOpen)
+      assertEquals(1, feedbackCount)
     }
   }
 

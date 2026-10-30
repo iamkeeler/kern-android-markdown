@@ -18,6 +18,8 @@ Prefer stable Android, Jetpack Compose, Kotlin, and Material 3 APIs and platform
 
 Every shared Firebase or Play build must have a new version name and a strictly greater Android version code. Use the repository's distribution workflows: they reserve both numbers from the shared counter, verify the packaged APK, and record its source commit. Never distribute a build using unchanged numbers or a per-workflow run counter. See [release automation](docs/release-automation.md#version-and-build-number-allocation).
 
+Keep `release-notes/whatsnew-en-US` current for user-visible changes before distributing a build. Firebase, Play and tagged GitHub releases use these maintained What's New notes.
+
 ## Theme, system UI, and accessibility requirements
 
 - Apply the active app theme to system status and navigation bars at the app root. Light themes require a light system-bar background with dark icons; dark themes require a dark background with light icons. Do not rely on a screen-local side effect for this.

@@ -309,7 +309,8 @@ fun EditorScreen(
         val bend = rememberFoldGestureProgress(
             environment = foldEnvironment, enabled = foldSetting?.value == "true",
             eligible = companionEnabled && windowFocused && geometry?.isVertical != false && !showRenameDialog && !showDeleteDialog &&
-                !showReferencePicker && !headerMenuOpen && uiState.sidebarMode != SidebarMode.SETTINGS,
+                !showReferencePicker && !headerMenuOpen && uiState.sidebarMode != SidebarMode.SETTINGS &&
+                (!companionVisible || secondaryState?.sidebarMode != SidebarMode.SETTINGS),
             resetKey = foldAction,
             inputSafe = { !pointerHeld && viewModel.documentTextFieldState.composition == null &&
                 secondaryEditor?.documentTextFieldState?.composition == null },

@@ -74,22 +74,35 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun foldActionLivesInBehaviorSettingsAndPersistsAcrossReopening() {
+    fun foldControlsAreInlineAndPersistAcrossTabsAtLargeFontScale() {
         show(fontScale = 2f)
         rule.onNodeWithText("Behavior").performClick()
-        rule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
         rule.onNodeWithText("Second editor").performScrollTo().assertIsSelected()
+        rule.onAllNodes(isDialog()).assertCountEquals(0)
+        rule.onAllNodes(hasText("Fold shortcut") and
+            SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).assertCountEquals(0)
         rule.onNodeWithText("Reader metrics (Hemingway)").performScrollTo().performClick()
         rule.waitUntil(5_000) {
             db.settingDao().getSetting(SettingKeys.FOLD_SHORTCUT_ACTION)?.value == "METRICS"
         }
-        rule.onNodeWithText("Done").performClick()
-        rule.onNodeWithText("Fold shortcut").performScrollTo().performClick()
+        rule.onNodeWithText("Appearance").performClick()
+        rule.onNodeWithText("Behavior").performClick()
+        rule.waitUntil(5_000) {
+            rule.onNodeWithText("Reader metrics (Hemingway)").fetchSemanticsNode()
+                .config[SemanticsProperties.Selected]
+        }
         rule.onNodeWithText("Reader metrics (Hemingway)").performScrollTo().assertIsSelected()
         rule.onNodeWithText("Second editor").performScrollTo().performClick()
         rule.waitUntil(5_000) {
             db.settingDao().getSetting(SettingKeys.FOLD_SHORTCUT_ACTION)?.value == "SECOND_EDITOR"
         }
+        rule.onNodeWithText("Second editor").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+        rule.onNodeWithContentDescription("Fold haptics").performScrollTo().assertIsDisplayed()
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
+                "screencap -p /sdcard/Download/kern-inline-fold-large-font.png"
+            )
+        ).use { it.readBytes() }
     }
 
     @Test

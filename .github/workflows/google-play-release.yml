@@ -111,6 +111,9 @@ jobs:
       - name: Verify packaged version
         run: python3 scripts/build_version.py verify-apk --apk app/build/outputs/apk/release/app-release.apk
 
+      - name: Prepare release notes
+        run: python3 scripts/prepare_release_notes.py
+
       - name: Fail on Android lint errors
         run: |
           if grep -R "^[1-9][0-9]* errors" app/build/reports/lint-results-*.txt; then
@@ -125,6 +128,7 @@ jobs:
           path: |
             app/build/outputs/bundle/release/*.aab
             build/build-version.json
+            build/release-notes.txt
           if-no-files-found: error
 
       - name: Upload signed APK artifact
@@ -134,6 +138,7 @@ jobs:
           path: |
             app/build/outputs/apk/release/*.apk
             build/build-version.json
+            build/release-notes.txt
           if-no-files-found: error
 
       - name: Validate Play service-account JSON
@@ -148,7 +153,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Kern ${{ steps.version.outputs.version_name }} (build ${{ steps.version.outputs.version_code }})
-          generate_release_notes: true
+          generate_release_notes: false
+          body_path: build/release-notes.txt
           fail_on_unmatched_files: true
           files: |
             app/build/outputs/apk/release/app-release.apk
@@ -163,3 +169,4 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           tracks: ${{ github.event.inputs.track || 'internal' }}
           status: ${{ github.event.inputs.status || 'draft' }}
+          whatsNewDirectory: release-notes

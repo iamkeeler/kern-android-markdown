@@ -21,7 +21,7 @@ The gutter cue tracks the bend without measuring or parsing text on each angle u
 
 ### Paper-fold feedback
 
-The Fold shortcut settings dialog shows live hinge-angle readings while it is open so device sensing can be checked locally. Gestures cannot commit while Settings or another modal window is visible; close Settings before using the shortcut. It also contains independent **Fold haptics** (on initially) and **Paper crease sound** (off initially) settings, plus **Try feedback**. Preview is available without a hinge sensor and does not toggle the companion or modify the draft.
+The inline Fold shortcut section in Settings → Behavior shows live hinge-angle readings while the Behavior tab is open so device sensing can be checked locally. Gestures cannot commit while Settings or another modal window is visible; close Settings before using the shortcut. The same section contains independent **Fold haptics** (on initially) and **Paper crease sound** (off initially) settings, plus **Try feedback**. Preview is available without a hinge sensor and does not toggle the companion or modify the draft.
 
 Kern reuses the supplied StudyCompanion `paper_crease.wav` unchanged: a 95ms mono sound. `TactileFeedbackHelper` pairs it with Android's native confirmation haptic on API 30+, with a native clock-tick fallback on earlier versions. Native view feedback respects device touch-feedback preferences and requires no added vibration permission.
 
@@ -54,4 +54,4 @@ The original commit reproduced five failing instrumentation checks during implem
 
 Emulator tests can inject angle/geometry events through the same platform boundary used by production. They do not establish physical sensor availability, hinge feel, or haptic quality. Validate those on a real book-style foldable before enabling the shortcut by default for a device family. The shortcut remains opt-in.
 
-Fold shortcut refinement verified October 29, 2026: 299 unit tests and 58 instrumentation tests passed, with zero failures/errors/skips; lint reported zero errors and the release APK built. Settings now owns the selected action and live sensor check. See [the refinement verification record](fold-shortcut-verification.md) for regression evidence, the emulator recovery, and the physical-device limit. Compact metrics uses the existing modal sheet and its native dismissal controls; gestures remain blocked behind modal windows.
+Fold shortcut refinement verified October 29, 2026: 299 unit tests and 58 instrumentation tests passed, with zero failures/errors/skips; lint reported zero errors and the release APK built. Settings owns the selected action and live sensor check. See [the refinement verification record](fold-shortcut-verification.md) for regression evidence, the emulator recovery, and the physical-device limit. Compact metrics uses the existing modal sheet and its native dismissal controls; gestures remain blocked behind modal windows.

@@ -42,9 +42,9 @@ Kern is open source and built for Android. See the repository license for detail
 - Designed for phones, tablets, and wider Android surfaces
 - Local-first posture with no account requirement
 
-## What's new — internal test build
+## What's new — upcoming release
 
-Initial internal testing build for Kern, a local-first markdown workspace for Android. This build validates release signing, Play upload automation, markdown editing basics, and Android file workflows.
+The current release notes are maintained in [release-notes/whatsnew-en-US](../release-notes/whatsnew-en-US). They describe the editor readability and canvas-focus improvements, inline fold controls, fold actions/feedback, and document-state refinements included in the upcoming release. Firebase, Play and tagged GitHub releases use that maintained source; update it with user-visible changes before sharing a new build.
 
 ## Category recommendation
 

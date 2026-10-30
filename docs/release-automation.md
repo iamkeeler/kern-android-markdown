@@ -44,6 +44,14 @@ actionlint .github/workflows/android-build-distribution.yml .github/workflows/go
 
 The tests use temporary bare Git repositories to exercise fresh checkouts, competing reservations, failed pushes and retries without modifying the real counter.
 
+## What's New and distribution notes
+
+Maintain `release-notes/whatsnew-en-US` as the English What's New text for the upcoming release (1–500 characters). The [Play upload action](https://github.com/r0adkll/upload-google-play#inputs) uses the `whatsnew-<locale>` naming convention. Update this file whenever user-visible changes are added; `docs/play-store-listing.md` links to the current draft rather than duplicating it.
+
+Both distribution workflows prepare `build/release-notes.txt` with `scripts/prepare_release_notes.py` after packaged-version verification. The prepared notes combine the maintained text with the actual reserved version/build, source commit, ref, run and attempt; Firebase dispatch notes add optional tester context. Firebase and tagged GitHub releases use the prepared file, while Play uses the localized source. Notes are also included in build artifacts. Blank or oversized English notes fail the preparation/tests before upload.
+
+The checked-in Gradle version remains the baseline/lower bound described above. The next shared build receives fresh version and build numbers from the shared counter; release notes avoid hardcoded version labels so the content stays attached to the actual packaged version.
+
 ## Required GitHub repository secrets
 
 Add these in GitHub → repository → Settings → Secrets and variables → Actions:
