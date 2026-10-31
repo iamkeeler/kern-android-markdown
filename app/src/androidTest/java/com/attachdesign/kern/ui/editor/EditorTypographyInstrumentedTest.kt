@@ -85,8 +85,11 @@ class EditorTypographyInstrumentedTest {
 
     @After
     fun tearDown() {
+        val secondary = composeTestRule.activity.viewModelStore["second-editor-${viewModel.sessionId}"] as? EditorViewModel
         composeTestRule.activityRule.scenario.close()
         runBlocking { viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+        // Activity destruction cancels this retained editor but does not join its Room observers.
+        runBlocking { secondary?.viewModelScope?.coroutineContext?.get(Job)?.cancelAndJoin() }
         runBlocking { deletionSession.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
         db.close()
     }

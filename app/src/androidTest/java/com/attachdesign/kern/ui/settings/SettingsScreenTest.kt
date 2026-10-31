@@ -28,7 +28,11 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.attachdesign.kern.data.local.AppDatabase
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.local.SettingKeys
+import com.attachdesign.kern.ui.editor.FoldEnvironment
+import com.attachdesign.kern.ui.editor.FoldGeometry
+import com.attachdesign.kern.ui.editor.LocalFoldEnvironment
 import com.attachdesign.kern.ui.theme.ThemeEngine
+import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -57,11 +61,13 @@ class SettingsScreenTest {
     private fun show(
         fontScale: Float = 1f,
         restoration: StateRestorationTester? = null,
+        foldEnvironment: FoldEnvironment? = null,
         importTheme: suspend (String) -> Unit = { persistImportedTheme(db, it) }
     ) {
         val content: @androidx.compose.runtime.Composable () -> Unit = {
             val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale),
+                LocalFoldEnvironment provides foldEnvironment) {
                 MaterialTheme {
                     Box(Modifier.width(320.dp).fillMaxSize().padding(horizontal = 16.dp)) {
                         SettingsTabsContent(db, ThemeEngine.DefaultLight.toColorTheme(), Modifier.fillMaxSize(), importTheme)
@@ -71,6 +77,28 @@ class SettingsScreenTest {
         }
         if (restoration != null) restoration.setContent(content) else rule.setContent(content)
         rule.waitForIdle()
+    }
+
+    @Test
+    fun foldShortcutDefaultsOnAndExplicitOffSurvivesReentry() {
+        val environment = object : FoldEnvironment {
+            override val sensorAvailable = true
+            override val angles = flowOf(165f)
+            override val geometry = flowOf<FoldGeometry?>(null)
+        }
+        show(foldEnvironment = environment)
+        rule.onNodeWithText("Behavior").performClick()
+        rule.onNodeWithContentDescription("Fold shortcut").performScrollTo().assertIsOn().performClick()
+        rule.waitUntil(5_000) {
+            db.settingDao().getSetting(SettingKeys.FOLD_TO_SPLIT)?.value == "false"
+        }
+        rule.onNodeWithText("Appearance").performClick()
+        rule.onNodeWithText("Behavior").performClick()
+        rule.waitUntil(5_000) {
+            rule.onNodeWithContentDescription("Fold shortcut").fetchSemanticsNode()
+                .config[SemanticsProperties.ToggleableState] == androidx.compose.ui.state.ToggleableState.Off
+        }
+        rule.onNodeWithContentDescription("Fold shortcut").performScrollTo().assertIsOff()
     }
 
     @Test

@@ -272,7 +272,7 @@ class EditorScreenTest {
   }
 
   @Test fun testInjectedHingeGestureTogglesCompanionExactlyOnceEachWay() {
-    db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
+    // No saved preference: the shortcut must work with its enabled default.
     val angles = MutableStateFlow(162f)
     val geometry = MutableStateFlow<FoldGeometry?>(null)
     val gestureClock = java.util.concurrent.atomic.AtomicLong(0)
@@ -344,6 +344,76 @@ class EditorScreenTest {
     composeTestRule.runOnIdle { assertEquals(listOf(true to false, true to false), feedbackCalls) }
   }
 
+  @Test fun testInjectedFoldReopensLoadedSecondEditorRepeatedly() {
+    runBlocking { storageManager.writeFile(project, "outline.md", "# Notes beside the draft") }
+    db.settingDao().insertSetting(SettingEntity("fold_to_split", "true"))
+    val angles = MutableStateFlow(162f)
+    val clock = java.util.concurrent.atomic.AtomicLong(0)
+    var feedbackCount = 0
+    val environment = object : FoldEnvironment {
+      override val sensorAvailable = true
+      override val angles = angles
+      override val geometry = MutableStateFlow<FoldGeometry?>(null)
+      override fun monotonicTimeMillis() = clock.get()
+    }
+    val feedback = object : FoldFeedback {
+      override fun triggerFoldFeedback(hapticsEnabled: Boolean, soundEnabled: Boolean) { feedbackCount++ }
+    }
+    wideEditor(feedback, environment)
+    composeTestRule.onNodeWithContentDescription("Document editor").performClick().performTextInput(" Primary edit.")
+    val primaryText = viewModel.documentTextFieldState.text.toString()
+    val primarySelection = viewModel.documentTextFieldState.selection
+    val primaryUndo = viewModel.documentTextFieldState.undoState.canUndo
+    openFoldSettings()
+    composeTestRule.onNodeWithContentDescription("Open split view").performClick()
+    composeTestRule.onNodeWithText("Choose file").performClick()
+    composeTestRule.onNodeWithText("outline.md").performClick()
+    val inSecond = hasAnyAncestor(hasContentDescription("Second editor pane"))
+    composeTestRule.waitUntil(15_000) {
+      composeTestRule.onAllNodes(hasContentDescription("Document editor") and inSecond).fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNode(hasContentDescription("Document editor") and inSecond)
+        .performClick().performTextInput(" Secondary edit.")
+    val secondary = composeTestRule.runOnIdle {
+      composeTestRule.activity.viewModelStore["second-editor-${viewModel.sessionId}"] as EditorViewModel
+    }
+    val secondaryText = secondary.documentTextFieldState.text.toString()
+    val secondarySelection = secondary.documentTextFieldState.selection
+    val secondaryUndo = secondary.documentTextFieldState.undoState.canUndo
+    fun holdFor(duration: Long) {
+      repeat((duration / 50).toInt()) {
+        clock.addAndGet(50)
+        composeTestRule.mainClock.advanceTimeBy(50)
+        composeTestRule.waitForIdle()
+      }
+    }
+    fun fold() {
+      holdFor(1300)
+      angles.value = 145f
+      holdFor(250)
+      angles.value = 165f
+      holdFor(250)
+    }
+    repeat(2) {
+      fold()
+      composeTestRule.runOnIdle { assertTrue(!viewModel.companion.state.value.isOpen) }
+      composeTestRule.onNodeWithContentDescription("Second editor pane").assertDoesNotExist()
+      fold()
+      composeTestRule.runOnIdle { assertTrue(viewModel.companion.state.value.isOpen) }
+      composeTestRule.onNode(hasContentDescription("Document editor") and inSecond).assertIsDisplayed()
+    }
+    composeTestRule.runOnIdle {
+      assertEquals(4, feedbackCount)
+      assertEquals(primaryText, viewModel.documentTextFieldState.text.toString())
+      assertEquals(primarySelection, viewModel.documentTextFieldState.selection)
+      assertEquals(primaryUndo, viewModel.documentTextFieldState.undoState.canUndo)
+      assertEquals(secondaryText, secondary.documentTextFieldState.text.toString())
+      assertEquals(secondarySelection, secondary.documentTextFieldState.selection)
+      assertEquals(secondaryUndo, secondary.documentTextFieldState.undoState.canUndo)
+      assertEquals("outline.md", secondary.uiState.value.activeFilePath)
+    }
+  }
+
   @Test fun testFoldFeedbackPreferencesPersistAndPreviewDoesNotChangeLayout() {
     val calls = mutableListOf<Pair<Boolean, Boolean>>()
     val feedback = object : FoldFeedback {
@@ -361,7 +431,9 @@ class EditorScreenTest {
     val draft = viewModel.documentTextFieldState.text.toString()
     openFoldSettings()
     composeTestRule.onNodeWithText("Hinge angle: 173°.", substring = true).performScrollTo().assertIsDisplayed()
-    composeTestRule.onNodeWithContentDescription("Fold shortcut").performScrollTo().performClick()
+    composeTestRule.onNodeWithContentDescription("Fold shortcut").performScrollTo().assertIsOn().performClick()
+    composeTestRule.waitUntil(5_000) { viewModel.foldToSplit.value?.value == "false" }
+    composeTestRule.onNodeWithContentDescription("Fold shortcut").performClick()
     composeTestRule.waitUntil(5_000) { viewModel.foldToSplit.value?.value == "true" }
     angles.value = 158f
     composeTestRule.onNodeWithText("Hinge angle: 158°.", substring = true).performScrollTo().assertIsDisplayed()

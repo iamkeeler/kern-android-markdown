@@ -9,7 +9,9 @@
 ### Foldable workspace
 
 - Fold preferences are part of Settings → Behavior.
+- The fold shortcut is now on by default. A saved off preference is still respected.
 - Choose whether a fold opens Reader metrics (Hemingway) or a second editor.
+- Fixed repeated reopening of a loaded second editor when split view was opened from Settings.
 - Hinge recognition follows the Study Companion gesture, with optional haptics and paper sound.
 - Settings shows local hinge readings. Close Settings before using the shortcut.
 

@@ -288,6 +288,25 @@ class EditorViewModelTest {
     }
 
     @Test
+    fun `fold closing a split opened from settings keeps repeated reopening available`() = runTest {
+        val source = "Unsaved **draft**"
+        val selection = androidx.compose.ui.text.TextRange(3, 8)
+        viewModel.documentTextFieldState.edit { replace(0, length, source); this.selection = selection }
+        viewModel.toggleSidebar(SidebarMode.SETTINGS)
+        viewModel.toggleCompanion()
+        repeat(2) {
+            assertTrue(viewModel.performFoldShortcut(FoldShortcutAction.SECOND_EDITOR, canSplit = true))
+            assertTrue(!viewModel.companion.state.value.isOpen)
+            assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
+            assertTrue(viewModel.performFoldShortcut(FoldShortcutAction.SECOND_EDITOR, canSplit = true))
+            assertTrue(viewModel.companion.state.value.isOpen)
+            assertEquals(SidebarMode.CLOSED, viewModel.uiState.value.sidebarMode)
+        }
+        assertEquals(source, viewModel.documentTextFieldState.text.toString())
+        assertEquals(selection, viewModel.documentTextFieldState.selection)
+    }
+
+    @Test
     fun `split restores prior sidebar without changing document state`() = runTest {
         viewModel.documentTextFieldState.edit { replace(0, length, "Unsaved **draft**") }
         viewModel.toggleSidebar(SidebarMode.SETTINGS)

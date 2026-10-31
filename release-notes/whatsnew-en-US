@@ -1,7 +1,8 @@
 - Larger default editor text and more comfortable spacing.
 - Tap anywhere on the writing canvas to start editing.
-- Fold controls live directly in Settings, with Reader metrics or Second editor actions.
-- Refined fold gestures, optional haptics and paper sound.
+- Fold controls in Settings: on by default, with metrics or Second editor actions.
+- Fixed repeated reopening of a second editor after folding back.
+- Optional fold haptics and paper sound.
 - Clearer settings, file actions and recovery feedback.
 - Better preservation of drafts, selection and Undo.
 - Bundled Markdown release notes appear in Files > Release Notes.

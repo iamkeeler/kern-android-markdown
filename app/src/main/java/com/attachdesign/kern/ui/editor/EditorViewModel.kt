@@ -172,7 +172,14 @@ class EditorViewModel(
                 if (!canSplit) return false
                 if (companion.state.value.isOpen && _uiState.value.isSidebarOpen) {
                     toggleSidebar(SidebarMode.CLOSED)
-                } else toggleCompanion()
+                } else {
+                    toggleCompanion()
+                    // A physical close returns to writing. Restoring Settings here would
+                    // disable recognition and prevent the next fold from reopening the pane.
+                    if (!companion.state.value.isOpen && _uiState.value.sidebarMode == SidebarMode.SETTINGS) {
+                        toggleSidebar(SidebarMode.CLOSED)
+                    }
+                }
             }
         }
         return true

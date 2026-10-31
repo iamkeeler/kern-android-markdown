@@ -36,7 +36,7 @@ internal fun FoldShortcutSettings(db: AppDatabase, theme: AppColorTheme) {
     val actionSetting by db.settingDao().getSettingFlow(SettingKeys.FOLD_SHORTCUT_ACTION).collectAsState(null)
     val hapticsSetting by db.settingDao().getSettingFlow(SettingKeys.FOLD_HAPTICS).collectAsState(null)
     val soundSetting by db.settingDao().getSettingFlow(SettingKeys.FOLD_SOUND).collectAsState(null)
-    val enabled = enabledSetting?.value == "true"
+    val enabled = enabledSetting?.value != "false"
     val action = FoldShortcutAction.fromSetting(actionSetting?.value)
     val haptics = hapticsSetting?.value != "false"
     val sound = soundSetting?.value == "true"

@@ -307,7 +307,7 @@ fun EditorScreen(
             if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED) else viewModel.toggleCompanion()
         }
         val bend = rememberFoldGestureProgress(
-            environment = foldEnvironment, enabled = foldSetting?.value == "true",
+            environment = foldEnvironment, enabled = foldSetting?.value != "false",
             eligible = companionEnabled && windowFocused && geometry?.isVertical != false && !showRenameDialog && !showDeleteDialog &&
                 !showReferencePicker && !headerMenuOpen && uiState.sidebarMode != SidebarMode.SETTINGS &&
                 (!companionVisible || secondaryState?.sidebarMode != SidebarMode.SETTINGS),
