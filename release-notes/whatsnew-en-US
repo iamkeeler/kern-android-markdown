@@ -5,3 +5,4 @@
 - Undo is directly available in the compact toolbar.
 - Collapsing formatting keeps the page steady and remembers your choice.
 - Typing preferences now apply to the active editor, preserving paste and composition.
+- Fixed text showing through the editor header.

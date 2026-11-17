@@ -20,6 +20,7 @@
 
 ### Steadier writing and easier Undo
 
+- Scrolling text stays below the solid editor header.
 - Undo is directly available in the compact formatting bar. Italic and Redo are in More.
 - Collapsing the formatting bar keeps the final line steady and remembers your choice during screen restoration.
 - Opening another note starts a separate viewport and Undo history. Renaming keeps the same writing session.

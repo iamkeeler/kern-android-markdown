@@ -866,7 +866,8 @@ fun EditorHeader(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
+            containerColor = theme.background,
+            scrolledContainerColor = theme.background,
             titleContentColor = theme.textPrimary,
             navigationIconContentColor = theme.accent,
             actionIconContentColor = theme.textMuted

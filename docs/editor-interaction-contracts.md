@@ -40,6 +40,14 @@ This document records user-visible editor behavior that must survive refactors. 
 - Behavioral invariant: the editor scroll range includes clearance so the bottom line can scroll completely above the floating toolbar without clipping the text field layout. The TopAppBar header stays permanently anchored under the status bar, and all screens use a unified 2.dp `theme.headerDivider`.
 - Regression coverage: `EditorScreenTest.testFocusingVisibleParagraphPreservesViewport`, `ThemeAccessibilityTest.testDefaultLightThemeContrast`.
 
+### Scrolling writing stays below an opaque editor header
+
+- Symptom and affected release: in test build 0.1.46 (47), scrolling writing could remain visible through the editor header.
+- Root cause: `EditorHeader` explicitly requested a transparent Material 3 app-bar container, and the elastic scroll container translated later-drawn document content outside its viewport. An opaque background alone cannot prevent a later sibling from drawing over the header.
+- Invariant: the Material 3 header paints the active theme background in both resting and scrolled states. The elastic scroll viewport clips translated document content and indicators to its own bounds, including in a second editor. Keep the header anchored, with existing divider, insets, scroll range, source, native selection, composition and Undo unchanged.
+- Regression coverage: `EditorChromeTest.headerPaintsAnOpaqueBackgroundInBothThemes` and `elasticScrollCannotDrawDocumentOverTheHeader` both fail on the regressed implementation. Pixel checks cover light/dark header opacity and a deterministic negative elastic displacement, with a contrasting document proving that drawing remains inside the viewport. Existing real-IME focus, viewport, elastic bounce and split tests remain required.
+- Platform behavior: use the standard Material 3 container colors and Compose `clipToBounds`; no custom focus, pointer handling, scroll positioning or header overlay is introduced.
+
 ### Rendered Markdown must not fall back to source syntax
 
 - Symptom and affected release: Markdown source was visible in the document canvas for styles that should have been rendered, making the live editor read like a raw text field.

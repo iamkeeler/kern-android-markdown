@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -163,7 +164,7 @@ fun ElasticOverscrollContainer(
     val progress = (absOverscroll / 120f).coerceIn(0f, 1f)
 
     Box(
-        modifier = modifier.nestedScroll(state.nestedScrollConnection)
+        modifier = modifier.clipToBounds().nestedScroll(state.nestedScrollConnection)
     ) {
         // Content with hardware-accelerated elastic translation
         Box(
