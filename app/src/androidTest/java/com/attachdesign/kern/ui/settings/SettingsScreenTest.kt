@@ -137,8 +137,8 @@ class SettingsScreenTest {
     fun settingRowHasOneSwitchActionAndPersistsOneToggle() {
         show()
         rule.onNodeWithText("Behavior").performClick()
-        val row = hasText("Sticky Selection") and hasClickAction()
-        val rowAction = hasClickAction() and hasAnyDescendant(hasText("Sticky Selection"))
+        val row = hasText("Keep selection after formatting") and hasClickAction()
+        val rowAction = hasClickAction() and hasAnyDescendant(hasText("Keep selection after formatting"))
         rule.onAllNodes(rowAction, useUnmergedTree = true).assertCountEquals(1)
         rule.onNode(row).assertIsOn().performClick()
         rule.waitUntil(5_000) {
@@ -185,7 +185,7 @@ class SettingsScreenTest {
         show(fontScale = 2f)
         rule.onNodeWithText("Behavior").performClick()
         val description = rule.onNodeWithText(
-            "Maintain text selection after applying formatting.", useUnmergedTree = true
+            "Keep text selected after using the formatting toolbar.", useUnmergedTree = true
         ).fetchSemanticsNode().boundsInRoot
         val control = rule.onNodeWithTag("sticky-selection-control", useUnmergedTree = true)
             .fetchSemanticsNode().boundsInRoot

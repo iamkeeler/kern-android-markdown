@@ -32,6 +32,10 @@ A high-performance, minimal, and typography-first Markdown editor designed for m
 * Each editor owns its own source, selection, undo, focus, IME composition, and save path. The picker must prevent opening the same file in both editors to avoid conflicting writes. Diff remains a follow-on feature.
 
 #### 2.3 Storage Architecture & Cloud Sync Engine
+* **Immediate capture:** New note creates a collision-safe Markdown file in the current folder and opens the native editor with the software keyboard ready. Naming remains available afterward. A successful creation always opens the editor; the retired Launch New File preference no longer controls this action. Empty notes remain ordinary user-owned files.
+* **Launch:** Show up to five recently modified Markdown notes above Files, including nested notes and excluding the bundled Release Notes folder. Preserve the current workspace as the creation destination and keep folder browsing available.
+* **Save protection:** Journal exact source and selection in app-private atomic recovery files before writing a destination. Surface save failures with Retry and Save a copy; never report an unavailable read as an empty note. Flush on departure/background and finish the final write outside the cancelled view-model scope. Validate the saved baseline and file identity before overwriting; keep recovery when access, conflicts, or writes fail.
+* **Session ownership:** Each editor navigation entry owns its view models and a stable content key independent of file renaming. Rename preserves native source, selection, composition and Undo.
 * **Dual Storage Modalities:**
     1. **App-Sandbox Storage (Internal):** High-speed, local-first operational sandbox. This storage tier supports the full suite of automated cloud synchronization pipelines.
     2. **External Scoped Storage (SAF):** Allows users to target arbitrary file paths on device storage or external SD cards. Files are read/written directly via Android's Storage Access Framework. Background cloud synchronization is programmatically disabled on this tier to prevent system file-handle bottlenecks.
@@ -42,6 +46,10 @@ A high-performance, minimal, and typography-first Markdown editor designed for m
 * **Sticky Selection Setting:** Controlled via a dedicated configuration toggle:
     * *State TRUE (Default):* Applying formatting (e.g., wrapping selected text in `**` tokens via the **B** control button) preserves the text selection state, allowing users to apply stacked formatting configurations sequentially.
     * *State FALSE:* Applying formatting drops the selection handle range immediately and returns to standard insertion cursor behavior.
+
+* **Writing continuity:** Explicit palette collapse survives screen-state restoration. Native bottom clearance stays constant across palette states; switching files starts a separate viewport and Undo history, while rename retains the live session.
+* **Compact actions:** Undo, Heading, Bold, Bullets, More and Collapse remain directly reachable with native touch targets. Italic and Redo remain in More at compact widths.
+* **Active typing preferences:** Heading spacing and enabled quote/bracket pairs apply to native user edits, preserve composition and clipboard source, and undo with the triggering input. Capitalize sentences requests the native keyboard behavior after active composition finishes; it does not rewrite source case.
 
 #### 2.5 Metrics & Analytical Panels
 * **Asynchronous On-Demand Metrics:** Word count, character count, and structural metrics operate on separate execution threads.

@@ -70,7 +70,6 @@ fun SettingsTabsContent(
     val editorFontSetting   by db.settingDao().getSettingFlow(SettingKeys.EDITOR_FONT_FAMILY).collectAsState(initial = null)
     val editorFontSizeScaleSetting by db.settingDao().getSettingFlow(SettingKeys.EDITOR_FONT_SIZE_SCALE).collectAsState(initial = null)
     val stickySetting       by db.settingDao().getSettingFlow(SettingKeys.STICKY_SELECTION).collectAsState(initial = null)
-    val launchNewFileSetting by db.settingDao().getSettingFlow(SettingKeys.LAUNCH_NEW_FILE).collectAsState(initial = null)
     val sentenceCapitalizationSetting by db.settingDao().getSettingFlow(SettingKeys.SENTENCE_CAPITALIZATION).collectAsState(initial = null)
     val showWorkspaceIntroSetting by db.settingDao().getSettingFlow(SettingKeys.SHOW_WORKSPACE_INTRO).collectAsState(initial = null)
     val telemetryCollectionSetting by db.settingDao().getSettingFlow(TelemetryCollection.SETTING_KEY).collectAsState(initial = null)
@@ -87,7 +86,6 @@ fun SettingsTabsContent(
     val currentFontFamily          = editorFontSetting?.value ?: "serif"
     val currentFontSizeScale = EditorTypography.normalizeScale(editorFontSizeScaleSetting?.value)
     val currentSticky              = stickySetting?.value?.toBoolean() ?: true
-    val currentLaunchNewFile       = launchNewFileSetting?.value?.toBoolean() ?: true
     val currentSentenceCapitalization = sentenceCapitalizationSetting?.value?.toBoolean() ?: true
     val currentShowWorkspaceIntro  = showWorkspaceIntroSetting?.value?.toBoolean() ?: true
     val currentTelemetryCollection = telemetryCollectionSetting?.value?.toBoolean() ?: TelemetryCollection.DEFAULT_ENABLED
@@ -399,14 +397,14 @@ fun SettingsTabsContent(
                       ) {
                           Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                               Text(
-                                  text = "Sticky Selection",
+                                  text = "Keep selection after formatting",
                                   color = theme.textPrimary,
                                   fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "Maintain text selection after applying formatting.",
+                                  text = "Keep text selected after using the formatting toolbar.",
                                   color = theme.textSecondary,
                                   fontSize = theme.typography.helper,
                                   lineHeight = theme.typography.helperLineHeight
@@ -415,49 +413,6 @@ fun SettingsTabsContent(
                           Switch(
                               checked = currentSticky,
                               modifier = Modifier.testTag("sticky-selection-control"),
-                              onCheckedChange = null,
-                              colors = SwitchDefaults.colors(
-                                  checkedThumbColor = theme.onControlAccent,
-                                  checkedTrackColor = theme.controlAccent,
-                                 uncheckedThumbColor = theme.indicator,
-                                 uncheckedBorderColor = theme.indicator
-                              )
-                          )
-                      }
-
-                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
-                      HorizontalDivider(thickness = theme.dimensions.borderWidth, color = theme.textMuted.copy(alpha = 0.15f))
-                      Spacer(Modifier.height(theme.dimensions.spacingLarge))
-
-                      Row(
-                          modifier = Modifier
-                              .fillMaxWidth()
-                              .toggleable(value = currentLaunchNewFile, role = Role.Switch) { value ->
-                                  coroutineScope.launch(Dispatchers.IO) {
-                                      db.settingDao().insertSetting(SettingEntity(SettingKeys.LAUNCH_NEW_FILE, value.toString()))
-                                  }
-                              }
-                              .padding(vertical = theme.dimensions.spacingMedium),
-                          verticalAlignment = Alignment.CenterVertically,
-                          horizontalArrangement = Arrangement.SpaceBetween
-                      ) {
-                          Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
-                               Text(
-                                  text = "Launch New File",
-                                  color = theme.textPrimary,
-                                  fontSize = theme.typography.body,
-                                  fontFamily = appFont,
-                                  fontWeight = FontWeight.Medium
-                              )
-                              Text(
-                                  text = "Open the editor automatically when creating a new file.",
-                                  color = theme.textSecondary,
-                                  fontSize = theme.typography.helper,
-                                  lineHeight = theme.typography.helperLineHeight
-                              )
-                          }
-                          Switch(
-                              checked = currentLaunchNewFile,
                               onCheckedChange = null,
                               colors = SwitchDefaults.colors(
                                   checkedThumbColor = theme.onControlAccent,
@@ -496,14 +451,14 @@ fun SettingsTabsContent(
                       ) {
                           Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                                Text(
-                                  text = "Auto Header Spacing",
+                                  text = "Space after heading markers",
                                   color = theme.textPrimary,
                                   fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "Insert a space after header symbols automatically (e.g. # Header).",
+                                  text = "Add a space after # while typing a heading.",
                                   color = theme.textSecondary,
                                   fontSize = theme.typography.helper,
                                   lineHeight = theme.typography.helperLineHeight
@@ -540,14 +495,14 @@ fun SettingsTabsContent(
                       ) {
                           Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                                Text(
-                                  text = "Sentence Capitalization",
+                                  text = "Capitalize sentences",
                                   color = theme.textPrimary,
                                   fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "Automatically capitalize the first letter of sentences.",
+                                  text = "Ask your keyboard to capitalize new sentences.",
                                   color = theme.textSecondary,
                                   fontSize = theme.typography.helper,
                                   lineHeight = theme.typography.helperLineHeight
@@ -626,14 +581,14 @@ fun SettingsTabsContent(
                       ) {
                           Column(modifier = Modifier.weight(1f).padding(end = theme.dimensions.spacingExtraLarge)) {
                                Text(
-                                  text = "Auto Complete",
+                                  text = "Pair quotes and brackets",
                                   color = theme.textPrimary,
                                   fontSize = theme.typography.body,
                                   fontFamily = appFont,
                                   fontWeight = FontWeight.Medium
                               )
                               Text(
-                                  text = "Auto-pair quotes, brackets, and braces.",
+                                  text = "Insert matching quotes, brackets and braces while typing.",
                                   color = theme.textSecondary,
                                   fontSize = theme.typography.helper,
                                   lineHeight = theme.typography.helperLineHeight

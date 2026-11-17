@@ -46,6 +46,9 @@ class EditorViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
+    @get:Rule
+    val recoveryDirectory = org.junit.rules.TemporaryFolder()
+
     private lateinit var db: AppDatabase
     private lateinit var projectDao: ProjectDao
     private lateinit var fileDao: FileDao
@@ -66,9 +69,11 @@ class EditorViewModelTest {
         storageManager = mockk(relaxed = true)
         fileOpsManager = mockk(relaxed = true)
         context = mockk(relaxed = true)
+        every { context.filesDir } returns recoveryDirectory.root
 
         every { db.projectDao() } returns projectDao
         every { db.fileDao() } returns fileDao
+        every { fileDao.getFileByPath(any(), any()) } returns null
         every { db.settingDao() } returns settingDao
         every { db.themeDao() } returns themeDao
 
@@ -171,6 +176,23 @@ class EditorViewModelTest {
     }
 
     @Test
+    fun `opening another file never exposes the previous documents undo history`() = runTest {
+        every { settingDao.insertSetting(any()) } returns Unit
+        val project = ProjectEntity(3, "Drafts", "drafts", false, true)
+        every { projectDao.getProjectById(3) } returns project
+        every { fileDao.getFilesForProject(3) } returns emptyList()
+        coEvery { storageManager.readFile(project, any()) } returns ""
+        coEvery { storageManager.listDirectory(project, "") } returns emptyList()
+        viewModel.loadFile(3, "first.md")?.join()
+        viewModel.documentTextFieldState.edit { replace(0, length, "First document draft") }
+        assertTrue(viewModel.documentTextFieldState.undoState.canUndo)
+        viewModel.loadFile(3, "second.md")?.join()
+        org.junit.Assert.assertFalse(viewModel.documentTextFieldState.undoState.canUndo)
+        viewModel.undo()
+        assertEquals("", viewModel.documentTextFieldState.text.toString())
+    }
+
+    @Test
     fun `reentering same file preserves live text selection and undo history`() = runTest {
         val project = com.attachdesign.kern.data.local.ProjectEntity(id = 3, name = "Drafts", path = "drafts", isExternal = false, isSelected = true)
         every { projectDao.getProjectById(3) } returns project
@@ -258,6 +280,10 @@ class EditorViewModelTest {
 
     @Test
     fun `fold metrics ignores split width and preserves the live draft`() = runTest {
+        viewModel.viewModelScope.cancel()
+        // Keep Main resumptions serial while real IO settings observers start.
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        viewModel = EditorViewModel(db, storageManager, fileOpsManager, context, testDispatcher)
         val source = "An unsaved **draft** with a sentence."
         viewModel.documentTextFieldState.edit { replace(0, length, source); selection = androidx.compose.ui.text.TextRange(4) }
         assertTrue(viewModel.performFoldShortcut(FoldShortcutAction.METRICS, canSplit = false))

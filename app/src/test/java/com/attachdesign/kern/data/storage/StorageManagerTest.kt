@@ -118,6 +118,38 @@ class StorageManagerTest {
     }
 
     @Test
+    fun documentReadDoesNotTurnAMissingFileIntoAnEmptyNote() = runTest {
+        storageManager.writeFile(project, "empty.md", "")
+        assertEquals("", storageManager.readFile(project, "empty.md"))
+        try {
+            storageManager.readFile(project, "missing.md")
+            fail("An unavailable note must not become an editable blank document")
+        } catch (_: java.io.IOException) { }
+    }
+
+    @Test
+    fun documentWriteReportsAnUnwritableDestination() = runTest {
+        storageManager.writeFile(project, "parent", "Existing file")
+        try {
+            storageManager.writeFile(project, "parent/note.md", "Do not lose this")
+            fail("A failed save must reach the editor")
+        } catch (_: java.io.IOException) { }
+        assertEquals("Existing file", storageManager.readFile(project, "parent"))
+    }
+
+    @Test
+    fun safWriteDoesNotSwallowProviderFailure() = runTest {
+        val provider = NamingTestDocumentsProvider.register(context)
+        provider.add("note.md")
+        provider.openFailure = java.io.IOException("Provider unavailable")
+        val linked = project.copy(path = NamingTestDocumentsProvider.TREE_URI, isExternal = true)
+        try {
+            storageManager.writeFile(linked, "note.md", "A thought worth keeping")
+            fail("SAF errors must reach save recovery")
+        } catch (_: java.io.IOException) { }
+    }
+
+    @Test
     fun testWriteAndReadFile_internal() = runTest {
         val content = "Hello, world!\nMarkdown content."
         val filename = "hello.md"

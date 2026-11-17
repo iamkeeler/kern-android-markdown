@@ -26,6 +26,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -289,9 +292,9 @@ class MainScreenTest {
 
     // The current toolbar exposes semantic icon controls rather than text FABs.
     waitForStartup()
-    composeTestRule.onNodeWithContentDescription("New Document").assertIsDisplayed().performClick()
-    composeTestRule.onNodeWithText("New File in Main Project").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Cancel").performClick()
+    composeTestRule.onNodeWithContentDescription("New note").assertIsDisplayed().performClick()
+    waitForText("Untitled note.md")
+    composeTestRule.onNode(hasSetTextAction()).assertDoesNotExist()
     composeTestRule.onNodeWithContentDescription("New Folder").assertIsDisplayed().performClick()
     composeTestRule.onNodeWithText("New Folder in Main Project").assertIsDisplayed()
   }
@@ -311,13 +314,16 @@ class MainScreenTest {
   private val longUnicodeName = "草稿Δ🙂".repeat(12) + "_final_document.md"
 
   private fun assertTwoLineEllipsis(text: String) {
-    val layouts = mutableListOf<TextLayoutResult>()
-    composeTestRule.onNodeWithText(text, useUnmergedTree = true)
-        .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-    val layout = layouts.single()
-    assertEquals(2, layout.layoutInput.maxLines)
-    assertTrue(layout.lineCount <= 2)
-    assertTrue("Long content should ellipsize within its own column", layout.isLineEllipsized(layout.lineCount - 1))
+    val matches = composeTestRule.onAllNodesWithText(text, useUnmergedTree = true)
+    assertTrue(matches.fetchSemanticsNodes().isNotEmpty())
+    matches.fetchSemanticsNodes().indices.forEach { index ->
+      val layouts = mutableListOf<TextLayoutResult>()
+      matches[index].performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+      val layout = layouts.single()
+      assertEquals(2, layout.layoutInput.maxLines)
+      assertTrue(layout.lineCount <= 2)
+      assertTrue("Long content should ellipsize within its own column", layout.isLineEllipsized(layout.lineCount - 1))
+    }
   }
 
   @Test
@@ -355,7 +361,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Rename Document").assertIsDisplayed()
     assertTrue(opened.isEmpty())
     composeTestRule.onNodeWithText("Cancel").performClick()
-    composeTestRule.onNodeWithText(longUnicodeName).performClick()
+    composeTestRule.onNode(hasText(longUnicodeName) and hasAnyDescendant(
+        hasContentDescription("More actions for $longUnicodeName ($path/$longUnicodeName)")
+    )).performClick()
     assertEquals(1, opened.size)
     assertTrue(opened.single() is EditorKey)
     up.performClick()
@@ -403,10 +411,10 @@ class MainScreenTest {
       MainScreen({}, db, storageManager, fileOpsManager, Modifier.fillMaxSize())
     }
     waitForStartup()
-    composeTestRule.onNodeWithText("Use New Document or New Folder to add content.").assertIsDisplayed()
-    composeTestRule.onNodeWithText("New Document").performClick()
-    composeTestRule.onNodeWithText("New File in Main Project").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Cancel").performClick()
+    composeTestRule.onNodeWithText("Use New note to start writing, or New Folder to organize files.").assertIsDisplayed()
+    composeTestRule.onNodeWithText("New note").performClick()
+    waitForText("Untitled note.md")
+    composeTestRule.onNode(hasSetTextAction()).assertDoesNotExist()
     composeTestRule.onNodeWithContentDescription("Search").performClick()
     composeTestRule.onNode(hasSetTextAction()).performTextInput("no_matching_filename_92841")
     waitForText("No matches found")
@@ -415,27 +423,68 @@ class MainScreenTest {
   }
 
   @Test
-  fun failedCreateKeepsDraftThroughRestorationAndImeRetryCreatesOneActualFile() {
+  fun quickNoteUsesCurrentFolderAndPreservesAnExistingUntitledNote() {
     db.projectDao().insertProject(project)
-    runBlocking { storageManager.writeFile(project, "existing.md", "Keep existing exact\r\n") }
-    val opened = mutableListOf<androidx.navigation3.runtime.NavKey>()
-    val restoration = StateRestorationTester(composeTestRule)
-    restoration.setContent { MainScreen({ opened += it }, db, storageManager, fileOpsManager, Modifier.fillMaxSize()) }
+    runBlocking {
+      storageManager.createDirectory(project, "Ideas")
+      storageManager.writeFile(project, "Ideas/Untitled note.md", "Existing exact\r\n")
+    }
+    val opened = mutableListOf<EditorKey>()
+    composeTestRule.setContent {
+      MainScreen({ (it as? EditorKey)?.let(opened::add) }, db, storageManager, fileOpsManager, Modifier.fillMaxSize())
+    }
     waitForStartup()
-    composeTestRule.onNodeWithContentDescription("New Document").performClick()
-    composeTestRule.onNode(hasSetTextAction()).performTextInput("existing")
-    composeTestRule.onNodeWithText("Create").performClick()
-    waitForText("An item with that name already exists. Choose another name.")
-    assertTrue(opened.isEmpty())
-    restoration.emulateSavedInstanceStateRestore()
-    composeTestRule.onNode(hasSetTextAction()).assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("existing")))
-    composeTestRule.onNode(hasSetTextAction()).performTextReplacement("Fresh.MD")
-    composeTestRule.onNode(hasSetTextAction()).performImeAction()
+    val vm = composeTestRule.runOnIdle {
+      ViewModelProvider(composeTestRule.activity)[MainScreenViewModel::class.java]
+    }
+    composeTestRule.runOnIdle { vm.navigateToSegment(project, "Ideas") }
+    waitForText("Untitled note.md")
+    composeTestRule.onNodeWithContentDescription("New note").performClick()
     composeTestRule.waitUntil(15_000) { opened.size == 1 }
-    assertEquals("Fresh.MD", (opened.single() as EditorKey).filePath)
-    assertEquals("Keep existing exact\r\n", runBlocking { storageManager.readFile(project, "existing.md") })
-    assertTrue(runBlocking { storageManager.fileExists(project, "Fresh.MD") })
-    assertTrue(!runBlocking { storageManager.fileExists(project, "Fresh.MD.md") })
+    val key = opened.single()
+    assertEquals(project.id, key.projectId)
+    assertEquals("Ideas/Untitled note 2.md", key.filePath)
+    assertTrue(key.focusOnStart)
+    composeTestRule.onNode(hasSetTextAction()).assertDoesNotExist()
+    assertEquals("Existing exact\r\n", runBlocking { storageManager.readFile(project, "Ideas/Untitled note.md") })
+  }
+
+  @Test
+  fun emptyCurrentWorkspaceStillShowsRecentNotesFromAnotherWorkspace() {
+    val other = project.copy(id = 2, name = "Other notes", path = "other_${System.nanoTime()}", isSelected = false)
+    db.projectDao().insertProject(project)
+    db.projectDao().insertProject(other)
+    runBlocking { storageManager.writeFile(other, "Remember.md", "An earlier thought") }
+    db.fileDao().insertFile(FileEntity(projectId = other.id, name = "Remember.md", relativePath = "Remember.md",
+        isDirectory = false, lastModified = 200, syncState = "SYNCED"))
+    composeTestRule.setContent { MainScreen({}, db, storageManager, fileOpsManager, Modifier.fillMaxSize()) }
+    waitForStartup()
+    waitForText("Recent notes")
+    composeTestRule.onNodeWithText("Remember.md").assertIsDisplayed()
+    val vm = composeTestRule.runOnIdle {
+      ViewModelProvider(composeTestRule.activity)[MainScreenViewModel::class.java]
+    }
+    assertEquals(project.id, vm.explorerState.value.activeProject?.id)
+  }
+
+  @Test
+  fun launchShowsRecentNotesFromNestedFoldersWithoutDuplicatingCurrentFiles() {
+    db.projectDao().insertProject(project)
+    runBlocking {
+      storageManager.writeFile(project, "Nested/recent.md", "Recent")
+      storageManager.writeFile(project, "older.md", "Older")
+    }
+    db.fileDao().insertFile(FileEntity(projectId = project.id, name = "recent.md", relativePath = "Nested/recent.md",
+        isDirectory = false, lastModified = 200, syncState = "SYNCED"))
+    db.fileDao().insertFile(FileEntity(projectId = project.id, name = "older.md", relativePath = "older.md",
+        isDirectory = false, lastModified = 100, syncState = "SYNCED"))
+    composeTestRule.setContent { MainScreen({}, db, storageManager, fileOpsManager, Modifier.fillMaxSize()) }
+    waitForStartup()
+    waitForText("Recent notes")
+    val recent = composeTestRule.onNodeWithText("recent.md").fetchSemanticsNode().boundsInRoot
+    val older = composeTestRule.onNodeWithText("older.md").fetchSemanticsNode().boundsInRoot
+    assertTrue(recent.top < older.top)
+    assertEquals(1, composeTestRule.onAllNodesWithText("older.md").fetchSemanticsNodes().size)
   }
 
 }

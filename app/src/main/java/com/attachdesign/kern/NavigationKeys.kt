@@ -11,7 +11,8 @@ data class EditorKey(
     val filePath: String,
     val focusOnStart: Boolean = false,
     val touchOriginX: Float? = null,
-    val touchOriginY: Float? = null
+    val touchOriginY: Float? = null,
+    val sessionId: String = java.util.UUID.randomUUID().toString()
 ) : NavKey
 
 @Serializable data object SettingsKey : NavKey

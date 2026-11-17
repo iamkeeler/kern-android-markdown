@@ -133,6 +133,70 @@ class MainScreenViewModelTest {
     }
 
     @Test
+    fun `quick capture keeps its folder retries collisions and uses actual provider identity`() = runTest {
+        val project = ProjectEntity(1, "Test", "test", false, true)
+        coEvery { projectDao.getSelectedProject() } returns project
+        coEvery { fileOpsManager.createFile(project, "Ideas", "Untitled note.md") } returns
+            MutationOutcome.Failed(MutationFailure.Collision)
+        val actual = VfsNode.File("Provider_note.md", "Ideas/Provider_note.md", 0, 0)
+        coEvery { fileOpsManager.createFile(project, "Ideas", "Untitled note 2.md") } returns
+            MutationOutcome.Success(StorageIdentity(actual))
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+        advanceUntilIdle()
+        viewModel.navigateToSegment(project, "Ideas")
+        var created: com.attachdesign.kern.EditorKey? = null
+        viewModel.createQuickNote { created = it }
+        advanceUntilIdle()
+        assertEquals(actual.relativePath, created?.filePath)
+        assertTrue(created?.focusOnStart == true)
+        coVerify(exactly = 1) { fileOpsManager.createFile(project, "Ideas", "Untitled note.md") }
+        coVerify(exactly = 1) { fileOpsManager.createFile(project, "Ideas", "Untitled note 2.md") }
+    }
+
+    @Test
+    fun `repeated capture taps share one creation and failed creation never opens a note`() = runTest {
+        val project = ProjectEntity(1, "Test", "test", false, true)
+        coEvery { projectDao.getSelectedProject() } returns project
+        val result = kotlinx.coroutines.CompletableDeferred<MutationOutcome>()
+        coEvery { fileOpsManager.createFile(project, "", "Untitled note.md") } coAnswers { result.await() }
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+        advanceUntilIdle()
+        var opened = 0
+        viewModel.createQuickNote { opened++ }
+        viewModel.createQuickNote { opened++ }
+        result.complete(MutationOutcome.Failed(MutationFailure.AccessDenied))
+        advanceUntilIdle()
+        assertEquals(0, opened)
+        coVerify(exactly = 1) { fileOpsManager.createFile(project, "", "Untitled note.md") }
+    }
+
+    @Test
+    fun `unavailable capture folder offers an explicit local fallback`() = runTest {
+        every { db.runInTransaction(any<Runnable>()) } answers { firstArg<Runnable>().run() }
+        val linked = ProjectEntity(1, "Linked", "content://notes", true, true)
+        val local = ProjectEntity(2, "Files", "root", false, false)
+        coEvery { projectDao.getSelectedProject() } returns linked
+        coEvery { projectDao.getAllProjects() } returns listOf(linked, local)
+        coEvery { fileDao.getFileByPath(any(), any()) } returns null
+        coEvery { fileOpsManager.createFile(linked, "", "Untitled note.md") } returns
+            MutationOutcome.Failed(MutationFailure.AccessDenied)
+        coEvery { fileOpsManager.createFile(local, "", "Untitled note.md") } returns
+            MutationOutcome.Success(StorageIdentity(VfsNode.File("Untitled note.md", "Untitled note.md", 0, 0)))
+        viewModel = MainScreenViewModel(db, storageManager, fileOpsManager, testDispatcher)
+        advanceUntilIdle()
+        val events = mutableListOf<com.attachdesign.kern.ui.common.SnackbarEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.snackbarEvent.collect { events += it } }
+        var created: com.attachdesign.kern.EditorKey? = null
+        viewModel.createQuickNote { created = it }
+        advanceUntilIdle()
+        assertEquals("Write locally", events.single().actionLabel)
+        assertEquals(null, created)
+        events.single().onAction?.invoke()
+        advanceUntilIdle()
+        assertEquals(local.id, created?.projectId)
+    }
+
+    @Test
     fun `creation delegates the submitted leaf and returns actual provider identity`() = runTest {
         val project = ProjectEntity(1, "Test", "test", false, true)
         coEvery { projectDao.getSelectedProject() } returns project

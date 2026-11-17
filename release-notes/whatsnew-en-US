@@ -1,8 +1,7 @@
-- Larger default editor text and more comfortable spacing.
-- Tap anywhere on the writing canvas to start editing.
-- Fold controls in Settings: on by default, with metrics or Second editor actions.
-- Fixed repeated reopening of a second editor after folding back.
-- Optional fold haptics and paper sound.
-- Clearer settings, file actions and recovery feedback.
-- Better preservation of drafts, selection and Undo.
-- Bundled Markdown release notes appear in Files > Release Notes.
+- New note opens in the current folder with the keyboard ready.
+- Recent notes appear at launch.
+- Draft recovery, clear save status, Retry and Save a copy protect writing.
+- Safer saves on departure and checks for outside changes.
+- Undo is directly available in the compact toolbar.
+- Collapsing formatting keeps the page steady and remembers your choice.
+- Typing preferences now apply to the active editor, preserving paste and composition.

@@ -28,6 +28,7 @@ class NamingTestDocumentsProvider : DocumentsProvider() {
     var normalize: (String) -> String = { it }
     var queryFailure: Exception? = null
     var mutationFailure: Exception? = null
+    var openFailure: Exception? = null
     var failReadback = false
     var returnNullMutation = false
     var createCalls = 0
@@ -172,8 +173,10 @@ class NamingTestDocumentsProvider : DocumentsProvider() {
         deleteFailureAfterCommit?.let { throw it }
     }
 
-    override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor =
+    override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {
+        openFailure?.let { throw it }
         throw UnsupportedOperationException("Naming must never read/write document text")
+    }
 
     private fun checkQuery() {
         queryFailure?.let { throw it }

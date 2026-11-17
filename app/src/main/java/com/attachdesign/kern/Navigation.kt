@@ -19,6 +19,8 @@ import android.widget.Toast
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -74,6 +76,10 @@ fun MainNavigation(
     Box(Modifier.fillMaxSize()) {
     NavDisplay(
         backStack = backStack,
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            rememberViewModelStoreNavEntryDecorator()
+        ),
         onBack = { backStack.removeLastOrNull() },
         transitionSpec = {
             val toKey = targetState.key
@@ -135,7 +141,7 @@ fun MainNavigation(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            entry<EditorKey> { key ->
+            entry<EditorKey>(clazzContentKey = { it.sessionId }) { key ->
                 val editorViewModel: EditorViewModel = viewModel {
                     EditorViewModel(db, storageManager, fileOpsManager, appContext)
                 }
@@ -154,7 +160,6 @@ fun MainNavigation(
                     touchOriginY = key.touchOriginY,
                     viewModel = editorViewModel,
                     onBackClick = {
-                        editorViewModel.closeFile()
                         backStack.remove(key)
                     },
                     modifier = Modifier.fillMaxSize()

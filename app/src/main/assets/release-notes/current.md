@@ -1,5 +1,33 @@
 ## What's new
 
+### Capture a thought immediately
+
+- New note creates a uniquely named Markdown file in the current folder and opens the keyboard.
+- Start writing before choosing a name. Tap the note title to rename it later.
+- Recent notes appear above the file list at launch, including notes in nested folders.
+- If a linked folder is unavailable, Write locally offers a note in Files instead.
+
+### Safer saves and draft recovery
+
+- The editor shows whether a note is saving, saved or needs attention.
+- A private local recovery copy protects unsaved writing before the destination is updated.
+- Failed saves offer Retry and Save a copy. Reopening a note restores its recoverable draft.
+- Leaving the editor or switching apps flushes pending writing.
+- Local files are replaced atomically. Unavailable notes show an error instead of a blank editor.
+- Changes made outside Kern are checked before saving, and replacement files cannot inherit an older draft.
+- Renaming keeps the same writing session, selection and Undo history.
+- Markdown continues revealing around the cursor as you write.
+
+### Steadier writing and easier Undo
+
+- Undo is directly available in the compact formatting bar. Italic and Redo are in More.
+- Collapsing the formatting bar keeps the final line steady and remembers your choice during screen restoration.
+- Opening another note starts a separate viewport and Undo history. Renaming keeps the same writing session.
+- Quote/bracket pairing and heading-spacing preferences now apply to the active editor.
+- Pasted text and ongoing keyboard composition stay intact. Pairing and its triggering input undo together.
+- Capitalize sentences asks your keyboard to capitalize; changes wait until ongoing composition finishes.
+- Markdown still reveals around the cursor.
+
 ### A more comfortable writing space
 
 - Medium editor text is larger, with more comfortable line spacing and padding.

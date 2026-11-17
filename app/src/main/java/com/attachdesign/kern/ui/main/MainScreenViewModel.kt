@@ -3,6 +3,10 @@ package com.attachdesign.kern.ui.main
 import com.attachdesign.kern.ui.main.dialogs.*
 import com.attachdesign.kern.data.storage.LeafNamePolicy
 import com.attachdesign.kern.data.storage.MutationOutcome
+import com.attachdesign.kern.data.storage.MutationFailure
+import com.attachdesign.kern.EditorKey
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 import com.attachdesign.kern.ui.common.DeletionSessionViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -50,7 +54,9 @@ data class ProjectExplorerUiState(
     val canNavigateBack: Boolean = false,
     val canNavigateForward: Boolean = false,
     val directoryError: String? = null,
-    val showSplash: Boolean = true
+    val showSplash: Boolean = true,
+    val isCreatingNote: Boolean = false,
+    val recentNotes: ImmutableList<FileListItem.FileRow> = kotlinx.collections.immutable.persistentListOf()
 )
 
 class MainScreenViewModel(
@@ -331,8 +337,73 @@ class MainScreenViewModel(
             enriched.forEach { items += FileListItem.FileRow(it, proj) }
         }
         if (request == rootListGeneration) {
-            _uiState.update { it.copy(allItems = items, directoryError = error) }
+            val projectsById = projectList.associateBy { it.id }
+            val recent = allDbFiles.asSequence().filter { !it.isDirectory &&
+                !it.relativePath.startsWith("Release Notes/") &&
+                (it.name.endsWith(".md", true) || it.name.endsWith(".markdown", true))
+            }.sortedByDescending { it.lastModified }.take(5).mapNotNull { file ->
+                projectsById[file.projectId]?.let { project ->
+                    FileListItem.FileRow(VfsNode.File(file.name, file.relativePath, 0, file.lastModified), project)
+                }
+            }.toList().toImmutableList()
+            _uiState.update { it.copy(allItems = items, directoryError = error, recentNotes = recent) }
         }
+    }
+
+    fun createQuickNote(onCreated: (EditorKey) -> Unit) {
+        if (_uiState.value.isCreatingNote) return
+        val state = _uiState.value
+        val project = state.activeProject ?: explorerState.value.projects.find { it.isSelected } ?: return
+        createQuickNoteIn(project, state.currentPath, onCreated)
+    }
+
+    private fun createQuickNoteIn(project: ProjectEntity, folder: String, onCreated: (EditorKey) -> Unit) {
+        if (_uiState.value.isCreatingNote) return
+        _uiState.update { it.copy(isCreatingNote = true) }
+        viewModelScope.launch {
+            try {
+                var number = 1
+                while (number <= 10_000) {
+                    val name = if (number == 1) "Untitled note.md" else "Untitled note $number.md"
+                    var result = fileOpsManager.createFile(project, folder, name)
+                    if (result is MutationOutcome.Failed && result.reason == MutationFailure.Collision) {
+                        number++
+                        continue
+                    }
+                    val needsIndexing = result is MutationOutcome.ReconciliationRequired
+                    if (result is MutationOutcome.ReconciliationRequired) {
+                        result = fileOpsManager.reconcileMetadata(project, result)
+                    }
+                    if (result is MutationOutcome.Success) {
+                        onCreated(EditorKey(project.id, result.actual.node.relativePath, focusOnStart = true))
+                        refreshAfterNaming()
+                    } else {
+                        if (needsIndexing) _snackbarEvent.emit(SnackbarEvent(
+                            "The note was created, but Files couldn't be updated. Refresh files before creating another."))
+                        else reportCaptureFailure(project, onCreated)
+                    }
+                    return@launch
+                }
+                _snackbarEvent.emit(SnackbarEvent("Rename an untitled note before creating another."))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                reportCaptureFailure(project, onCreated)
+            } finally {
+                _uiState.update { it.copy(isCreatingNote = false) }
+            }
+        }
+    }
+
+    private suspend fun reportCaptureFailure(project: ProjectEntity, onCreated: (EditorKey) -> Unit) {
+        val local = withContext(ioDispatcher) {
+            db.projectDao().getAllProjects().firstOrNull { !it.isExternal && it.path == "root" && it.id != project.id }
+        }
+        _snackbarEvent.emit(SnackbarEvent(
+            message = "Couldn't create the note in this folder. Check folder access and try again.",
+            actionLabel = if (local != null) "Write locally" else null,
+            onAction = local?.let { { createQuickNoteIn(it, "", onCreated) } }
+        ))
     }
 
     // ── Folder drill-down ──────────────────────────────────────────────────────

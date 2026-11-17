@@ -265,10 +265,11 @@ class StorageManager(private val context: Context) {
      */
     suspend fun readFile(project: ProjectEntity, relativePath: String): String = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
-            val doc = getDocumentFile(project, relativePath) ?: return@withContext ""
+            val doc = getDocumentFile(project, relativePath)?.takeIf { it.isFile }
+                ?: throw IOException("Document unavailable")
             return@withContext context.contentResolver.openInputStream(doc.uri)?.use { inputStream ->
                 inputStream.bufferedReader().use { it.readText() }
-            } ?: ""
+            } ?: throw IOException("Cannot open document")
         }
 
         val projectRoot = getProjectRootFile(project)
@@ -276,21 +277,12 @@ class StorageManager(private val context: Context) {
         if (file.exists() && file.isFile) {
             file.readText(Charsets.UTF_8)
         } else {
-            ""
+            throw IOException("Document unavailable")
         }
     }
 
     /** A reference must distinguish an empty document from missing/revoked storage. */
-    suspend fun readReferenceFile(project: ProjectEntity, relativePath: String): String = withContext(Dispatchers.IO) {
-        if (project.path.startsWith("content://")) {
-            val doc = getDocumentFile(project, relativePath)?.takeIf { it.isFile }
-                ?: throw IOException("Reference unavailable")
-            context.contentResolver.openInputStream(doc.uri)?.bufferedReader()?.use { it.readText() }
-                ?: throw IOException("Reference unavailable")
-        } else {
-            getSafeFile(getProjectRootFile(project), relativePath).readText(Charsets.UTF_8)
-        }
-    }
+    suspend fun readReferenceFile(project: ProjectEntity, relativePath: String): String = readFile(project, relativePath)
 
     /**
      * Resolves the app-private internal storage fallback directory for a project
@@ -346,19 +338,15 @@ class StorageManager(private val context: Context) {
      */
     suspend fun writeFile(project: ProjectEntity, relativePath: String, content: String): Unit = withContext(Dispatchers.IO) {
         if (project.path.startsWith("content://")) {
-            val doc = getOrCreateDocumentFile(project, relativePath, isDirectory = false) ?: return@withContext
-            try {
-                context.contentResolver.openOutputStream(doc.uri, "rwt")?.use { outputStream ->
-                    outputStream.bufferedWriter().use { it.write(content) }
-                }
-            } catch (_: Exception) {
-            }
+            val doc = getOrCreateDocumentFile(project, relativePath, isDirectory = false)
+                ?: throw IOException("Cannot create document")
+            val output = context.contentResolver.openOutputStream(doc.uri, "rwt")
+                ?: throw IOException("Cannot open document for writing")
+            output.bufferedWriter(Charsets.UTF_8).use { it.write(content) }
             return@withContext
         }
 
-        withProjectFile(project, relativePath, ensureParent = true) { file ->
-            file.writeText(content, Charsets.UTF_8)
-        }
+        getSafeFile(getProjectRootFile(project), relativePath).writeTextAtomically(content)
     }
 
     /**

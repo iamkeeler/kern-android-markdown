@@ -10,6 +10,8 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.ForcedSize
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
@@ -74,9 +76,18 @@ class EditorCanvasFocusTest {
 
     @After
     fun tearDown() {
-        composeTestRule.activityRule.scenario.close()
-        runBlocking { viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
-        db.close()
+        try {
+            // Release the old window's IME control before the next activity starts.
+            composeTestRule.runOnIdle {
+                val window = composeTestRule.activity.window
+                WindowInsetsControllerCompat(window, window.decorView).hide(WindowInsetsCompat.Type.ime())
+            }
+            waitForIme(false)
+        } finally {
+            composeTestRule.activityRule.scenario.close()
+            runBlocking { viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+            db.close()
+        }
     }
 
     private fun showDocument(source: String, wide: Boolean = false) {
@@ -150,6 +161,79 @@ class EditorCanvasFocusTest {
                 after.length == before.length + typed.length && typed in after
             }
         }
+    }
+
+    @Test
+    fun newNoteStartsFocusedWithRealImeWithoutAnotherTap() {
+        runBlocking { storage.writeFile(project, path, "") }
+        composeTestRule.setContent {
+            EditorScreen(project.id, path, viewModel, onBackClick = {}, focusOnStart = true)
+        }
+        composeTestRule.waitUntil(30_000) { viewModel.uiState.value.activeFilePath == path }
+        composeTestRule.waitForIdle()
+        assertFocusedImeAndType("An immediate **thought**")
+    }
+
+    @Test
+    fun collapsingToolbarKeepsTheFinalLineAtItsViewportAnchor() {
+        showDocument(longDocument())
+        scrollBy(100_000f)
+        val result = layout()
+        tapRoot(Offset(textPosition().x + pixels(24),
+            textPosition().y + result.getLineTop(result.lineCount - 1) + pixels(8)))
+        waitForIme(true)
+        scrollBy(100_000f)
+        val before = textPosition().y + layout().getLineBottom(layout().lineCount - 1)
+        composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()
+        val after = textPosition().y + layout().getLineBottom(layout().lineCount - 1)
+        assertEquals("Collapsing the palette moved the final line", before, after, pixels(1))
+        waitForIme(true)
+    }
+
+    @Test
+    fun collapsedToolbarSurvivesScreenStateRestoration() {
+        runBlocking { storage.writeFile(project, path, "A writing session") }
+        val restoration = StateRestorationTester(composeTestRule)
+        restoration.setContent { EditorScreen(project.id, path, viewModel, onBackClick = {}) }
+        composeTestRule.waitUntil(30_000) { viewModel.uiState.value.isDocumentReady }
+        composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        composeTestRule.onNodeWithContentDescription("Expand formatting toolbar").assertIsDisplayed()
+        assertEquals("A writing session", viewModel.documentTextFieldState.text.toString())
+    }
+
+    @Test
+    fun compactToolbarOffersUndoWithoutOpeningAMenu() {
+        showDocument("A note")
+        editor().performClick()
+        waitForIme(true)
+        editor().performTextInput(" added")
+        composeTestRule.runOnIdle {
+            assertTrue(viewModel.documentTextFieldState.text.toString().contains(" added"))
+        }
+        composeTestRule.onNodeWithContentDescription("Undo").assertIsDisplayed().performClick()
+        composeTestRule.runOnIdle { assertEquals("A note", viewModel.documentTextFieldState.text.toString()) }
+        waitForIme(true)
+    }
+
+    @Test
+    fun switchingDocumentsStartsANewViewportWithoutChangingTheSavedPaletteChoice() {
+        showDocument(longDocument())
+        scrollBy(pixels(600))
+        composeTestRule.onNodeWithContentDescription("Minimize formatting toolbar").performClick()
+        val next = "next.md"
+        runBlocking {
+            storage.writeFile(project, next, longDocument().replace("Line ", "Next "))
+            db.fileDao().insertFile(FileEntity(2, project.id, next, next, false, 0, "SYNCED"))
+        }
+        composeTestRule.runOnIdle { viewModel.loadFile(project.id, next) }
+        composeTestRule.waitUntil(30_000) {
+            viewModel.uiState.value.isDocumentReady && viewModel.uiState.value.activeFilePath == next
+        }
+        composeTestRule.onNodeWithContentDescription("Expand formatting toolbar").assertIsDisplayed()
+        val scroll = composeTestRule.onNodeWithTag("Document scroll", useUnmergedTree = true).fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange]
+        assertEquals(0f, scroll.value(), pixels(1))
     }
 
     @Test

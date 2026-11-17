@@ -756,16 +756,16 @@ class EditorScreenTest {
 
     // Verify format buttons appear in formatting toolbar
     composeTestRule.onNodeWithContentDescription("Format selection bold").assertIsDisplayed()
-    composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Undo").assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("Toggle bullet list").assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("More formatting actions").assertIsDisplayed()
 
     // Formatting is non-dismissive: actions remain available until the explicit collapse control.
     composeTestRule.onNodeWithContentDescription("Format selection bold").performClick()
-    composeTestRule.onNodeWithContentDescription("Format selection italic").assertIsDisplayed()
+    composeTestRule.onNodeWithContentDescription("Undo").assertIsDisplayed()
 
     composeTestRule.onNodeWithContentDescription("More formatting actions").performClick()
-    composeTestRule.onNodeWithText("Undo").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Italic").assertIsDisplayed()
     composeTestRule.onNodeWithText("Redo").assertIsDisplayed()
     composeTestRule.onNodeWithText("Indent").assertIsDisplayed()
     // Complete the menu interaction before tapping a control behind its popup.

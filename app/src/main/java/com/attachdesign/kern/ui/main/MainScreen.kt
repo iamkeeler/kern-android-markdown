@@ -134,6 +134,14 @@ fun MainScreen(
         })
     }
     val state by vm.explorerState.collectAsStateWithLifecycle()
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, vm) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refreshAfterExternalMutation()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -192,7 +200,7 @@ fun MainScreen(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val isSearchImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    var sortMode by remember { mutableStateOf(SortMode.ALPHA_ASC) }
+    var sortMode by remember { mutableStateOf(SortMode.RECENT) }
     var isSortMenuOpen by remember { mutableStateOf(false) }
     var draggedNode by remember { mutableStateOf<VfsNode?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
@@ -225,8 +233,6 @@ fun MainScreen(
         }
     }
 
-    val launchNewFileSetting by db.settingDao().getSettingFlow(SettingKeys.LAUNCH_NEW_FILE).collectAsState(initial = null)
-    val shouldLaunchNewFile = launchNewFileSetting?.value?.toBoolean() ?: true
     val theme by ThemeEngine.observeActiveTheme(db).collectAsState(initial = ThemeEngine.DefaultLight.toColorTheme())
 
     val typedText = remember { mutableStateOf("K") }
@@ -267,7 +273,7 @@ fun MainScreen(
             targetPath = node?.relativePath ?: "",
             targetName = if (kind == NamingKind.RenameWorkspaceAlias) project.name else node?.name ?: "",
             directory = node?.isDirectory ?: false,
-            openCreatedFile = kind == NamingKind.CreateFile && shouldLaunchNewFile
+            openCreatedFile = kind == NamingKind.CreateFile
         )
     }
 
@@ -333,13 +339,16 @@ fun MainScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 IconButton(
-                                    onClick = { targetProj?.let { openNaming(NamingKind.CreateFile, it) } },
-                                    enabled = targetProj != null,
-                                    modifier = Modifier.fillMaxSize()
+                                    onClick = { vm.createQuickNote { onItemClick(it) } },
+                                    enabled = targetProj != null && !state.isCreatingNote,
+                                    modifier = Modifier.fillMaxSize().semantics { contentDescription = "New note" }
                                 ) {
-                                    Icon(
+                                    if (state.isCreatingNote) CircularProgressIndicator(
+                                        modifier = Modifier.size(theme.dimensions.iconMedium),
+                                        color = docIconColor, strokeWidth = theme.dimensions.borderWidth
+                                    ) else Icon(
                                         imageVector = Icons.AutoMirrored.Outlined.NoteAdd,
-                                        contentDescription = "New Document",
+                                        contentDescription = null,
                                         tint = docIconColor
                                     )
                                 }
@@ -735,16 +744,20 @@ fun MainScreen(
                         }
                     }
 
-                    if (sortedFiles.isEmpty() && state.directoryError != null) {
+                    val recent = if (currentPath.isEmpty()) state.recentNotes else emptyList()
+                    val visibleFiles = sortedFiles.filterNot { node -> recent.any {
+                        it.project.id == activeProj.id && it.node.relativePath == node.relativePath
+                    } }
+                    if (sortedFiles.isEmpty() && recent.isEmpty() && state.directoryError != null) {
                         EmptyStateHint("Folder unavailable", "Restore folder permission or choose another workspace.", theme,
                             actionLabel = "Refresh", onAction = vm::refreshCurrentDirectory)
-                    } else if (sortedFiles.isEmpty()) {
+                    } else if (sortedFiles.isEmpty() && recent.isEmpty()) {
                         EmptyStateHint(
                             title = "Folder is empty",
-                            body = "Use New Document or New Folder to add content.",
+                            body = "Use New note to start writing, or New Folder to organize files.",
                             theme = theme,
-                            actionLabel = "New Document",
-                            onAction = { targetProj?.let { openNaming(NamingKind.CreateFile, it) } }
+                            actionLabel = "New note",
+                            onAction = { vm.createQuickNote { onItemClick(it) } }
                         )
                     } else {
                         LazyColumn(
@@ -778,7 +791,27 @@ fun MainScreen(
                                     }
                                 }
                             }
-                            items(sortedFiles, key = { it.relativePath }) { node ->
+                            if (recent.isNotEmpty()) {
+                                item {
+                                    Text("Recent notes", color = theme.textSecondary, fontSize = theme.typography.small,
+                                        modifier = Modifier.padding(horizontal = theme.dimensions.spacingExtraLarge,
+                                            vertical = theme.dimensions.spacingMedium))
+                                }
+                                items(recent, key = { "recent:${it.project.id}:${it.node.relativePath}" }) { item ->
+                                    SearchOverflowRow(item.node, item.project, theme,
+                                        onClick = { onItemClick(EditorKey(item.project.id, item.node.relativePath)) },
+                                        onShare = { coroutineScope.launch { fileOpsManager.shareNode(item.project, item.node)
+                                            .onSuccess { context.launchShare(it) }.onFailure { vm.reportShareFailure(item.node.name) } } },
+                                        onEdit = { openNaming(NamingKind.RenameNode, item.project, item.node) },
+                                        onDelete = { nodeToDelete = item.node to item.project })
+                                }
+                                if (visibleFiles.isNotEmpty()) item {
+                                    Text("Files", color = theme.textSecondary, fontSize = theme.typography.small,
+                                        modifier = Modifier.padding(horizontal = theme.dimensions.spacingExtraLarge,
+                                            vertical = theme.dimensions.spacingMedium))
+                                }
+                            }
+                            items(visibleFiles, key = { it.relativePath }) { node ->
                                 val rowModifier = Modifier.onGloballyPositioned { coordinates ->
                                     folderBounds[node.relativePath] = coordinates.boundsInRoot()
                                 }

@@ -28,6 +28,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import com.attachdesign.kern.data.local.SettingEntity
 import com.attachdesign.kern.data.local.ThemeEntity
 import com.attachdesign.kern.data.storage.StorageManager
+import com.attachdesign.kern.data.storage.DocumentConflictException
+import com.attachdesign.kern.data.storage.DocumentSaveSession
+import com.attachdesign.kern.data.storage.DocumentSnapshot
+import com.attachdesign.kern.data.storage.DraftRecoveryStore
+import com.attachdesign.kern.data.storage.RecoveryDraft
 import com.attachdesign.kern.data.storage.VfsNode
 import com.attachdesign.kern.data.storage.VfsNodeMapper
 import com.attachdesign.kern.data.storage.FileOperationsManager
@@ -47,6 +52,9 @@ import com.attachdesign.kern.data.analytics.AnalyticsTracker
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +72,8 @@ enum class SidebarMode {
     METRICS,
     SETTINGS
 }
+
+enum class DocumentSaveStatus { LOADING, SAVED, SAVING, UNSAVED, ERROR, UNAVAILABLE }
 
 data class EditorUiState(
     val activeProject: ProjectEntity? = null,
@@ -91,7 +101,12 @@ data class EditorUiState(
     val projectFiles: List<VfsNode> = emptyList(),
     val explorerCurrentPath: String = "",
     val isFileOperationPending: Boolean = false,
-    val isReadabilityPopupOpen: Boolean = false
+    val isReadabilityPopupOpen: Boolean = false,
+    val isDocumentReady: Boolean = false,
+    val documentScrollKey: String = "",
+    val saveStatus: DocumentSaveStatus = DocumentSaveStatus.LOADING,
+    val saveError: String? = null,
+    val loadError: String? = null
 ) {
     val isSidebarOpen: Boolean get() = sidebarMode != SidebarMode.CLOSED
 }
@@ -125,6 +140,10 @@ class EditorViewModel(
                 saveJob?.cancelAndJoin()
                 saveActiveFile()
                 loadFile(key.projectId, key.path)?.join()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep the current file open when its save needs attention.
             } finally {
                 _switchingSecondaryFile.value = false
             }
@@ -214,6 +233,14 @@ class EditorViewModel(
     val documentTextFieldState = TextFieldState()
 
     private var documentText: String = ""
+    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val recoveryStore by lazy { DraftRecoveryStore(java.io.File(context.filesDir, "editor-recovery")) }
+    private var saveSession: DocumentSaveSession? = null
+    private var documentRevision = 0L
+    private var savedRevision = 0L
+    private var closeJob: Job? = null
+    internal var finalSaveJob: Job? = null
+        private set
 
     val allProjects: StateFlow<List<ProjectEntity>> = db.projectDao().getAllProjectsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -391,9 +418,14 @@ class EditorViewModel(
     }
 
     fun loadFile(projectId: Long, filePath: String, focusOnStart: Boolean = false): Job? {
-        // Re-entering composition after rotation must not reload over the live draft.
-        if (_uiState.value.activeProject?.id == projectId && _uiState.value.activeFilePath == filePath) {
-            if (loadingFile != (projectId to filePath)) fileLoadJob?.cancel()
+        val state = _uiState.value
+        if (state.activeProject?.id == projectId && state.activeFilePath == filePath &&
+            (state.isDocumentReady || (saveSession != null && loadingFile != (projectId to filePath)))) {
+            if (loadingFile != (projectId to filePath)) {
+                fileLoadJob?.cancel()
+                _uiState.value = state.copy(isDocumentReady = true, loadError = null,
+                    saveStatus = if (documentRevision == savedRevision) DocumentSaveStatus.SAVED else DocumentSaveStatus.UNSAVED)
+            }
             return fileLoadJob
         }
         val requestedFile = projectId to filePath
@@ -401,47 +433,89 @@ class EditorViewModel(
         fileLoadJob?.cancel()
         loadingFile = requestedFile
         return viewModelScope.launch {
-            val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) } ?: return@launch
-            val content = storageManager.readFile(project, filePath)
-            
-            // Track document open and words read stats
-            statsRepository.incrementDocumentsOpened()
-            analyticsTracker.logDocumentOpened()
-            val wordCount = countWords(content)
-            statsRepository.addWordsRead(wordCount.toLong())
-            analyticsTracker.logWordsRead(wordCount.toLong())
-
-            val parsedBlocks = MarkdownParser.parseDocument(content).map { block ->
-                ImmutableParagraphBlock(block)
-            }.toImmutableList()
-
-            // Initialize TextFieldValues
-            val initialValues = parsedBlocks.mapIndexed { index, wrapper ->
-                index to TextFieldValue(wrapper.block.rawText)
-            }.toMap()
-
-            val parentPath = if (filePath.contains('/')) filePath.substringBeforeLast('/') else ""
-            val diskFiles = storageManager.listDirectory(project, parentPath)
-            val enriched = withContext(Dispatchers.IO) {
-                VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(project.id))
+            val project = withContext(Dispatchers.IO) { db.projectDao().getProjectById(projectId) }
+            if (project == null) {
+                _uiState.value = _uiState.value.copy(isDocumentReady = false,
+                    saveStatus = DocumentSaveStatus.UNAVAILABLE,
+                    loadError = "Workspace unavailable. Restore folder access and try again.")
+                return@launch
             }
-
-            _uiState.value = _uiState.value.copy(
-                activeProject = project,
-                activeFilePath = filePath,
-                fileName = filePath.substringAfterLast('/'),
-                isFileOperationPending = pendingRenameRequest?.let { it.projectId == projectId && it.targetPath == filePath } == true,
-                paragraphs = ImmutableParagraphList(parsedBlocks),
-                focusedParagraphIndex = if (focusOnStart) 0 else -1,
-                hemingwayMetrics = null, // Clear metrics until requested
-                explorerCurrentPath = parentPath,
-                projectFiles = enriched
-            )
-            _paragraphTextFieldValues.value = initialValues
-            documentText = content
-            documentTextFieldState.edit {
-                replace(0, length, content)
-                selection = TextRange(if (focusOnStart) 0 else content.length)
+            _uiState.value = _uiState.value.copy(isDocumentReady = false,
+                saveStatus = DocumentSaveStatus.LOADING, loadError = null, saveError = null)
+            try {
+                val recovery = withContext(Dispatchers.IO) { recoveryStore.read(project, filePath) }
+                val fileId = withContext(Dispatchers.IO) { db.fileDao().getFileByPath(project.id, filePath)?.id }
+                val disk = try {
+                    storageManager.readFile(project, filePath)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    if (recovery == null) throw failure
+                    null
+                }
+                val restored = recovery?.takeIf { it.text != disk }
+                val content = restored?.text ?: requireNotNull(disk)
+                val baseText = restored?.baseText ?: content
+                if (recovery != null && restored == null) {
+                    withContext(Dispatchers.IO) { recoveryStore.remove(project, filePath) }
+                }
+                val loadedSession = DocumentSaveSession(project, filePath, db, storageManager, recoveryStore, baseText,
+                    recovery?.fileId ?: fileId)
+                val parsedBlocks = withContext(defaultDispatcher) {
+                    MarkdownParser.parseDocument(content).map(::ImmutableParagraphBlock).toImmutableList()
+                }
+                val parentPath = filePath.substringBeforeLast('/', "")
+                val files = try {
+                    val diskFiles = storageManager.listDirectory(project, parentPath)
+                    withContext(Dispatchers.IO) {
+                        VfsNodeMapper.enrichFiles(diskFiles, db.fileDao().getFilesForProject(project.id))
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                saveSession = loadedSession
+                documentRevision = 0L
+                savedRevision = if (restored == null) 0L else -1L
+                documentText = content
+                documentTextFieldState.edit {
+                    replace(0, length, content)
+                    selection = if (restored != null) TextRange(
+                        restored.selectionStart.coerceIn(0, length), restored.selectionEnd.coerceIn(0, length)
+                    ) else TextRange(if (focusOnStart) 0 else content.length)
+                }
+                documentTextFieldState.undoState.clearHistory()
+                _paragraphTextFieldValues.value = parsedBlocks.mapIndexed { index, wrapper ->
+                    index to TextFieldValue(wrapper.block.rawText)
+                }.toMap()
+                _uiState.value = _uiState.value.copy(
+                    activeProject = project, activeFilePath = filePath, fileName = filePath.substringAfterLast('/'),
+                    documentScrollKey = "${project.id}:${fileId?.let { "id:$it" } ?: "path:$filePath"}",
+                    paragraphs = ImmutableParagraphList(parsedBlocks),
+                    focusedParagraphIndex = if (focusOnStart) 0 else -1,
+                    hemingwayMetrics = null, explorerCurrentPath = parentPath, projectFiles = files,
+                    isFileOperationPending = pendingRenameRequest?.let {
+                        it.projectId == projectId && it.targetPath == filePath
+                    } == true,
+                    isDocumentReady = true,
+                    saveStatus = if (restored == null) DocumentSaveStatus.SAVED else DocumentSaveStatus.UNSAVED
+                )
+                if (restored != null) saveActiveFileAsync()
+                viewModelScope.launch {
+                    statsRepository.incrementDocumentsOpened()
+                    analyticsTracker.logDocumentOpened()
+                    val wordCount = countWords(content)
+                    statsRepository.addWordsRead(wordCount.toLong())
+                    analyticsTracker.logWordsRead(wordCount.toLong())
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(activeProject = project, activeFilePath = filePath,
+                    fileName = filePath.substringAfterLast('/'), isDocumentReady = false,
+                    saveStatus = DocumentSaveStatus.UNAVAILABLE,
+                    loadError = "This note couldn't be opened. Check folder access and try again.")
             }
         }.also { fileLoadJob = it }
     }
@@ -636,12 +710,8 @@ class EditorViewModel(
             paragraphs = ImmutableParagraphList(items.toImmutableList())
         )
 
-        // Debounce auto-save to VFS sandbox
-        saveJob?.cancel()
-        saveJob = viewModelScope.launch {
-            delay(1000) // 1 second debounce
-            saveActiveFile()
-        }
+        captureDocumentText()
+        scheduleSave()
     }
 
     fun setHeaderLevel(index: Int, level: Int) {
@@ -713,7 +783,7 @@ class EditorViewModel(
     }
 
     fun onDocumentTextChanged(content: String) {
-        if (content == documentText) return
+        if (!_uiState.value.isDocumentReady || content == documentText) return
         val previous = documentText
         documentText = content
         val blocks = MarkdownParser.parseDocument(content)
@@ -738,10 +808,18 @@ class EditorViewModel(
                 }
             }
         }
+        documentRevision++
+        saveSession?.accept(documentRevision)
+        _uiState.value = _uiState.value.copy(saveStatus = DocumentSaveStatus.UNSAVED)
+        protectDraft()
+        scheduleSave()
+    }
+
+    private fun scheduleSave() {
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(1000)
-            saveActiveFile()
+            persistenceScope.launch { saveSafely() }
         }
     }
 
@@ -864,57 +942,116 @@ class EditorViewModel(
 
     private fun saveActiveFileAsync() {
         saveJob?.cancel()
-        saveJob = viewModelScope.launch {
-            saveActiveFile()
+        persistenceScope.launch { saveSafely() }
+    }
+
+    private fun currentSnapshot(): DocumentSnapshot = DocumentSnapshot(documentRevision, RecoveryDraft(
+        text = documentText, baseText = "",
+        selectionStart = documentTextFieldState.selection.start,
+        selectionEnd = documentTextFieldState.selection.end
+    ))
+
+    private fun protectDraft() {
+        val session = saveSession ?: return
+        val snapshot = currentSnapshot()
+        session.accept(snapshot.revision)
+        persistenceScope.launch {
+            try {
+                withContext(Dispatchers.IO) { session.protect(snapshot) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (saveSession === session && documentRevision == snapshot.revision) {
+                    _uiState.value = _uiState.value.copy(saveStatus = DocumentSaveStatus.ERROR,
+                        saveError = "Couldn't protect this draft on device. Free some space, then retry or save a copy.")
+                }
+            }
         }
     }
 
-    private suspend fun saveActiveFile(allowPending: Boolean = false) = withContext(Dispatchers.IO) {
+    private suspend fun saveActiveFile(allowPending: Boolean = false) {
+        captureDocumentText()
+        val session = saveSession ?: return
         val state = _uiState.value
-        val project = state.activeProject ?: return@withContext
-        val filePath = state.activeFilePath
-        if (filePath.isEmpty()) return@withContext
-
-        val documentContent = if (state.documentEditorEnabled) {
-            documentText
-        } else {
-            MarkdownParser.joinParsedDocument(state.paragraphs.items.map { it.block })
+        if (state.isFileOperationPending && !allowPending) throw java.io.IOException("File action pending")
+        if (documentRevision == savedRevision) return
+        val snapshot = currentSnapshot()
+        session.accept(snapshot.revision)
+        _uiState.value = state.copy(saveStatus = DocumentSaveStatus.SAVING)
+        try {
+            withContext(Dispatchers.IO) { session.save(snapshot) }
+            if (saveSession === session && documentRevision == snapshot.revision) {
+                savedRevision = snapshot.revision
+                _uiState.value = _uiState.value.copy(saveStatus = DocumentSaveStatus.SAVED,
+                    saveError = null)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            if (saveSession === session && documentRevision == snapshot.revision) {
+                val protected = session.protectedRevision == snapshot.revision
+                val message = when {
+                    failure is DocumentConflictException -> "This note changed outside Kern. Your draft is kept on device. Save a copy to keep both versions."
+                    protected -> "Couldn't finish saving. Your draft is kept on device. Retry or save a copy."
+                    else -> "Couldn't save or protect this draft. Free some space, then retry or save a copy."
+                }
+                _uiState.value = _uiState.value.copy(saveStatus = DocumentSaveStatus.ERROR, saveError = message)
+            }
+            throw failure
         }
-        ProjectMutationCoordinator.forDatabase(db).withMutation(project.id) {
-        if (_uiState.value.isFileOperationPending && !allowPending) return@withMutation
-        if (db.projectDao().getProjectById(project.id)?.path != project.path) return@withMutation
-        storageManager.writeFile(project, filePath, documentContent)
-
-        // Calculate metrics for DB metadata update
-        val wordCount = countWords(documentContent)
-        val charCount = documentContent.length
-
-        // Readability ARI approximation for caching
-        val sentenceCount = maxOf(1, TextAnalysisUtils.countSentences(documentContent))
-        val nonWhitespaceCharCount = documentContent.count { !it.isWhitespace() }
-        val gradeLevel = TextAnalysisUtils.calculateAriGrade(
-            wordCount = wordCount,
-            charCount = nonWhitespaceCharCount,
-            sentenceCount = sentenceCount
-        )
-
-        // Update database FileEntity
-        val fileEntity = db.fileDao().getFileByPath(project.id, filePath)
-        if (fileEntity != null) {
-            val updatedFile = fileEntity.copy(
-                lastModified = System.currentTimeMillis(),
-                syncState = "PENDING", // Mark pending sync
-                wordCount = wordCount,
-                characterCount = charCount,
-                readabilityGrade = gradeLevel
-            )
-            db.fileDao().updateFile(updatedFile)
-        }
-
-        }
-        // If Hemingway analyzer is active, recalculate on save
         if (state.sidebarMode == SidebarMode.METRICS || state.isReadabilityPopupOpen) {
-            runHemingwayAnalysis(documentContent)
+            runHemingwayAnalysis(snapshot.draft.text)
+        }
+    }
+
+    private suspend fun saveSafely(): Boolean = try {
+        saveActiveFile()
+        true
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        false
+    }
+
+    fun flushPendingSave(): Job {
+        captureDocumentText()
+        saveJob?.cancel()
+        return persistenceScope.launch { saveSafely() }
+    }
+
+    private fun captureDocumentText() {
+        if (!_uiState.value.isDocumentReady) return
+        val source = getFullDocumentContent()
+        if (_uiState.value.documentEditorEnabled) onDocumentTextChanged(source)
+        else if (source != documentText) {
+            documentText = source
+            documentRevision++
+            protectDraft()
+        }
+    }
+
+    fun retrySave() {
+        flushPendingSave()
+    }
+
+    fun saveCopy(uri: android.net.Uri) {
+        if (!_uiState.value.isDocumentReady) return
+        val text = getFullDocumentContent()
+        persistenceScope.launch {
+            val copied = try {
+                withContext(Dispatchers.IO) {
+                    val output = context.contentResolver.openOutputStream(uri, "rwt")
+                        ?: throw java.io.IOException("Cannot open copy")
+                    output.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
+                }
+                true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+            _snackbarEvent.emit(SnackbarEvent(if (copied) "Copy saved. The original note still needs saving."
+                else "Couldn't save the copy. Your draft is still open."))
         }
     }
 
@@ -1086,17 +1223,25 @@ class EditorViewModel(
         }
     }
 
-    fun closeFile() {
+    fun closeFile(onClosed: () -> Unit = {}) {
+        if (closeJob?.isActive == true) return
+        captureDocumentText()
         saveJob?.cancel()
-        viewModelScope.launch {
-            saveActiveFile()
+        closeJob = persistenceScope.launch {
+            val saved = saveSafely()
+            if (!saved && saveSession?.protectedRevision != documentRevision) return@launch
             triggerCloudSyncSweep()
-            _uiState.value = _uiState.value.copy(
-                activeFilePath = "",
-                paragraphs = ImmutableParagraphList(emptyList<ImmutableParagraphBlock>().toImmutableList()),
-                hemingwayMetrics = null
-            )
+            onClosed()
         }
+    }
+
+    override fun onCleared() {
+        captureDocumentText()
+        saveJob?.cancel()
+        finalSaveJob = persistenceScope.launch {
+            try { saveSafely() } finally { persistenceScope.cancel() }
+        }
+        super.onCleared()
     }
 
     fun triggerCloudSyncSweep() {
@@ -1111,7 +1256,7 @@ class EditorViewModel(
         if (currentPath.isEmpty()) return
         
         viewModelScope.launch {
-            saveActiveFile() // Save current state first
+            if (!saveSafely()) return@launch
             
             val success = withContext(Dispatchers.IO) {
                 // Move on disk
@@ -1151,7 +1296,7 @@ class EditorViewModel(
         viewModelScope.launch {
             statsRepository.incrementTimesShared()
             analyticsTracker.logDocumentShared()
-            saveActiveFile()
+            if (!saveSafely()) return@launch
             val fileNode = VfsNode.File(
                 name = filePath.substringAfterLast('/'),
                 relativePath = filePath,
@@ -1180,6 +1325,7 @@ class EditorViewModel(
                     onFailure = { needsInspection -> if (_uiState.value.activeProject?.id == project.id && _uiState.value.activeFilePath == path)
                         _uiState.value = _uiState.value.copy(isFileOperationPending = needsInspection) }) {
                     if (_uiState.value.activeProject?.id == project.id && _uiState.value.activeFilePath == path) {
+                        saveSession = null
                         _uiState.value = _uiState.value.copy(activeFilePath = "", isFileOperationPending = false)
                         onDeleted()
                     }
@@ -1201,7 +1347,7 @@ class EditorViewModel(
         if (filePath.isEmpty()) return
 
         viewModelScope.launch {
-            saveActiveFile() // save active changes first
+            if (!saveSafely()) return@launch
             val fileNode = VfsNode.File(
                 name = filePath.substringAfterLast('/'),
                 relativePath = filePath,
@@ -1279,6 +1425,8 @@ class EditorViewModel(
                     val actual = result.actual.node
                     _uiState.value = _uiState.value.copy(activeFilePath = actual.relativePath, fileName = actual.name,
                         explorerCurrentPath = actual.relativePath.substringBeforeLast('/', ""), isFileOperationPending = false)
+                    saveSession = DocumentSaveSession(requireNotNull(_uiState.value.activeProject), actual.relativePath,
+                        db, storageManager, recoveryStore, documentText, saveSession?.fileId).also { it.accept(documentRevision) }
                     pendingRenameRequest = null
                     onRenamed(actual.relativePath)
                 }

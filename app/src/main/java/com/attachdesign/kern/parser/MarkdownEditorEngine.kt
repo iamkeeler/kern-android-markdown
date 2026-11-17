@@ -132,6 +132,9 @@ object MarkdownEditorEngine {
         autoCompleteBrackets: Boolean = true,
         sentenceCapitalization: Boolean = true
     ): TransformResult {
+        val pairing = DocumentTypingPreferences(autoCompleteEnabled = autoCompleteEnabled,
+            quotes = autoCompleteQuotes, singleQuotes = autoCompleteSingleQuotes,
+            braces = autoCompleteBraces, parens = autoCompleteParens, brackets = autoCompleteBrackets)
         // Selection wrapping: wraps active selection in matching delimiters
         val wasSelectionActive = oldSelStart != oldSelEnd
         if (wasSelectionActive && autoCompleteEnabled) {
@@ -139,18 +142,8 @@ object MarkdownEditorEngine {
             if (newText.length == oldText.length - replacedLength + 1) {
                 val typedChar = newText.getOrNull(oldSelStart)
                 if (typedChar != null) {
-                    val closeSym = when (typedChar) {
-                        '(' -> if (autoCompleteParens) ")" else null
-                        '[' -> if (autoCompleteBrackets) "]" else null
-                        '{' -> if (autoCompleteBraces) "}" else null
-                        '"' -> if (autoCompleteQuotes) "\"" else null
-                        '\'' -> if (autoCompleteSingleQuotes) "'" else null
-                        '*' -> "*"
-                        '_' -> "_"
-                        '`' -> "`"
-                        '~' -> "~"
-                        else -> null
-                    }
+                    val closeSym = pairing.closingFor(typedChar)?.toString()
+                        ?: typedChar.takeIf { it in "*_`~" }?.toString()
                     if (closeSym != null) {
                         val openSym = typedChar.toString()
                         val originalSelectedText = oldText.substring(oldSelStart, oldSelEnd)
@@ -260,14 +253,7 @@ object MarkdownEditorEngine {
         // 3. Overtype Skipping
         if (autoCompleteEnabled && cursorState > 0 && cursorState <= textState.length) {
             val typedChar = textState[cursorState - 1]
-            val isClosingChar = when (typedChar) {
-                ')' -> autoCompleteParens
-                ']' -> autoCompleteBrackets
-                '}' -> autoCompleteBraces
-                '"', '”' -> autoCompleteQuotes
-                '\'', '’' -> autoCompleteSingleQuotes
-                else -> false
-            }
+            val isClosingChar = pairing.openingFor(typedChar) != null
             if (isClosingChar) {
                 // If the user typed a closing character, and in the oldText at oldSelStart there is already that character, skip it.
                 if (oldSelStart < oldText.length && oldText[oldSelStart] == typedChar) {
@@ -279,16 +265,7 @@ object MarkdownEditorEngine {
         // 4. Auto-Pairing
         if (autoCompleteEnabled && cursorState > 0 && cursorState <= textState.length) {
             val typedChar = textState[cursorState - 1]
-            val closePair = when (typedChar) {
-                '(' -> if (autoCompleteParens) ')' else null
-                '[' -> if (autoCompleteBrackets) ']' else null
-                '{' -> if (autoCompleteBraces) '}' else null
-                '"' -> if (autoCompleteQuotes) '"' else null
-                '\'' -> if (autoCompleteSingleQuotes) '\'' else null
-                '“' -> if (autoCompleteQuotes) '”' else null
-                '‘' -> if (autoCompleteSingleQuotes) '’' else null
-                else -> null
-            }
+            val closePair = pairing.closingFor(typedChar)
             if (closePair != null) {
                 textState = textState.substring(0, cursorState) + closePair + textState.substring(cursorState)
             }

@@ -10,6 +10,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import android.widget.Toast
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +44,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.heightIn
 import com.attachdesign.kern.ui.common.AdaptiveMetricPair
@@ -98,6 +102,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.attachdesign.kern.parser.MarkdownBlockType
+import com.attachdesign.kern.parser.DocumentTypingPreferences
 import com.attachdesign.kern.parser.DocumentEditEngine
 import kotlinx.coroutines.flow.collectLatest
 import androidx.activity.compose.BackHandler
@@ -137,9 +142,24 @@ fun EditorScreen(
     val deletionSession = LocalDeletionSession.current
     SideEffect { viewModel.attachDeletionSession(deletionSession) }
     val context = LocalContext.current
+    val saveCopyLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri -> if (uri != null) viewModel.saveCopy(uri) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) viewModel.flushPendingSave()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.flushPendingSave()
+        }
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
+    val documentScrollState = key(uiState.documentScrollKey) { rememberScrollState() }
     val companion by viewModel.companion.state.collectAsStateWithLifecycle()
     val secondaryEditor = if (companionEnabled) androidx.lifecycle.viewmodel.compose.viewModel<EditorViewModel>(
         key = "second-editor-${viewModel.sessionId}"
@@ -303,6 +323,10 @@ fun EditorScreen(
         }
         val supportingVisible = companionVisible || (isDualPane && uiState.isSidebarOpen)
         val imeVisible = WindowInsets.ime.getBottom(density) > 0
+        BackHandler(enabled = !companion.isOpen && !imeVisible && !showReferencePicker && !headerMenuOpen &&
+            !showRenameDialog && !showDeleteDialog) {
+            viewModel.closeFile(onBackClick)
+        }
         BackHandler(enabled = companion.isOpen && !imeVisible && !showReferencePicker && !headerMenuOpen) {
             if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED) else viewModel.toggleCompanion()
         }
@@ -370,6 +394,7 @@ fun EditorScreen(
                                 EditorHeader(
                                     filePath = uiState.activeFilePath.ifEmpty { filePath },
                                     theme = uiState.activeTheme,
+                                    saveStatus = uiState.saveStatus,
                                     isMetricsActive = uiState.sidebarMode == SidebarMode.METRICS,
                                     canSplit = companionEnabled && canSplit,
                                     isCompanionOpen = companion.isOpen,
@@ -380,7 +405,7 @@ fun EditorScreen(
                                         if (companion.isOpen) {
                                             if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED)
                                             else viewModel.toggleCompanion()
-                                        } else onBackClick()
+                                        } else viewModel.closeFile(onBackClick)
                                     },
                                     onCopyClick = {
                                         val fullText = MarkdownRenderer.copyDocument(uiState.paragraphs.items.map { it.block })
@@ -434,6 +459,19 @@ fun EditorScreen(
                             }
                         }
 
+                        if (uiState.loadError != null || uiState.saveError != null) {
+                            DocumentErrorNotice(
+                                message = uiState.loadError ?: requireNotNull(uiState.saveError),
+                                theme = theme,
+                                onRetry = {
+                                    if (uiState.loadError != null) viewModel.loadFile(projectId, filePath, focusOnStart)
+                                    else viewModel.retrySave()
+                                },
+                                onSaveCopy = if (uiState.isDocumentReady) ({
+                                    saveCopyLauncher.launch(uiState.fileName.ifEmpty { "Note.md" })
+                                }) else null
+                            )
+                        }
                         val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                         val editorHorizontalPadding = if (!supportingVisible && widthDp >= theme.dimensions.largeScreenBreakpoint) {
                             theme.dimensions.spacingHuge
@@ -460,7 +498,7 @@ fun EditorScreen(
                                     })
                         ) {
                             // Floating Formatting Toolbar State
-                            var isToolbarMinimized by remember { mutableStateOf(false) }
+                            var isToolbarMinimized by rememberSaveable(viewModel.sessionId) { mutableStateOf(false) }
 
                             val overscrollState = rememberElasticOverscrollState()
 
@@ -469,14 +507,15 @@ fun EditorScreen(
                                 accentColor = theme.accent,
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                if (uiState.documentEditorEnabled) {
+                                if (uiState.documentEditorEnabled && uiState.loadError == null) {
                                     DocumentEditorField(
                                         state = uiState,
                                         viewModel = viewModel,
-                                        isToolbarMinimized = isToolbarMinimized,
-                                        horizontalPadding = editorHorizontalPadding
+                                        scrollState = documentScrollState,
+                                        horizontalPadding = editorHorizontalPadding,
+                                        focusOnStart = focusOnStart
                                     )
-                                } else {
+                                } else if (uiState.loadError == null) {
                                     EditorCanvas(
                                         state = uiState,
                                         textFieldValues = textFieldValues,
@@ -501,7 +540,7 @@ fun EditorScreen(
                                 label = "toolbarBottomPadding"
                             )
 
-                            Box(
+                            if (uiState.isDocumentReady) Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .align(Alignment.BottomCenter)
@@ -680,6 +719,27 @@ fun EditorScreen(
     }
 }
 
+@Composable
+private fun DocumentErrorNotice(
+    message: String,
+    theme: AppColorTheme,
+    onRetry: () -> Unit,
+    onSaveCopy: (() -> Unit)?
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = theme.dimensions.spacingExtraLarge,
+        vertical = theme.dimensions.spacingSmall).testTag("Document save error")
+        .semantics { liveRegion = LiveRegionMode.Polite }) {
+        Text(message, color = theme.textDanger, fontSize = theme.typography.helper,
+            lineHeight = theme.typography.helperLineHeight)
+        Row {
+            TextButton(onClick = onRetry) { Text("Retry", color = theme.textAccent) }
+            if (onSaveCopy != null) TextButton(onClick = onSaveCopy) {
+                Text("Save a copy", color = theme.textAccent)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorHeader(
@@ -697,26 +757,43 @@ fun EditorHeader(
     canSplit: Boolean = false,
     isCompanionOpen: Boolean = false,
     onSplitToggle: () -> Unit = {},
-    onMenuVisibilityChanged: (Boolean) -> Unit = {}
+    onMenuVisibilityChanged: (Boolean) -> Unit = {},
+    saveStatus: DocumentSaveStatus = DocumentSaveStatus.SAVED
 ) {
     val fileName = filePath.split('/').last()
 
     TopAppBar(
         modifier = Modifier.testTag("Editor header"),
         title = {
-            Text(
-                text = fileName,
-                color = theme.textPrimary,
-                fontSize = theme.typography.subtitle,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(theme.dimensions.cornerRadiusSmall))
-                    .clickable { onTitleClick() }
-                    .padding(horizontal = theme.dimensions.spacingSmall, vertical = theme.dimensions.spacingTiny)
-            )
+            Column {
+                Text(
+                    text = fileName,
+                    color = theme.textPrimary,
+                    fontSize = theme.typography.subtitle,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(theme.dimensions.cornerRadiusSmall))
+                        .clickable { onTitleClick() }
+                        .padding(horizontal = theme.dimensions.spacingSmall, vertical = theme.dimensions.spacingTiny)
+                )
+                Text(
+                    text = when (saveStatus) {
+                        DocumentSaveStatus.LOADING -> "Opening…"
+                        DocumentSaveStatus.SAVED -> "Saved"
+                        DocumentSaveStatus.SAVING -> "Saving…"
+                        DocumentSaveStatus.UNSAVED -> "Unsaved changes"
+                        DocumentSaveStatus.ERROR -> "Couldn't save"
+                        DocumentSaveStatus.UNAVAILABLE -> "Couldn't open"
+                    },
+                    color = if (saveStatus == DocumentSaveStatus.ERROR) theme.textDanger else theme.textSecondary,
+                    fontSize = theme.typography.tiny,
+                    modifier = Modifier.padding(horizontal = theme.dimensions.spacingSmall)
+                        .testTag("Document save status")
+                )
+            }
         },
         navigationIcon = {
             IconButton(
@@ -860,76 +937,106 @@ fun EditorCanvas(
 private fun DocumentEditorField(
     state: EditorUiState,
     viewModel: EditorViewModel,
-    isToolbarMinimized: Boolean,
-    horizontalPadding: androidx.compose.ui.unit.Dp
+    scrollState: ScrollState,
+    horizontalPadding: androidx.compose.ui.unit.Dp,
+    focusOnStart: Boolean = false
 ) {
     val theme = state.activeTheme
-    val scrollState = rememberScrollState()
     val editorFont = theme.toFontFamily()
     val metrics = EditorTypography.metrics(state.editorFontSizeScale)
-    val inputTransformation = remember { MarkdownDocumentInputTransformation() }
-    val bottomScrollPadding = if (isToolbarMinimized) 100.dp else 220.dp
+    val inputContext = remember(state.documentScrollKey) { DocumentInputContext() }
+    val typingPreferences = DocumentTypingPreferences(state.autoHeaderSpacing, state.autoCompleteEnabled,
+        state.autoCompleteQuotes, state.autoCompleteSingleQuotes, state.autoCompleteBraces,
+        state.autoCompleteParens, state.autoCompleteBrackets)
+    val inputTransformation = remember(typingPreferences, inputContext, viewModel.documentTextFieldState) {
+        MarkdownDocumentInputTransformation(typingPreferences,
+            preserveInput = { inputContext.consumePreservedInput() },
+            isComposing = { viewModel.documentTextFieldState.composition != null },
+            committedComposition = { inputContext.isCommitting && viewModel.documentTextFieldState.composition != null })
+    }
+    val isComposing = viewModel.documentTextFieldState.composition != null
+    var previousCapitalization by remember { mutableStateOf(state.sentenceCapitalization) }
+    val sentenceCapitalization = if (isComposing) previousCapitalization else state.sentenceCapitalization
+    SideEffect { if (!isComposing) previousCapitalization = state.sentenceCapitalization }
+    val focusRequester = remember { FocusRequester() }
+    var initialFocusRequested by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(focusOnStart, state.isDocumentReady) {
+        if (focusOnStart && state.isDocumentReady && !initialFocusRequested) {
+            focusRequester.requestFocus()
+            initialFocusRequested = true
+        }
+    }
+    val bottomScrollPadding = 220.dp
 
-    // Capture the finite viewport before verticalScroll supplies unbounded content height.
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val viewportHeight = maxHeight
-        Column(Modifier.fillMaxSize().verticalScroll(scrollState).testTag("Document scroll")) {
-        BasicTextField(
-            state = viewModel.documentTextFieldState,
-            readOnly = state.isFileOperationPending,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentDescription = "Document editor" }
-                .onFocusChanged { focus -> viewModel.onDocumentEditorFocusChanged(focus.isFocused) },
-            textStyle = TextStyle(
-                color = theme.textPrimary,
-                fontFamily = editorFont,
-                fontSize = metrics.fontSize,
-                lineHeight = metrics.lineHeight,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Proportional,
-                    trim = LineHeightStyle.Trim.None,
-                    mode = LineHeightStyle.Mode.Minimum
-                )
-            ),
-            lineLimits = TextFieldLineLimits.MultiLine(),
-            keyboardOptions = KeyboardOptions(
-                capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
-                autoCorrectEnabled = true,
-                imeAction = ImeAction.Default
-            ),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.controlAccent),
-            decorator = TextFieldDecorator { innerTextField ->
-                // Native decoration expands the hit area without intercepting text gestures.
-                Box(
-                    modifier = Modifier.fillMaxWidth()
-                        .heightIn(min = viewportHeight)
-                        .padding(start = horizontalPadding, end = horizontalPadding,
-                            top = theme.dimensions.spacingExtraLarge, bottom = bottomScrollPadding),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Box(Modifier.widthIn(max = theme.dimensions.maxTextLineWidth).fillMaxWidth()
-                        .testTag("Document text")) {
-                        innerTextField()
+    // Capture the viewport before scrolling supplies unbounded content height.
+    DocumentInputSession(inputContext) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val viewportHeight = maxHeight
+            Column(Modifier.fillMaxSize().verticalScroll(scrollState).testTag("Document scroll")) {
+                BasicTextField(
+                    state = viewModel.documentTextFieldState,
+                    readOnly = state.isFileOperationPending || !state.isDocumentReady,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .contentReceiver(inputContext.contentReceiver)
+                        .semantics { contentDescription = "Document editor" }
+                        .onFocusChanged { focus -> viewModel.onDocumentEditorFocusChanged(focus.isFocused) },
+                    textStyle = TextStyle(
+                        color = theme.textPrimary,
+                        fontFamily = editorFont,
+                        fontSize = metrics.fontSize,
+                        lineHeight = metrics.lineHeight,
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Proportional,
+                            trim = LineHeightStyle.Trim.None,
+                            mode = LineHeightStyle.Mode.Minimum
+                        )
+                    ),
+                    lineLimits = TextFieldLineLimits.MultiLine(),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = if (sentenceCapitalization) androidx.compose.ui.text.input.KeyboardCapitalization.Sentences
+                            else androidx.compose.ui.text.input.KeyboardCapitalization.None,
+                        autoCorrectEnabled = true,
+                        imeAction = ImeAction.Default
+                    ),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(theme.controlAccent),
+                    decorator = TextFieldDecorator { innerTextField ->
+                        // Native decoration expands the hit area without intercepting text gestures.
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                                .heightIn(min = viewportHeight)
+                                .padding(start = horizontalPadding, end = horizontalPadding,
+                                    top = theme.dimensions.spacingExtraLarge, bottom = bottomScrollPadding),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            Box(Modifier.widthIn(max = theme.dimensions.maxTextLineWidth).fillMaxWidth()
+                                .testTag("Document text")) {
+                                if (state.isDocumentReady && viewModel.documentTextFieldState.text.isEmpty()) {
+                                    Text("Start writing…", style = TextStyle(color = theme.textSecondary,
+                                        fontFamily = editorFont, fontSize = metrics.fontSize, lineHeight = metrics.lineHeight))
+                                }
+                                innerTextField()
+                            }
+                        }
+                    },
+                    inputTransformation = inputTransformation,
+                    outputTransformation = remember(
+                        state.viewMode,
+                        metrics.fontSize,
+                        metrics.lineHeight,
+                        theme.textSecondary,
+                        theme.codeBackground
+                    ) {
+                        MarkdownDocumentOutputTransformation(
+                            viewMode = state.viewMode,
+                            bodySize = metrics.fontSize,
+                            tokenColor = theme.textSecondary,
+                            codeBackgroundColor = theme.codeBackground
+                        )
                     }
-                }
-            },
-            inputTransformation = inputTransformation,
-            outputTransformation = remember(
-                state.viewMode,
-                metrics.fontSize,
-                metrics.lineHeight,
-                theme.textSecondary,
-                theme.codeBackground
-            ) {
-                MarkdownDocumentOutputTransformation(
-                    viewMode = state.viewMode,
-                    bodySize = metrics.fontSize,
-                    tokenColor = theme.textSecondary,
-                    codeBackgroundColor = theme.codeBackground
                 )
             }
-        )
         }
     }
 }
@@ -1446,52 +1553,31 @@ fun FloatingFormattingToolbar(
             shadowElevation = theme.dimensions.elevationMedium
         ) {
             PaletteRow(theme, Modifier.padding(palettePadding), spacing = paletteSpacing) {
+                HistoryAction(theme, "Undo", Icons.AutoMirrored.Filled.Undo, canUndo, onUndoClick)
                 if (showHistory) {
-                    FormatAction(
-                        description = "Undo",
-                        icon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Undo,
-                                contentDescription = "Undo",
-                                tint = if (canUndo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
-                                modifier = Modifier.size(theme.dimensions.iconMedium)
-                            )
-                        },
-                        enabled = canUndo,
-                        onClick = onUndoClick
-                    )
-                    FormatAction(
-                        description = "Redo",
-                        icon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Redo,
-                                contentDescription = "Redo",
-                                tint = if (canRedo) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
-                                modifier = Modifier.size(theme.dimensions.iconMedium)
-                            )
-                        },
-                        enabled = canRedo,
-                        onClick = onRedoClick
-                    )
-                    VerticalDivider(
-                        modifier = Modifier
-                            .height(20.dp)
-                            .padding(horizontal = 2.dp),
-                        thickness = 1.dp,
-                        color = theme.textMuted.copy(alpha = 0.2f)
-                    )
+                    HistoryAction(theme, "Redo", Icons.AutoMirrored.Filled.Redo, canRedo, onRedoClick)
+                    VerticalDivider(Modifier.height(20.dp).padding(horizontal = 2.dp),
+                        thickness = 1.dp, color = theme.textMuted.copy(alpha = 0.2f))
                 }
                 HeaderAction(theme, onHeaderClick, onHeaderSet)
                 FormatAction("Format selection bold", { Text("B", fontWeight = FontWeight.Bold, fontSize = theme.typography.subtitle) }, onClick = { onFormat("**", "**") })
-                FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }, onClick = { onFormat("*", "*") })
+                if (showHistory) FormatAction("Format selection italic", { Text("I", fontStyle = FontStyle.Italic, fontSize = theme.typography.subtitle) }, onClick = { onFormat("*", "*") })
                 FormatAction("Toggle bullet list", { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null) }, onClick = onBulletClick)
                 OverflowFormattingActions(theme, onFormat, onChecklistClick, onIndentClick, onOutdentClick,
-                    showHistory = !showHistory, canUndo = canUndo, canRedo = canRedo,
-                    onUndoClick = onUndoClick, onRedoClick = onRedoClick)
+                    compact = !showHistory, canRedo = canRedo, onRedoClick = onRedoClick)
                 FormatAction("Minimize formatting toolbar", { Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(theme.dimensions.iconMedium), tint = theme.textMuted) }, onClick = onMinimizeClick)
             }
         }
     }
+}
+
+@Composable
+private fun HistoryAction(theme: AppColorTheme, label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean, onClick: () -> Unit) {
+    FormatAction(label, icon = {
+        Icon(icon, null, tint = if (enabled) theme.textPrimary else theme.textMuted.copy(alpha = 0.35f),
+            modifier = Modifier.size(theme.dimensions.iconMedium))
+    }, enabled = enabled, onClick = onClick)
 }
 
 @Composable
@@ -1513,10 +1599,8 @@ private fun OverflowFormattingActions(
     onChecklistClick: () -> Unit,
     onIndentClick: () -> Unit,
     onOutdentClick: () -> Unit,
-    showHistory: Boolean = false,
-    canUndo: Boolean = false,
+    compact: Boolean = false,
     canRedo: Boolean = false,
-    onUndoClick: () -> Unit = {},
     onRedoClick: () -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -1527,9 +1611,8 @@ private fun OverflowFormattingActions(
             onDismissRequest = { expanded = false },
             properties = androidx.compose.ui.window.PopupProperties(focusable = false)
         ) {
-            if (showHistory) {
-                DropdownMenuItem(text = { Text("Undo") }, enabled = canUndo,
-                    onClick = { expanded = false; onUndoClick() })
+            if (compact) {
+                DropdownMenuItem(text = { Text("Italic") }, onClick = { expanded = false; onFormat("*", "*") })
                 DropdownMenuItem(text = { Text("Redo") }, enabled = canRedo,
                     onClick = { expanded = false; onRedoClick() })
             }
