@@ -1,12 +1,12 @@
 {
-  "code": 46,
+  "code": 47,
   "major": 0,
   "minor": 1,
-  "patch": 45,
+  "patch": 46,
   "ref": "codex/application-polish",
-  "reservation_id": "49546b38-b0fb-4255-b99f-7da679a4cea2",
+  "reservation_id": "ba121623-92a8-40fe-8e8b-294573972e52",
   "run_attempt": "1",
-  "run_id": "41252123729",
-  "source_commit": "790a80ee52aad916b6aa4f1578322fff7e22d579",
-  "version_name": "0.1.45"
+  "run_id": "44121856633",
+  "source_commit": "8e73122c66f52b0f14baef3165588d3e13f2c608",
+  "version_name": "0.1.46"
 }
