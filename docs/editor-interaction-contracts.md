@@ -4,6 +4,13 @@ This document records user-visible editor behavior that must survive refactors. 
 
 ## Required behavior
 
+### Find shows the matching passage without editing the note
+
+- Files search uses current storage with cancellable background reads and partial results for unavailable storage. Content matches carry the query into the editor. Recheck it against the live document before highlighting or scrolling.
+- Find in an open note matches literal Markdown text case-insensitively. The active match uses the same source-to-display offset map as Markdown rendering. Keep cursor and selection reveal. If the match itself includes hidden syntax, retain the matching tokens so the highlight remains visible.
+- Find only scrolls to a requested match. It uses the native viewport and leaves the source, selection and Undo history intact. Closing Find keeps the passage in view. Opening a content result shows Find without focusing the keyboard. The editor menu can explicitly focus Find. With the keyboard dismissed, Back closes Find before leaving the note.
+- Coverage is in `EditorCanvasFocusTest.findHighlightsAndWrapsWithoutMovingTheWritingSelection` and `QuickCaptureNavigationTest.contentSearchOpensNestedNoteAtTheMatchingPassageAndReturnsToResults`.
+
 ### Typing must not crash
 
 - Markdown containing full-block or inline images must remain measurable while rendered, focused, and edited.

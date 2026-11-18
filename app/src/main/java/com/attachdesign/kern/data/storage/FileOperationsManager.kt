@@ -20,6 +20,8 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import java.util.UUID
 
+internal const val TRASH_DIRECTORY = ".trash"
+
 class FileOperationsManager(
     private val db: AppDatabase,
     private val storageManager: StorageManager,
@@ -468,11 +470,11 @@ class FileOperationsManager(
     private suspend fun prepareTrashDirectory(project: ProjectEntity): MutationOutcome {
         return when (val listing = storageManager.listDirectoryOutcome(project, "")) {
             is DirectoryOutcome.Success -> {
-                val existing = listing.nodes.firstOrNull { it.name == ".trash" }
+                val existing = listing.nodes.firstOrNull { it.name == TRASH_DIRECTORY }
                 if (existing != null) {
                     if (existing.isDirectory) MutationOutcome.Success(StorageIdentity(existing), changed = false)
                     else MutationOutcome.Failed(MutationFailure.Collision)
-                } else storageManager.createNamedDirectory(project, "", ".trash")
+                } else storageManager.createNamedDirectory(project, "", TRASH_DIRECTORY)
             }
             else -> listingFailure(listing)
         }

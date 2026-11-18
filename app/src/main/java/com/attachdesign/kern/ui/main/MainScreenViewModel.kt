@@ -34,6 +34,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.attachdesign.kern.ui.common.SnackbarEvent
 import com.attachdesign.kern.data.local.QuoteEntity
+import com.attachdesign.kern.search.WorkspaceNoteSearch
+import kotlinx.coroutines.flow.flowOn
 
 /** Flat list item for the unified single-scroll file index. */
 sealed class FileListItem {
@@ -80,6 +82,11 @@ class MainScreenViewModel(
 
     private val _snackbarEvent = kotlinx.coroutines.flow.MutableSharedFlow<SnackbarEvent>()
     val snackbarEvent = _snackbarEvent.asSharedFlow()
+
+    internal fun searchNotes(projects: List<ProjectEntity>, query: String) =
+        WorkspaceNoteSearch(storageManager::listDirectoryOutcome, storageManager::openDocumentReader)
+            .search(projects, query)
+            .flowOn(ioDispatcher)
 
     private val projectMutations = ProjectMutationCoordinator.forDatabase(db)
     private val removedProjects = mutableSetOf<Long>()

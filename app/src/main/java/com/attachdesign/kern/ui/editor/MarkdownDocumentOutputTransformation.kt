@@ -3,14 +3,10 @@ package com.attachdesign.kern.ui.editor
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.isSpecified
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.TextUnit
 import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.MarkdownElementType
@@ -19,34 +15,34 @@ import com.attachdesign.kern.parser.MarkdownDocumentScanner
 import com.attachdesign.kern.parser.MarkdownElement
 import com.attachdesign.kern.parser.ParagraphBlock
 
-class MarkdownDocumentOutputTransformation(
+internal class MarkdownDocumentOutputTransformation(
     private val viewMode: ViewMode,
     private val bodySize: TextUnit,
     private val tokenColor: Color,
-    private val codeBackgroundColor: Color
+    codeBackgroundColor: Color,
+    private val find: DocumentFindHighlight? = null
 ) : OutputTransformation {
     private val styleProvider = MarkdownSpanStyleProvider(tokenColor, codeBackgroundColor, bodySize)
 
     override fun TextFieldBuffer.transformOutput() {
         val source = asCharSequence().toString()
         if (source.isEmpty()) return
+        val match = find?.takeIf { it.source == source }
         if (viewMode == ViewMode.RAW_PLAIN_TEXT) {
             addStyle(styleProvider.styleForMonospaceRaw(), 0, length)
+            match?.let { addStyle(it.style, it.range.first, it.range.last + 1) }
             return
         }
 
-        var blockStart = 0
-        val indexedBlocks = MarkdownDocumentScanner.scan(source).map { block ->
-            val start = blockStart
-            blockStart += block.rawText.length + block.separatorAfter.length
-            start to block
-        }
+        val indexedBlocks = indexedBlocks(source)
 
         // Do not replace the entire document in one edit. Compose maps a whole-document
         // replacement as one transformed range, which collapses word-level selection into
         // the document boundaries. Apply the Markdown changes as local edits instead so
         // the platform can retain an accurate offset mapping for selection handles.
-        val offsetMap = applyMarkdownProjection(source, indexedBlocks)
+        val edits = projectionEdits(indexedBlocks, selection, match?.range)
+        edits.forEach { replace(it.start, it.end, it.replacement) }
+        val offsetMap = SourceOffsetMap(edits)
 
         indexedBlocks.forEach { (start, block) ->
             val blockTransformedStart = offsetMap.map(start)
@@ -59,16 +55,31 @@ class MarkdownDocumentOutputTransformation(
                 applyElementStyle(element.type, elementTransformedStart, elementTransformedEnd)
             }
         }
+        match?.let {
+            val range = offsetMap.mapRange(it.range)
+            if (!range.isEmpty()) addStyle(it.style, range.first, range.last + 1)
+        }
     }
 
-    private fun TextFieldBuffer.applyMarkdownProjection(
-        source: String,
-        indexedBlocks: List<Pair<Int, ParagraphBlock>>
-    ): SourceOffsetMap {
-        val selectionStart = selection.min
-        val selectionEnd = selection.max
-        val documentEdits = mutableListOf<LocalEdit>()
+    internal fun displayedFindRange(selection: TextRange): IntRange? = find?.let {
+        if (viewMode == ViewMode.RAW_PLAIN_TEXT) it.range
+        else SourceOffsetMap(projectionEdits(indexedBlocks(it.source), selection, it.range)).mapRange(it.range)
+    }
 
+    private fun indexedBlocks(source: String): List<Pair<Int, ParagraphBlock>> {
+        var blockStart = 0
+        return MarkdownDocumentScanner.scan(source).map { block ->
+            val start = blockStart
+            blockStart += block.rawText.length + block.separatorAfter.length
+            start to block
+        }
+    }
+
+    private fun projectionEdits(
+        indexedBlocks: List<Pair<Int, ParagraphBlock>>,
+        selection: TextRange,
+        match: IntRange?
+    ): List<LocalEdit> = buildList {
         indexedBlocks.asReversed().forEach { (start, block) ->
             val blockProjection = MarkdownRenderer.render(block).text
             val rendered = when (block.blockType) {
@@ -79,8 +90,8 @@ class MarkdownDocumentOutputTransformation(
             val edits = block.elements.mapNotNull { element ->
                 val constructStart = start + element.constructStart
                 val constructEnd = start + element.constructEnd
-                val selectionTouchesConstruct = selectionStart <= constructEnd &&
-                    selectionEnd >= constructStart
+                val selectionTouchesConstruct = selection.min <= constructEnd &&
+                    selection.max >= constructStart
                 // Inline Markdown is a live preview until the user works within that
                 // construct. At that point preserve its source syntax so selection,
                 // editing, and formatting are all legible. Blockquote and fenced-code
@@ -93,6 +104,9 @@ class MarkdownDocumentOutputTransformation(
                     return@mapNotNull null
                 }
                 element.replacementFor(block.blockType)?.let { replacement ->
+                    if (match.intersects(start + element.start, start + element.end)) {
+                        return@mapNotNull null
+                    }
                     LocalEdit(element.start, element.end, replacement)
                 }
             }.sortedByDescending { it.start }
@@ -100,22 +114,21 @@ class MarkdownDocumentOutputTransformation(
             val locallyProjected = edits.fold(block.rawText) { text, edit ->
                 text.replaceRange(edit.start, edit.end, edit.replacement)
             }
-            if (locallyProjected == rendered || revealsSelectedSyntax) {
+            if (locallyProjected == rendered || revealsSelectedSyntax ||
+                match.intersects(start, start + block.rawText.length)) {
                 edits.forEach { edit ->
-                    val documentEdit = LocalEdit(start + edit.start, start + edit.end, edit.replacement)
-                    documentEdits += documentEdit
-                    replace(documentEdit.start, documentEdit.end, documentEdit.replacement)
+                    add(LocalEdit(start + edit.start, start + edit.end, edit.replacement))
                 }
             } else if (block.rawText != rendered) {
                 // Tables and other compound blocks need a richer layout projection. Keep
                 // their replacement block-local so ordinary text retains granular mapping.
-                val documentEdit = LocalEdit(start, start + block.rawText.length, rendered)
-                documentEdits += documentEdit
-                replace(documentEdit.start, documentEdit.end, documentEdit.replacement)
+                add(LocalEdit(start, start + block.rawText.length, rendered))
             }
         }
-        return SourceOffsetMap(documentEdits)
     }
+
+    private fun IntRange?.intersects(start: Int, end: Int): Boolean =
+        this != null && first < end && last >= start
 
     private fun MarkdownElement.replacementFor(blockType: MarkdownBlockType): String? = when (type) {
         MarkdownElementType.TOKEN_LIST_BULLET -> when (blockType) {
@@ -140,6 +153,8 @@ class MarkdownDocumentOutputTransformation(
     /** Maps source offsets into the local output edits without replacing the whole document. */
     private class SourceOffsetMap(edits: List<LocalEdit>) {
         private val edits = edits.sortedBy { it.start }
+
+        fun mapRange(range: IntRange): IntRange = map(range.first) until map(range.last + 1)
 
         fun map(offset: Int): Int {
             var delta = 0

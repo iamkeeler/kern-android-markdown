@@ -17,6 +17,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldDecorator
@@ -61,6 +63,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -105,6 +110,10 @@ import com.attachdesign.kern.parser.MarkdownBlockType
 import com.attachdesign.kern.parser.DocumentTypingPreferences
 import com.attachdesign.kern.parser.DocumentEditEngine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -137,7 +146,8 @@ fun EditorScreen(
     touchOriginY: Float? = null,
     companionEnabled: Boolean = true,
     onChooseFile: (() -> Unit)? = null,
-    onIdentityChanged: (String, String) -> Unit = { _, _ -> }
+    onIdentityChanged: (String, String) -> Unit = { _, _ -> },
+    initialFindQuery: String = ""
 ) {
     val deletionSession = LocalDeletionSession.current
     SideEffect { viewModel.attachDeletionSession(deletionSession) }
@@ -160,6 +170,35 @@ fun EditorScreen(
     val textFieldValues by viewModel.paragraphTextFieldValues.collectAsStateWithLifecycle()
     val theme = uiState.activeTheme
     val documentScrollState = key(uiState.documentScrollKey) { rememberScrollState() }
+    // The route's initial query is only used for its first document.
+    val findSession = key(uiState.documentScrollKey) {
+        val initialQuery = initialFindQuery.takeIf {
+            uiState.activeProject?.id == projectId && uiState.activeFilePath == filePath
+        }.orEmpty()
+        rememberDocumentFindSession(initialQuery)
+    }
+    val findAvailable = uiState.documentEditorEnabled && uiState.isDocumentReady && uiState.loadError == null
+    val findOpen = findAvailable && findSession.open
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val closeFind = {
+        if (!uiState.isDocumentEditorFocused) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+        findSession.close()
+    }
+    val findText = if (findOpen) viewModel.documentTextFieldState.text else ""
+    val findSource = remember(findText) { findText.toString() }
+    val findMatches = findInDocument(findSource, if (findOpen) findSession.query.trim() else "")
+    val matchCount = findMatches?.size
+    val matchIndex = if (matchCount != null && matchCount > 0) findSession.index % matchCount else 0
+    val findHighlight = findMatches?.getOrNull(matchIndex)?.let { range ->
+        remember(findSource, range, theme) {
+            DocumentFindHighlight(findSource, range,
+                SpanStyle(color = theme.onControlAccent, background = theme.controlAccent))
+        }
+    }
     val companion by viewModel.companion.state.collectAsStateWithLifecycle()
     val secondaryEditor = if (companionEnabled) androidx.lifecycle.viewmodel.compose.viewModel<EditorViewModel>(
         key = "second-editor-${viewModel.sessionId}"
@@ -323,16 +362,18 @@ fun EditorScreen(
         }
         val supportingVisible = companionVisible || (isDualPane && uiState.isSidebarOpen)
         val imeVisible = WindowInsets.ime.getBottom(density) > 0
-        BackHandler(enabled = !companion.isOpen && !imeVisible && !showReferencePicker && !headerMenuOpen &&
+        BackHandler(enabled = !findOpen && !companion.isOpen && !imeVisible && !showReferencePicker && !headerMenuOpen &&
             !showRenameDialog && !showDeleteDialog) {
             viewModel.closeFile(onBackClick)
         }
-        BackHandler(enabled = companion.isOpen && !imeVisible && !showReferencePicker && !headerMenuOpen) {
+        BackHandler(enabled = !findOpen && companion.isOpen && !imeVisible && !showReferencePicker && !headerMenuOpen) {
             if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED) else viewModel.toggleCompanion()
         }
+        BackHandler(enabled = findOpen && !imeVisible && !headerMenuOpen && !showRenameDialog &&
+            !showDeleteDialog && !showReferencePicker, onBack = closeFind)
         val bend = rememberFoldGestureProgress(
             environment = foldEnvironment, enabled = foldSetting?.value != "false",
-            eligible = companionEnabled && windowFocused && geometry?.isVertical != false && !showRenameDialog && !showDeleteDialog &&
+            eligible = companionEnabled && windowFocused && !findOpen && geometry?.isVertical != false && !showRenameDialog && !showDeleteDialog &&
                 !showReferencePicker && !headerMenuOpen && uiState.sidebarMode != SidebarMode.SETTINGS &&
                 (!companionVisible || secondaryState?.sidebarMode != SidebarMode.SETTINGS),
             resetKey = foldAction,
@@ -399,10 +440,12 @@ fun EditorScreen(
                                     canSplit = companionEnabled && canSplit,
                                     isCompanionOpen = companion.isOpen,
                                     onChooseFile = onChooseFile,
+                                    onFindClick = if (findAvailable) findSession::show else null,
                                     onSplitToggle = viewModel::toggleCompanion,
                                     onMenuVisibilityChanged = { headerMenuOpen = it },
                                     onBackClick = {
-                                        if (companion.isOpen) {
+                                        if (findOpen) closeFind()
+                                        else if (companion.isOpen) {
                                             if (uiState.isSidebarOpen) viewModel.toggleSidebar(SidebarMode.CLOSED)
                                             else viewModel.toggleCompanion()
                                         } else viewModel.closeFile(onBackClick)
@@ -459,6 +502,22 @@ fun EditorScreen(
                             }
                         }
 
+                        if (findOpen) DocumentFindBar(
+                            query = findSession.query,
+                            onQueryChange = findSession::updateQuery,
+                            count = matchCount,
+                            index = matchIndex,
+                            requestFocus = findSession.requestFocus,
+                            onFocusRequested = { findSession.requestFocus = false },
+                            onNavigate = { step ->
+                                if (matchCount != null && matchCount > 0) {
+                                    if (uiState.isDocumentEditorFocused) focusManager.clearFocus()
+                                    findSession.index = (matchIndex + step + matchCount) % matchCount
+                                }
+                            },
+                            onClose = closeFind,
+                            theme = theme
+                        )
                         if (uiState.loadError != null || uiState.saveError != null) {
                             DocumentErrorNotice(
                                 message = uiState.loadError ?: requireNotNull(uiState.saveError),
@@ -472,7 +531,6 @@ fun EditorScreen(
                                 }) else null
                             )
                         }
-                        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                         val editorHorizontalPadding = if (!supportingVisible && widthDp >= theme.dimensions.largeScreenBreakpoint) {
                             theme.dimensions.spacingHuge
                         } else {
@@ -513,7 +571,8 @@ fun EditorScreen(
                                         viewModel = viewModel,
                                         scrollState = documentScrollState,
                                         horizontalPadding = editorHorizontalPadding,
-                                        focusOnStart = focusOnStart
+                                        focusOnStart = focusOnStart,
+                                        find = findHighlight
                                     )
                                 } else if (uiState.loadError == null) {
                                     EditorCanvas(
@@ -540,7 +599,7 @@ fun EditorScreen(
                                 label = "toolbarBottomPadding"
                             )
 
-                            if (uiState.isDocumentReady) Box(
+                            if (uiState.isDocumentReady && !findOpen) Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .align(Alignment.BottomCenter)
@@ -758,7 +817,8 @@ fun EditorHeader(
     isCompanionOpen: Boolean = false,
     onSplitToggle: () -> Unit = {},
     onMenuVisibilityChanged: (Boolean) -> Unit = {},
-    saveStatus: DocumentSaveStatus = DocumentSaveStatus.SAVED
+    saveStatus: DocumentSaveStatus = DocumentSaveStatus.SAVED,
+    onFindClick: (() -> Unit)? = null
 ) {
     val fileName = filePath.split('/').last()
 
@@ -856,6 +916,10 @@ fun EditorHeader(
                     )
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    if (onFindClick != null) DropdownMenuItem(
+                        text = { Text("Find in note") },
+                        onClick = { showMenu = false; onFindClick() }
+                    )
                     DropdownMenuItem(text = { Text("Settings") }, onClick = { showMenu = false; onMoreOptionsAction("Settings") })
                     DropdownMenuItem(text = { Text("Share") }, onClick = { showMenu = false; onMoreOptionsAction("Share") })
                     DropdownMenuItem(text = { Text("Copy Markdown") }, onClick = { showMenu = false; onMoreOptionsAction("Copy Markdown") })
@@ -940,7 +1004,8 @@ private fun DocumentEditorField(
     viewModel: EditorViewModel,
     scrollState: ScrollState,
     horizontalPadding: androidx.compose.ui.unit.Dp,
-    focusOnStart: Boolean = false
+    focusOnStart: Boolean = false,
+    find: DocumentFindHighlight? = null
 ) {
     val theme = state.activeTheme
     val editorFont = theme.toFontFamily()
@@ -968,6 +1033,39 @@ private fun DocumentEditorField(
         }
     }
     val bottomScrollPadding = 220.dp
+    val outputTransformation = remember(state.viewMode, metrics.fontSize, theme.textSecondary, theme.codeBackground, find) {
+        MarkdownDocumentOutputTransformation(
+            viewMode = state.viewMode,
+            bodySize = metrics.fontSize,
+            tokenColor = theme.textSecondary,
+            codeBackgroundColor = theme.codeBackground,
+            find = find
+        )
+    }
+    val matchRequester = remember { BringIntoViewRequester() }
+    val navigationBarHeight = WindowInsets.navigationBars.getBottom(LocalDensity.current)
+    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    LaunchedEffect(outputTransformation) {
+        if (find == null || state.isDocumentEditorFocused) return@LaunchedEffect
+        val selection = viewModel.documentTextFieldState.selection
+        val range = withContext(Dispatchers.Default) { outputTransformation.displayedFindRange(selection) }
+            ?.takeUnless { it.isEmpty() } ?: return@LaunchedEffect
+        val layout = snapshotFlow { textLayout }.filterNotNull().first { result ->
+            result.layoutInput.text.spanStyles.any {
+                it.item == find.style && it.start == range.first && it.end == range.last + 1
+            }
+        }
+        val firstLine = layout.getLineForOffset(range.first)
+        val lastLine = layout.getLineForOffset(range.last)
+        val lineHeight = layout.getLineBottom(firstLine) - layout.getLineTop(firstLine)
+        // Leave a line of context above the system navigation bar.
+        matchRequester.bringIntoView(Rect(
+            0f,
+            layout.getLineTop(firstLine),
+            layout.size.width.toFloat(),
+            layout.getLineBottom(lastLine) + navigationBarHeight + lineHeight
+        ))
+    }
 
     // Capture the viewport before scrolling supplies unbounded content height.
     DocumentInputSession(inputContext) {
@@ -977,6 +1075,7 @@ private fun DocumentEditorField(
                 BasicTextField(
                     state = viewModel.documentTextFieldState,
                     readOnly = state.isFileOperationPending || !state.isDocumentReady,
+                    onTextLayout = if (find == null) null else { getResult -> textLayout = getResult() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
@@ -1012,6 +1111,7 @@ private fun DocumentEditorField(
                             contentAlignment = Alignment.TopCenter
                         ) {
                             Box(Modifier.widthIn(max = theme.dimensions.maxTextLineWidth).fillMaxWidth()
+                                .bringIntoViewRequester(matchRequester)
                                 .testTag("Document text")) {
                                 if (state.isDocumentReady && viewModel.documentTextFieldState.text.isEmpty()) {
                                     Text("Start writing…", style = TextStyle(color = theme.textSecondary,
@@ -1022,20 +1122,7 @@ private fun DocumentEditorField(
                         }
                     },
                     inputTransformation = inputTransformation,
-                    outputTransformation = remember(
-                        state.viewMode,
-                        metrics.fontSize,
-                        metrics.lineHeight,
-                        theme.textSecondary,
-                        theme.codeBackground
-                    ) {
-                        MarkdownDocumentOutputTransformation(
-                            viewMode = state.viewMode,
-                            bodySize = metrics.fontSize,
-                            tokenColor = theme.textSecondary,
-                            codeBackgroundColor = theme.codeBackground
-                        )
-                    }
+                    outputTransformation = outputTransformation
                 )
             }
         }

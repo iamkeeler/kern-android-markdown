@@ -1,8 +1,6 @@
-- New note opens in the current folder with the keyboard ready.
-- Recent notes appear at launch.
-- Draft recovery, clear save status, Retry and Save a copy protect writing.
-- Safer saves on departure and checks for outside changes.
-- Undo is directly available in the compact toolbar.
-- Collapsing formatting keeps the page steady and remembers your choice.
-- Typing preferences now apply to the active editor, preserving paste and composition.
+- Search note contents and filenames from Files, with excerpts that open at the matching passage.
+- Find in note highlights matches and lets you move between them.
+- New note opens in the current folder with the keyboard ready. Recent notes appear at launch.
+- Draft recovery, clearer save status and safer saves protect your writing.
+- Direct Undo, steady scrolling and typing preferences in the editor.
 - Fixed text showing through the editor header.

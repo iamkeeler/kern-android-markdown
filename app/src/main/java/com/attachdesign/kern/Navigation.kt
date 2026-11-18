@@ -156,6 +156,7 @@ fun MainNavigation(
                         }
                     },
                     focusOnStart = key.focusOnStart,
+                    initialFindQuery = key.findQuery,
                     touchOriginX = key.touchOriginX,
                     touchOriginY = key.touchOriginY,
                     viewModel = editorViewModel,

@@ -1,5 +1,10 @@
 ## What's new
 
+### Find a thought again
+
+- Search file names and note contents from Files. Content results show an excerpt and open at the matching passage.
+- Use Find in note from the editor menu to highlight matches and move between them.
+
 ### Capture a thought immediately
 
 - New note creates a uniquely named Markdown file in the current folder and opens the keyboard.

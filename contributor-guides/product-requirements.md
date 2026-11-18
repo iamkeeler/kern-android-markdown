@@ -34,6 +34,7 @@ A high-performance, minimal, and typography-first Markdown editor designed for m
 #### 2.3 Storage Architecture & Cloud Sync Engine
 * **Immediate capture:** New note creates a collision-safe Markdown file in the current folder and opens the native editor with the software keyboard ready. Naming remains available afterward. A successful creation always opens the editor; the retired Launch New File preference no longer controls this action. Empty notes remain ordinary user-owned files.
 * **Launch:** Show up to five recently modified Markdown notes above Files, including nested notes and excluding the bundled Release Notes folder. Preserve the current workspace as the creation destination and keep folder browsing available.
+* **Find notes:** Files search matches names and literal text in Markdown and plain-text notes across workspaces. Show the folder and a short excerpt for content matches. Open those results at the passage and keep the query when returning to Files. Report partial results when some folders or notes are unavailable.
 * **Save protection:** Journal exact source and selection in app-private atomic recovery files before writing a destination. Surface save failures with Retry and Save a copy; never report an unavailable read as an empty note. Flush on departure/background and finish the final write outside the cancelled view-model scope. Validate the saved baseline and file identity before overwriting; keep recovery when access, conflicts, or writes fail.
 * **Session ownership:** Each editor navigation entry owns its view models and a stable content key independent of file renaming. Rename preserves native source, selection, composition and Undo.
 * **Dual Storage Modalities:**
@@ -50,6 +51,7 @@ A high-performance, minimal, and typography-first Markdown editor designed for m
 * **Writing continuity:** Explicit palette collapse survives screen-state restoration. Native bottom clearance stays constant across palette states; switching files starts a separate viewport and Undo history, while rename retains the live session.
 * **Compact actions:** Undo, Heading, Bold, Bullets, More and Collapse remain directly reachable with native touch targets. Italic and Redo remain in More at compact widths.
 * **Active typing preferences:** Heading spacing and enabled quote/bracket pairs apply to native user edits, preserve composition and clipboard source, and undo with the triggering input. Capitalize sentences requests the native keyboard behavior after active composition finishes; it does not rewrite source case.
+* **Find in note:** The editor menu opens Find with the keyboard ready. Highlight the current match, show its position in the results, and wrap in both directions. Search live text case-insensitively and leave the writing selection and Undo history intact.
 
 #### 2.5 Metrics & Analytical Panels
 * **Asynchronous On-Demand Metrics:** Word count, character count, and structural metrics operate on separate execution threads.

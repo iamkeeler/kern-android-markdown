@@ -418,7 +418,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithContentDescription("Search").performClick()
     composeTestRule.onNode(hasSetTextAction()).performTextInput("no_matching_filename_92841")
     waitForText("No matches found")
-    composeTestRule.onNodeWithText("Try another filename in Search.").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Try another filename or phrase.").assertIsDisplayed()
     composeTestRule.onNodeWithContentDescription("Clear search").assertIsDisplayed()
   }
 

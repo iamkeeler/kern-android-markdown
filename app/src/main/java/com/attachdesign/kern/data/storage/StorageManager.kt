@@ -264,21 +264,21 @@ class StorageManager(private val context: Context) {
      * Reads file content as a UTF-8 string on Dispatchers.IO.
      */
     suspend fun readFile(project: ProjectEntity, relativePath: String): String = withContext(Dispatchers.IO) {
+        openDocumentReader(project, relativePath).use { it.readText() }
+    }
+
+    internal fun openDocumentReader(project: ProjectEntity, relativePath: String): java.io.BufferedReader {
         if (project.path.startsWith("content://")) {
             val doc = getDocumentFile(project, relativePath)?.takeIf { it.isFile }
                 ?: throw IOException("Document unavailable")
-            return@withContext context.contentResolver.openInputStream(doc.uri)?.use { inputStream ->
-                inputStream.bufferedReader().use { it.readText() }
-            } ?: throw IOException("Cannot open document")
+            return context.contentResolver.openInputStream(doc.uri)?.bufferedReader()
+                ?: throw IOException("Cannot open document")
         }
 
         val projectRoot = getProjectRootFile(project)
-        val file = getSafeFile(projectRoot, relativePath)
-        if (file.exists() && file.isFile) {
-            file.readText(Charsets.UTF_8)
-        } else {
-            throw IOException("Document unavailable")
-        }
+        val file = getSafeFile(projectRoot, relativePath).takeIf { it.isFile }
+            ?: throw IOException("Document unavailable")
+        return file.bufferedReader(Charsets.UTF_8)
     }
 
     /** A reference must distinguish an empty document from missing/revoked storage. */

@@ -14,12 +14,17 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -172,6 +177,54 @@ class EditorCanvasFocusTest {
         composeTestRule.waitUntil(30_000) { viewModel.uiState.value.activeFilePath == path }
         composeTestRule.waitForIdle()
         assertFocusedImeAndType("An immediate **thought**")
+    }
+
+    @Test
+    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+    fun findHighlightsAndWrapsWithoutMovingTheWritingSelection() {
+        val source = "**Amber thread**\n\n" + longDocument() + "\n\n**AMBER THREAD**"
+        showDocument(source)
+        val originalSelection = TextRange(25, 30)
+        composeTestRule.runOnIdle {
+            viewModel.documentTextFieldState.edit { selection = originalSelection }
+        }
+        composeTestRule.onNodeWithContentDescription("More Options").performClick()
+        composeTestRule.onNodeWithText("Find in note").performClick()
+        val input = composeTestRule.onNode(hasSetTextAction() and hasText("Find in note"))
+        input.assertIsFocused().performTextInput("amber thread")
+        composeTestRule.waitUntil(15_000) {
+            composeTestRule.onAllNodes(hasText("1 of 2")).fetchSemanticsNodes().isNotEmpty()
+        }
+        val scroll = composeTestRule.onNodeWithTag("Document scroll", useUnmergedTree = true)
+        fun offset() = scroll.fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange].value()
+        composeTestRule.onNodeWithContentDescription("Previous match").performClick()
+        composeTestRule.onNodeWithText("2 of 2").assertExists()
+        composeTestRule.waitUntil(15_000) { offset() > pixels(600) }
+        val result = layout()
+        val rendered = result.layoutInput.text
+        assertTrue(rendered.text.endsWith("AMBER THREAD"))
+        assertTrue(rendered.spanStyles.any {
+            it.item.background == viewModel.uiState.value.activeTheme.controlAccent &&
+                rendered.text.substring(it.start, it.end) == "AMBER THREAD"
+        })
+        val lastLine = result.getLineForOffset(rendered.length - 1)
+        val viewportBottom = scroll.fetchSemanticsNode().boundsInRoot.bottom
+        val matchBottom = textPosition().y + result.getLineBottom(lastLine)
+        assertTrue("The match needs room above the bottom edge", matchBottom < viewportBottom - pixels(12))
+        composeTestRule.onNodeWithContentDescription("Next match").performClick()
+        composeTestRule.onNodeWithText("1 of 2").assertExists()
+        composeTestRule.waitUntil(15_000) { offset() < pixels(20) }
+        input.performTextReplacement("nothing here")
+        composeTestRule.waitUntil(15_000) {
+            composeTestRule.onAllNodes(hasText("No matches")).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithContentDescription("Close Find").performClick()
+        composeTestRule.runOnIdle {
+            assertEquals(originalSelection, viewModel.documentTextFieldState.selection)
+            assertEquals(source, viewModel.documentTextFieldState.text.toString())
+            assertTrue(!viewModel.documentTextFieldState.undoState.canUndo)
+        }
     }
 
     @Test

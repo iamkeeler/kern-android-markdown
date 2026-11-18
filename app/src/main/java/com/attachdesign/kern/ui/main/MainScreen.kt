@@ -60,6 +60,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.attachdesign.kern.search.WorkspaceSearchState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.attachdesign.kern.EditorKey
@@ -195,6 +196,14 @@ fun MainScreen(
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    val searchTerm = searchQuery.trim().takeIf { isSearchActive }.orEmpty()
+    val searchResults = key(searchTerm, state.projects, state.allItems) {
+        if (searchTerm.isEmpty()) WorkspaceSearchState(searching = false)
+        else produceState(WorkspaceSearchState()) {
+            delay(250)
+            vm.searchNotes(state.projects, searchTerm).collect { value = it }
+        }.value
+    }
     var requestSearchFocus by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -467,11 +476,11 @@ fun MainScreen(
                     SearchBarDefaults.InputField(
                         query = searchQuery,
                         onQueryChange = { searchQuery = it },
-                        onSearch = {},
+                        onSearch = { keyboardController?.hide() },
                         expanded = false,
                         onExpandedChange = {},
                         modifier = Modifier.fillMaxWidth().focusRequester(searchFocusRequester),
-                        placeholder = { Text("Search files...", color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight) },
+                        placeholder = { Text("Search names and contents", color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight) },
                         leadingIcon = {
                             IconButton(onClick = closeSearch) {
                                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Close search", tint = theme.indicator)
@@ -614,7 +623,7 @@ fun MainScreen(
         // ── Single unified list and floating buttons container ─────────────────
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             AnimatedContent(
-                targetState = Triple(state.activeProject, state.currentPath, isSearchActive && searchQuery.isNotEmpty()),
+                targetState = Triple(state.activeProject, state.currentPath, searchTerm.isNotEmpty()),
                 transitionSpec = {
                     val (initProj, initPath, initSearching) = initialState
                     val (targetProj, targetPath, targetSearching) = targetState
@@ -646,10 +655,8 @@ fun MainScreen(
                 label = "FileExplorerTransition"
             ) { (activeProj, currentPath, isSearching) ->
                 if (isSearching) {
-                    val filteredItems = remember(state.allItems, searchQuery, sortMode) {
-                        state.allItems.filterIsInstance<FileListItem.FileRow>().filter {
-                            it.node.name.contains(searchQuery, ignoreCase = true)
-                        }.let { list ->
+                    val filteredItems = remember(searchResults.hits, sortMode) {
+                        searchResults.hits.let { list ->
                             when (sortMode) {
                                 SortMode.ALPHA_ASC -> list.sortedBy { it.node.name.lowercase() }
                                 SortMode.ALPHA_DESC -> list.sortedByDescending { it.node.name.lowercase() }
@@ -658,10 +665,11 @@ fun MainScreen(
                         }
                     }
 
-                    if (filteredItems.isEmpty()) {
+                    if (filteredItems.isEmpty() && !searchResults.searching) {
                         EmptyStateHint(
-                            title = "No matches found",
-                            body = "Try another filename in Search.",
+                            title = if (searchResults.incomplete) "No matches in available files" else "No matches found",
+                            body = if (searchResults.incomplete) "Some files or folders couldn’t be searched."
+                                else "Try another filename or phrase.",
                             theme = theme
                         )
                     } else {
@@ -670,18 +678,30 @@ fun MainScreen(
                             verticalArrangement = Arrangement.Top,
                             contentPadding = PaddingValues(bottom = 90.dp)
                         ) {
-                            items(filteredItems) { item ->
+                            if (searchResults.searching || searchResults.incomplete) item {
+                                Text(
+                                    if (searchResults.searching) "Searching files…"
+                                    else "Some files or folders couldn’t be searched.",
+                                    modifier = Modifier.padding(theme.dimensions.spacingExtraLarge),
+                                    color = theme.textSecondary,
+                                    fontSize = theme.typography.helper
+                                )
+                            }
+                            items(filteredItems, key = { "${it.project.id}:${it.node.relativePath}" }) { item ->
                                 SearchOverflowRow(
                                     node = item.node,
                                     project = item.project,
                                     theme = theme,
+                                    excerpt = item.excerpt,
                                     onClick = {
                                         if (item.node.isDirectory) {
                                             vm.navigateToFolder(item.node, item.project)
                                             isSearchActive = false
                                             searchQuery = ""
                                         } else {
-                                            onItemClick(EditorKey(item.project.id, item.node.relativePath))
+                                            keyboardController?.hide()
+                                            onItemClick(EditorKey(item.project.id, item.node.relativePath,
+                                                findQuery = searchTerm.takeIf { item.excerpt != null }.orEmpty()))
                                         }
                                     },
                                     onShare = { coroutineScope.launch { fileOpsManager.shareNode(item.project, item.node).onSuccess { context.launchShare(it) }.onFailure { vm.reportShareFailure(item.node.name) } } },
@@ -1320,11 +1340,21 @@ private fun SearchOverflowRow(
     onClick: () -> Unit,
     onShare: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    excerpt: String? = null
 ) {
     ListItem(
         headlineContent = { Text(node.name, fontFamily = theme.toFontFamily(), fontSize = theme.typography.subtitle, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal) },
-        supportingContent = { Text("${project.name}/${node.relativePath.substringBeforeLast('/', "")}", color = theme.textSecondary, fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        supportingContent = {
+            Column {
+                Text("${project.name}/${node.relativePath.substringBeforeLast('/', "")}",
+                    color = theme.textSecondary, fontSize = theme.typography.helper,
+                    lineHeight = theme.typography.helperLineHeight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (excerpt != null) Text(excerpt, color = theme.textPrimary,
+                    fontSize = theme.typography.helper, lineHeight = theme.typography.helperLineHeight,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        },
         leadingContent = { ExplorerLeadingIcon(if (node.isDirectory) "📁" else "📄", theme) },
         trailingContent = { OverflowActions(theme, "${node.name} in ${project.name}/${node.relativePath}", onShare, onEdit, onDelete) },
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
